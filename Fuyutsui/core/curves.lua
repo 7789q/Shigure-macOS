@@ -1,0 +1,47 @@
+local addon, ns = ...
+
+local EnumPowerType = Fuyutsui.EnumPowerType
+local curveCache = {}
+local powerCurves = {}
+
+function Fuyutsui:CreateColorCurve(point, b)
+    local curve = C_CurveUtil.CreateColorCurve()
+    curve:SetType(Enum.LuaCurveType.Linear)
+    curve:AddPoint(0, CreateColor(0, 0, 0, 1))
+    curve:AddPoint(point, CreateColor(0, 0, b / 255, 1))
+    return curve
+end
+
+function Fuyutsui:CreateColorCurveScaling(b)
+    if curveCache[b] then
+        return curveCache[b]
+    end
+    local curve = C_CurveUtil.CreateColorCurve()
+    curve:SetType(Enum.LuaCurveType.Linear)
+    if b > 100 then
+        curve:AddPoint(0, CreateColor(0, 0, (b - 100) / 255, 1))
+        curve:AddPoint(1, CreateColor(0, 0, b / 255, 1))
+    else
+        local z = (100 - b) / 100
+        curve:AddPoint(0, CreateColor(0, 0, 0, 1))
+        curve:AddPoint(z, CreateColor(0, 0, 1 / 255, 1))
+        curve:AddPoint(1, CreateColor(0, 0, b / 255, 1))
+    end
+    curveCache[b] = curve
+    return curve
+end
+
+function Fuyutsui:CreatePowerCurve(powerType)
+    if powerCurves[powerType] then return end
+    local powerMax = UnitPowerMax("player", EnumPowerType[powerType])
+    if powerMax >= 250 then
+        powerCurves[powerType] = self:CreateColorCurve(1, 100)
+    else
+        powerCurves[powerType] = self:CreateColorCurve(1, powerMax)
+    end
+end
+
+Fuyutsui.powerCurves = powerCurves
+Fuyutsui.curve100 = Fuyutsui:CreateColorCurveScaling(100)
+Fuyutsui.curve255 = Fuyutsui:CreateColorCurve(255, 255)
+Fuyutsui.castCurve = Fuyutsui:CreateColorCurve(2.55, 255)

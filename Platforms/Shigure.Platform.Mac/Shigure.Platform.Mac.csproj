@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Shigure.Platform.Mac</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Shigure.Core.csproj" />
+    <ProjectReference Include="..\Shigure.Platform.Abstractions\Shigure.Platform.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

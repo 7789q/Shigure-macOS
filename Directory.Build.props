@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <ShigureVersionMajor>1</ShigureVersionMajor>
+    <ShigureVersionMinor>2</ShigureVersionMinor>
+    <ShigureVersionPatch>1</ShigureVersionPatch>
+    <ShigureBuildNumber>7</ShigureBuildNumber>
+
+    <ShigureMinimumUpdateBundleVersion>1.2.7</ShigureMinimumUpdateBundleVersion>
+
+    <ShigureMarketingVersion>$(ShigureVersionMajor).$(ShigureVersionMinor).$(ShigureVersionPatch)</ShigureMarketingVersion>
+    <ShigureVersion>$(ShigureMarketingVersion).$(ShigureBuildNumber)</ShigureVersion>
+    <ShigureBundleVersion>$(ShigureVersionMajor).$(ShigureVersionMinor).$(ShigureBuildNumber)</ShigureBundleVersion>
+
+    <Version>$(ShigureVersion)</Version>
+    <AssemblyVersion>$(ShigureVersion)</AssemblyVersion>
+    <FileVersion>$(ShigureVersion)</FileVersion>
+    <InformationalVersion>$(ShigureVersion)</InformationalVersion>
+  </PropertyGroup>
+</Project>

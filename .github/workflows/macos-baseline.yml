@@ -1,0 +1,40 @@
+name: macOS baseline
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-contracts:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore solution
+        run: dotnet restore Shigure.slnx
+
+      - name: Build release solution
+        run: dotnet build Shigure.slnx --configuration Release --no-restore
+
+      - name: Run contract tests
+        run: dotnet run --project Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj --configuration Release --no-build
+
+      - name: Build Apple Silicon target
+        run: dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --runtime osx-arm64
+
+      - name: Build Intel target
+        run: dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --runtime osx-x64

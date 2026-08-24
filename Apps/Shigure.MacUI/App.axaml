@@ -1,0 +1,35 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Shigure.MacUI.App"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+  </Application.Styles>
+
+  <NativeMenu.Menu>
+    <NativeMenu>
+      <NativeMenuItem Header="显示 Shigure" Click="ShowMainWindow" />
+      <NativeMenuItem Header="显示浮动条" Click="ShowOverlay" />
+      <NativeMenuItem Header="检查更新…" Click="CheckForUpdates" />
+      <NativeMenuItemSeparator />
+      <NativeMenuItem Header="退出" Gesture="Meta+Q" Click="QuitApplication" />
+    </NativeMenu>
+  </NativeMenu.Menu>
+
+  <TrayIcon.Icons>
+    <TrayIcons>
+      <TrayIcon Icon="/Assets/arasaka-icon.ico" ToolTipText="Shigure">
+        <TrayIcon.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="显示 Shigure" Click="ShowMainWindow" />
+            <NativeMenuItem Header="显示浮动条" Click="ShowOverlay" />
+            <NativeMenuItem Header="检查更新…" Click="CheckForUpdates" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="退出" Click="QuitApplication" />
+          </NativeMenu>
+        </TrayIcon.Menu>
+      </TrayIcon>
+    </TrayIcons>
+  </TrayIcon.Icons>
+</Application>

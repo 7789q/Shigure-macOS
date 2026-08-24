@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>Shigure.Core</AssemblyName>
+    <RootNamespace>Shigure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="LegacyModuleMigrationService.cs" />
+    <Compile Include="MacUiStateStore.cs" />
+    <Compile Include="ProjectConfigUpdateService.cs" />
+    <Compile Include="RuntimeResourceWorkspaceService.cs" />
+    <Compile Include="UserDataLayout.cs" />
+    <Compile Include="..\App\AppOptions.cs" Link="App\AppOptions.cs" />
+    <Compile Include="..\App\IShigureRuntimeFactory.cs" Link="App\IShigureRuntimeFactory.cs" />
+    <Compile Include="..\App\RuntimeSessionCoordinator.cs" Link="App\RuntimeSessionCoordinator.cs" />
+    <Compile Include="..\Modules\ClassNames.cs" Link="Modules\ClassNames.cs" />
+    <Compile Include="..\Infrastructure\FuyutsuiAddonSyncService.cs" Link="Infrastructure\FuyutsuiAddonSyncService.cs" />
+    <Compile Include="..\Infrastructure\AtomicFile.cs" Link="Infrastructure\AtomicFile.cs" />
+    <Compile Include="..\Infrastructure\ClassBlocksStore.cs" Link="Infrastructure\ClassBlocksStore.cs" />
+    <Compile Include="..\Infrastructure\ClassMacrosStore.cs" Link="Infrastructure\ClassMacrosStore.cs" />
+    <Compile Include="..\Infrastructure\ClassStateCatalog.cs" Link="Infrastructure\ClassStateCatalog.cs" />
+    <Compile Include="..\Infrastructure\ConfigService.cs" Link="Infrastructure\ConfigService.cs" />
+    <Compile Include="..\Infrastructure\FuyutsuiConfigConverter.cs" Link="Infrastructure\FuyutsuiConfigConverter.cs" />
+    <Compile Include="..\Infrastructure\FuyutsuiKeymapConverter.cs" Link="Infrastructure\FuyutsuiKeymapConverter.cs" />
+    <Compile Include="..\Infrastructure\JsonHelpers.cs" Link="Infrastructure\JsonHelpers.cs" />
+    <Compile Include="..\Infrastructure\LuaLiteParser.cs" Link="Infrastructure\LuaLiteParser.cs" />
+    <Compile Include="..\Infrastructure\ModuleDependencyService.cs" Link="Infrastructure\ModuleDependencyService.cs" />
+    <Compile Include="..\Infrastructure\WowAddonLocator.cs" Link="Infrastructure\WowAddonLocator.cs" />
+    <Compile Include="..\Input\KeymapService.cs" Link="Input\KeymapService.cs" />
+    <Compile Include="..\Input\KeymapCatalog.cs" Link="Input\KeymapCatalog.cs" />
+    <Compile Include="..\Modules\FormulaEvaluator.cs" Link="Modules\FormulaEvaluator.cs" />
+    <Compile Include="..\Modules\IKeymapResolver.cs" Link="Modules\IKeymapResolver.cs" />
+    <Compile Include="..\Modules\LogicRegistry.cs" Link="Modules\LogicRegistry.cs" />
+    <Compile Include="..\Modules\ModuleDependencies.cs" Link="Modules\ModuleDependencies.cs" />
+    <Compile Include="..\Modules\ModuleMatch.cs" Link="Modules\ModuleMatch.cs" />
+    <Compile Include="..\Modules\ModuleMatchSelector.cs" Link="Modules\ModuleMatchSelector.cs" />
+    <Compile Include="..\Modules\ModuleMarketplaceClient.cs" Link="Modules\ModuleMarketplaceClient.cs" />
+    <Compile Include="..\Modules\ModuleSpecialActions.cs" Link="Modules\ModuleSpecialActions.cs" />
+    <Compile Include="..\Modules\ModuleStore.cs" Link="Modules\ModuleStore.cs" />
+    <Compile Include="..\Modules\ModuleUnit.cs" Link="Modules\ModuleUnit.cs" />
+    <Compile Include="..\Modules\ReservedUnit.cs" Link="Modules\ReservedUnit.cs" />
+    <Compile Include="..\Modules\UnitSelector.cs" Link="Modules\UnitSelector.cs" />
+    <Compile Include="..\Runtime\GameState.cs" Link="Runtime\GameState.cs" />
+    <Compile Include="..\Runtime\IRuntimeStateBuilder.cs" Link="Runtime\IRuntimeStateBuilder.cs" />
+    <Compile Include="..\Runtime\PixelProtocolDecoder.cs" Link="Runtime\PixelProtocolDecoder.cs" />
+    <Compile Include="..\Runtime\RegionPixelScanner.cs" Link="Runtime\RegionPixelScanner.cs" />
+    <Compile Include="..\Runtime\RenderSnapshot.cs" Link="Runtime\RenderSnapshot.cs" />
+    <Compile Include="..\Runtime\RuntimeDependencies.cs" Link="Runtime\RuntimeDependencies.cs" />
+    <Compile Include="..\Runtime\ScreenScanResult.cs" Link="Runtime\ScreenScanResult.cs" />
+    <Compile Include="..\Runtime\ShigureRuntime.cs" Link="Runtime\ShigureRuntime.cs" />
+    <Compile Include="..\Runtime\StateBuilder.cs" Link="Runtime\StateBuilder.cs" />
+    <Compile Include="..\Runtime\TriggerModePolicy.cs" Link="Runtime\TriggerModePolicy.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Platforms\Shigure.Platform.Abstractions\Shigure.Platform.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

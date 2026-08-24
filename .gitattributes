@@ -1,0 +1,16 @@
+* text=auto eol=lf
+
+*.axaml text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.json text eol=lf
+*.lua text eol=lf
+*.md text eol=lf
+*.plist text eol=lf
+*.sh text eol=lf
+*.slnx text eol=lf
+*.swift text eol=lf
+*.txt text eol=lf
+*.xml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf

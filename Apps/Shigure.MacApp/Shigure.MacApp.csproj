@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Shigure.MacApp</AssemblyName>
+    <RootNamespace>Shigure.MacApp</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Shigure.Core.csproj" />
+    <ProjectReference Include="..\..\Platforms\Shigure.Platform.Abstractions\Shigure.Platform.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Platforms\Shigure.Platform.Mac\Shigure.Platform.Mac.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\config\*.json" Link="config\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\keymap\*.json" Link="keymap\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\wow_process.txt" Link="wow_process.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\Fuyutsui\**\*" Link="Fuyutsui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

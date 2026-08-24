@@ -1,0 +1,92 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Shigure.MacUI.MainWindow"
+        x:CompileBindings="False"
+        Title="Shigure"
+        Width="1180"
+        Height="760"
+        MinWidth="980"
+        MinHeight="640"
+        Background="#111315"
+        Icon="/Assets/arasaka-icon.ico">
+  <Window.Styles>
+    <Style Selector="TextBlock.page-title">
+      <Setter Property="FontSize" Value="24" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#F5F7F8" />
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#F5F7F8" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="#929AA1" />
+    </Style>
+    <Style Selector="Button.command">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="14,6" />
+    </Style>
+    <Style Selector="ListBox#PageList ListBoxItem">
+      <Setter Property="Padding" Value="12,9" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="DataGrid">
+      <Setter Property="GridLinesVisibility" Value="Horizontal" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#30353A" />
+      <Setter Property="Background" Value="#171A1D" />
+      <Setter Property="RowBackground" Value="#171A1D" />
+    </Style>
+  </Window.Styles>
+
+  <Grid ColumnDefinitions="220,1,*">
+    <Border Grid.Column="0" Background="#0B0D0F" Padding="16,18,14,12">
+      <Grid RowDefinitions="96,*,64">
+        <StackPanel>
+          <TextBlock Text="SHIGURE" FontSize="18" FontWeight="Bold" Foreground="#F5F7F8" />
+          <TextBlock Text="CONTROL CENTER" FontSize="11" Foreground="#E5D624" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <ListBox x:Name="PageList"
+                 Grid.Row="1"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 AutomationProperties.Name="功能页面">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel>
+                <TextBlock Text="{Binding GroupHeader}" FontSize="10" Foreground="#697178" Margin="0,7,0,3" />
+                <TextBlock Text="{Binding Title}" FontSize="14" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <StackPanel Grid.Row="2" VerticalAlignment="Bottom">
+          <TextBlock Text="MAC CONTROL CENTER" Foreground="#E5D624" FontSize="12" />
+          <TextBlock x:Name="GlobalStatus" Text="运行时已停止" Classes="muted" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Border Grid.Column="1" Background="#2A2F33" />
+
+    <Grid Grid.Column="2" RowDefinitions="94,*">
+      <Grid ColumnDefinitions="*,Auto" Margin="28,20,28,12">
+        <StackPanel>
+          <TextBlock x:Name="PageTitle" Classes="page-title" />
+          <TextBlock x:Name="PageSubtitle" Classes="muted" FontSize="13" Margin="0,5,0,0" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+          <Button x:Name="EnableButton" Classes="command" Content="开启逻辑" IsEnabled="False" AutomationProperties.Name="开启或关闭运行逻辑" />
+          <Button x:Name="RunButton" Classes="command" Content="启动运行" AutomationProperties.Name="启动或停止运行时" />
+          <Button x:Name="OverlayButton" Classes="command" Content="显示浮动条" AutomationProperties.Name="显示置顶浮动条" />
+        </StackPanel>
+      </Grid>
+
+      <ContentControl x:Name="PageHost" Grid.Row="1" Margin="28,0,28,24" />
+    </Grid>
+  </Grid>
+</Window>

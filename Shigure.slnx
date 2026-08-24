@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="Apps/Shigure.MacApp/Shigure.MacApp.csproj" />
+  <Project Path="Apps/Shigure.MacUI/Shigure.MacUI.csproj" />
+  <Project Path="Core/Shigure.Core.csproj" />
+  <Project Path="Platforms/Shigure.Platform.Abstractions/Shigure.Platform.Abstractions.csproj" />
+  <Project Path="Platforms/Shigure.Platform.Mac/Shigure.Platform.Mac.csproj" />
+  <Project Path="Presentation/Shigure.Presentation.csproj" />
+  <Project Path="Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj" />
+  <Project Path="Tools/Shigure.MacDiagnostics/Shigure.MacDiagnostics.csproj" />
+</Solution>

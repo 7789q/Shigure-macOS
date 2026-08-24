@@ -1,0 +1,52 @@
+# Build output
+bin/
+obj/
+artifacts/
+.DS_Store
+
+# Explicit diagnostic screen exports
+*.ppm
+*.log
+
+# Local application/cache data
+cache/
+
+# Visual Studio / VS Code user state
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local assistant/tooling state
+.claude/
+
+# Local environment and signing material
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
+*.keychain-db
+*.mobileprovision
+*.provisionprofile
+
+# Local Apple build/release output
+*.xcarchive/
+*.dSYM/
+*.notary-log.json
+
+# Local notes
+提示词帮助.md
+
+# 本地模块（不上传）
+module/
+# 说明文档
+docs/
+__pycache__/
+/.prompt
+/.mean
+/.plan
