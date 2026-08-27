@@ -10,7 +10,13 @@ public sealed class ModuleDependencyService
         ClassStateCatalog.CategoryItem,
         ClassStateCatalog.CategoryConfig,
         ClassStateCatalog.CategoryTarget,
-        ClassStateCatalog.CategoryFocus
+        ClassStateCatalog.CategoryFocus,
+        ClassStateCatalog.CategoryMouseover,
+        ClassStateCatalog.CategoryBoss1,
+        ClassStateCatalog.CategoryBoss2,
+        ClassStateCatalog.CategoryBoss3,
+        ClassStateCatalog.CategoryBoss4,
+        ClassStateCatalog.CategoryBoss5
     ];
 
     private readonly string _classDirectory;
@@ -154,14 +160,15 @@ public sealed class ModuleDependencyService
         MergeMacros(localMacros, snapshot.SpecId, snapshot.Macros, counters);
         EnsureMacroCapacity(snapshot.ClassId, localMacros);
 
-        if (counters.ConfigAdded == 0 && counters.MacrosAdded == 0)
+        if (!counters.HasConfigChanges && counters.MacrosAdded == 0)
         {
             result.Conflicts.AddRange(counters.Conflicts.Select(message => $"{module.Name}: {message}"));
             return;
         }
 
-        CommitDocuments(configDocument, macrosDocument, counters.ConfigAdded > 0, counters.MacrosAdded > 0);
+        CommitDocuments(configDocument, macrosDocument, counters.HasConfigChanges, counters.MacrosAdded > 0);
         result.ConfigAdded += counters.ConfigAdded;
+        result.ConfigUpdated += counters.ConfigUpdated;
         result.MacrosAdded += counters.MacrosAdded;
         result.ChangedModules.Add(module.Name);
         result.Conflicts.AddRange(counters.Conflicts.Select(message => $"{module.Name}: {message}"));
@@ -318,15 +325,14 @@ public sealed class ModuleDependencyService
         string label,
         MergeCounters counters)
     {
+        CompactLocalAuras(local, label, counters);
+
         foreach (var entry in incoming)
         {
-            var existing = local.FirstOrDefault(item => string.Equals(item.Name, entry.Name, StringComparison.Ordinal));
+            var existing = local.FirstOrDefault(item => AuraIdentityMatches(item, entry));
             if (existing is not null)
             {
-                if (!AuraEquals(existing, entry))
-                {
-                    counters.Conflicts.Add($"{label}“{entry.Name}”与本地内容不同，已保留本地。");
-                }
+                MergeAuraMetadata(existing, entry, label, counters);
                 continue;
             }
 
@@ -342,16 +348,148 @@ public sealed class ModuleDependencyService
         }
     }
 
+    private static void CompactLocalAuras(
+        List<ClassBlocksStore.AuraEntry> local,
+        string label,
+        MergeCounters counters)
+    {
+        for (var index = 0; index < local.Count; index++)
+        {
+            var current = local[index];
+            var existing = local.Take(index).FirstOrDefault(item => AuraIdentityMatches(item, current));
+            if (existing is null)
+            {
+                continue;
+            }
+
+            MergeAuraMetadata(existing, current, label, counters);
+            local.RemoveAt(index--);
+            counters.ConfigUpdated++;
+        }
+    }
+
+    private static bool AuraIdentityMatches(
+        ClassBlocksStore.AuraEntry left,
+        ClassBlocksStore.AuraEntry right)
+    {
+        return SpellIdentityMatches(
+            GetAuraSpellIds(left.SpellId, left.SpellIds),
+            left.Name,
+            GetAuraSpellIds(right.SpellId, right.SpellIds),
+            right.Name);
+    }
+
+    private static bool AuraIdentityMatches(
+        ClassBlocksStore.AuraEntry left,
+        ModuleAuraSnapshot right)
+    {
+        return SpellIdentityMatches(
+            GetAuraSpellIds(left.SpellId, left.SpellIds),
+            left.Name,
+            GetAuraSpellIds(right.SpellId, right.SpellIds),
+            right.Name);
+    }
+
+    private static void MergeAuraMetadata(
+        ClassBlocksStore.AuraEntry target,
+        ClassBlocksStore.AuraEntry incoming,
+        string label,
+        MergeCounters counters)
+    {
+        MergeAuraMetadataCore(
+            target,
+            incoming.Name,
+            incoming.SpellId,
+            incoming.SpellIds,
+            incoming.MaxApps,
+            label,
+            counters);
+    }
+
+    private static void MergeAuraMetadata(
+        ClassBlocksStore.AuraEntry target,
+        ModuleAuraSnapshot incoming,
+        string label,
+        MergeCounters counters)
+    {
+        MergeAuraMetadataCore(
+            target,
+            incoming.Name,
+            incoming.SpellId,
+            incoming.SpellIds,
+            incoming.MaxApps,
+            label,
+            counters);
+    }
+
+    private static void MergeAuraMetadataCore(
+        ClassBlocksStore.AuraEntry target,
+        string? incomingName,
+        long? incomingSpellId,
+        IEnumerable<long>? incomingSpellIds,
+        int? incomingMaxApps,
+        string label,
+        MergeCounters counters)
+    {
+        var changed = false;
+        if (target.SpellId is null && incomingSpellId is > 0)
+        {
+            target.SpellId = incomingSpellId;
+            changed = true;
+        }
+
+        foreach (var spellId in GetAuraSpellIds(incomingSpellId, incomingSpellIds))
+        {
+            if (target.SpellId != spellId && !target.SpellIds.Contains(spellId))
+            {
+                target.SpellIds.Add(spellId);
+                changed = true;
+            }
+        }
+
+        if (target.MaxApps is null && incomingMaxApps is not null)
+        {
+            target.MaxApps = incomingMaxApps;
+            changed = true;
+        }
+        else if (target.MaxApps is not null
+                 && incomingMaxApps is not null
+                 && target.MaxApps != incomingMaxApps)
+        {
+            var mergedMaxApps = Math.Max(target.MaxApps.Value, incomingMaxApps.Value);
+            counters.Conflicts.Add(
+                $"{label}“{DisplayName(incomingName, incomingSpellId)}”的 maxApps 存在差异："
+                + $"{target.MaxApps}、{incomingMaxApps}，已采用 {mergedMaxApps}。");
+            if (target.MaxApps != mergedMaxApps)
+            {
+                target.MaxApps = mergedMaxApps;
+                changed = true;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(target.Name) && !string.IsNullOrWhiteSpace(incomingName))
+        {
+            target.Name = incomingName;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            counters.ConfigUpdated++;
+        }
+    }
+
     private static void MergeSpells(
         List<ClassBlocksStore.SpellEntry> local,
         IEnumerable<ModuleSpellSnapshot> incoming,
         MergeCounters counters)
     {
+        CompactLocalSpells(local, counters);
+
         foreach (var entry in incoming)
         {
-            var name = string.IsNullOrWhiteSpace(entry.Name) ? entry.SpellId.ToString() : entry.Name;
-            var existing = local.FirstOrDefault(item =>
-                string.Equals(string.IsNullOrWhiteSpace(item.Name) ? item.SpellId.ToString() : item.Name, name, StringComparison.Ordinal));
+            var name = DisplayName(entry.Name, entry.SpellId);
+            var existing = local.FirstOrDefault(item => SpellIdentityMatches(item, entry));
             if (existing is not null)
             {
                 if (!SpellEquals(existing, entry))
@@ -375,11 +513,98 @@ public sealed class ModuleDependencyService
         }
     }
 
+    private static void CompactLocalSpells(
+        List<ClassBlocksStore.SpellEntry> local,
+        MergeCounters counters)
+    {
+        for (var index = 0; index < local.Count; index++)
+        {
+            var current = local[index];
+            var existing = local.Take(index).FirstOrDefault(item => SpellIdentityMatches(item, current));
+            if (existing is null)
+            {
+                continue;
+            }
+
+            local.RemoveAt(index--);
+            counters.ConfigUpdated++;
+        }
+    }
+
+    private static bool SpellIdentityMatches(
+        ClassBlocksStore.SpellEntry left,
+        ClassBlocksStore.SpellEntry right)
+    {
+        return SpellIdentityMatches(
+            GetSpellIds(left.SpellId),
+            left.Name,
+            GetSpellIds(right.SpellId),
+            right.Name);
+    }
+
+    private static bool SpellIdentityMatches(
+        ClassBlocksStore.SpellEntry left,
+        ModuleSpellSnapshot right)
+    {
+        return SpellIdentityMatches(
+            GetSpellIds(left.SpellId),
+            left.Name,
+            GetSpellIds(right.SpellId),
+            right.Name);
+    }
+
+    private static bool SpellIdentityMatches(
+        IEnumerable<long> leftIds,
+        string? leftName,
+        IEnumerable<long> rightIds,
+        string? rightName)
+    {
+        var leftIdSet = leftIds.Where(IsValidSpellId).ToHashSet();
+        var rightIdSet = rightIds.Where(IsValidSpellId).ToHashSet();
+        if (leftIdSet.Count > 0 || rightIdSet.Count > 0)
+        {
+            return leftIdSet.Count > 0
+                && rightIdSet.Count > 0
+                && leftIdSet.Overlaps(rightIdSet);
+        }
+
+        return string.Equals(leftName?.Trim(), rightName?.Trim(), StringComparison.Ordinal);
+    }
+
+    private static IEnumerable<long> GetSpellIds(long spellId)
+        => IsValidSpellId(spellId) ? [spellId] : [];
+
+    private static IEnumerable<long> GetAuraSpellIds(long? spellId, IEnumerable<long>? spellIds)
+    {
+        var result = new HashSet<long>();
+        if (spellId is { } primary && IsValidSpellId(primary))
+        {
+            result.Add(primary);
+        }
+
+        foreach (var id in spellIds ?? [])
+        {
+            if (IsValidSpellId(id))
+            {
+                result.Add(id);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsValidSpellId(long spellId) => spellId > 0;
+
+    private static string DisplayName(string? name, long? spellId)
+        => string.IsNullOrWhiteSpace(name) ? spellId?.ToString() ?? "未命名" : name.Trim();
+
     private static void MergeSpellsList(
         List<ClassBlocksStore.SpellsListEntry> local,
         IEnumerable<ModuleSpellListEntrySnapshot> incoming,
         MergeCounters counters)
     {
+        CompactLocalSpellsList(local, counters);
+
         foreach (var entry in incoming)
         {
             var byId = local.FirstOrDefault(item => item.SpellId == entry.SpellId);
@@ -407,6 +632,23 @@ public sealed class ModuleDependencyService
         }
     }
 
+    private static void CompactLocalSpellsList(
+        List<ClassBlocksStore.SpellsListEntry> local,
+        MergeCounters counters)
+    {
+        var seen = new HashSet<long>();
+        for (var index = 0; index < local.Count; index++)
+        {
+            if (seen.Add(local[index].SpellId))
+            {
+                continue;
+            }
+
+            local.RemoveAt(index--);
+            counters.ConfigUpdated++;
+        }
+    }
+
     private static void MergeGroup(
         ClassBlocksStore.SpecBlocks localSpec,
         ModuleGroupSnapshot? incoming,
@@ -426,16 +668,25 @@ public sealed class ModuleDependencyService
                 Role = incoming.Role,
                 Dispel = incoming.Dispel
             };
+            counters.ConfigAdded++;
             foreach (var aura in incoming.Auras)
             {
+                var existing = group.Auras.FirstOrDefault(item => GroupAuraIdentityMatches(item, aura));
+                if (existing is not null)
+                {
+                    MergeGroupAuraMetadata(existing, aura, counters);
+                    continue;
+                }
+
                 group.Auras.Add(ToGroupAura(aura, aura.Offset));
+                counters.ConfigAdded++;
             }
             localSpec.Group = group;
-            counters.ConfigAdded += 1 + incoming.Auras.Count;
             return;
         }
 
         var local = localSpec.Group;
+        CompactLocalGroupAuras(local.Auras, counters);
         var occupied = new HashSet<int>(local.Auras.Select(aura => aura.Offset));
         AddOffset(local.HealthPercent);
         AddOffset(local.Role);
@@ -459,13 +710,10 @@ public sealed class ModuleDependencyService
 
         foreach (var aura in incoming.Auras)
         {
-            var existing = local.Auras.FirstOrDefault(item => string.Equals(item.Name, aura.Name, StringComparison.Ordinal));
+            var existing = local.Auras.FirstOrDefault(item => GroupAuraIdentityMatches(item, aura));
             if (existing is not null)
             {
-                if (!GroupAuraEquals(existing, aura))
-                {
-                    counters.Conflicts.Add($"队伍光环“{aura.Name}”与本地内容不同，已保留本地。");
-                }
+                MergeGroupAuraMetadata(existing, aura, counters);
                 continue;
             }
 
@@ -485,6 +733,100 @@ public sealed class ModuleDependencyService
             {
                 occupied.Add(offset.Value);
             }
+        }
+    }
+
+    private static bool GroupAuraIdentityMatches(
+        ClassBlocksStore.GroupAuraEntry left,
+        ModuleGroupAuraSnapshot right)
+    {
+        // offset 是队伍光环的槽位，同一 spellId 出现在不同槽位时仍然是两个槽位。
+        return left.Offset == right.Offset
+            && SpellIdentityMatches(
+                GetAuraSpellIds(left.SpellId, left.SpellIds),
+                left.Name,
+                GetAuraSpellIds(right.SpellId, right.SpellIds),
+                right.Name);
+    }
+
+    private static bool GroupAuraIdentityMatches(
+        ClassBlocksStore.GroupAuraEntry left,
+        ClassBlocksStore.GroupAuraEntry right)
+    {
+        return left.Offset == right.Offset
+            && SpellIdentityMatches(
+                GetAuraSpellIds(left.SpellId, left.SpellIds),
+                left.Name,
+                GetAuraSpellIds(right.SpellId, right.SpellIds),
+                right.Name);
+    }
+
+    private static void CompactLocalGroupAuras(
+        List<ClassBlocksStore.GroupAuraEntry> local,
+        MergeCounters counters)
+    {
+        for (var index = 0; index < local.Count; index++)
+        {
+            var current = local[index];
+            var existing = local.Take(index).FirstOrDefault(item => GroupAuraIdentityMatches(item, current));
+            if (existing is null)
+            {
+                continue;
+            }
+
+            if (existing.SpellId is null && current.SpellId is > 0)
+            {
+                existing.SpellId = current.SpellId;
+            }
+
+            foreach (var spellId in GetAuraSpellIds(null, current.SpellIds))
+            {
+                if (!existing.SpellIds.Contains(spellId))
+                {
+                    existing.SpellIds.Add(spellId);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(current.Name))
+            {
+                existing.Name = current.Name;
+            }
+
+            local.RemoveAt(index--);
+            counters.ConfigUpdated++;
+        }
+    }
+
+    private static void MergeGroupAuraMetadata(
+        ClassBlocksStore.GroupAuraEntry target,
+        ModuleGroupAuraSnapshot incoming,
+        MergeCounters counters)
+    {
+        var changed = false;
+        if (target.SpellId is null && incoming.SpellId is > 0)
+        {
+            target.SpellId = incoming.SpellId;
+            changed = true;
+        }
+
+        foreach (var spellId in GetAuraSpellIds(null, incoming.SpellIds))
+        {
+            if (!target.SpellIds.Contains(spellId))
+            {
+                target.SpellIds.Add(spellId);
+                changed = true;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(target.Name) && !string.IsNullOrWhiteSpace(incoming.Name))
+        {
+            target.Name = incoming.Name;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            counters.ConfigUpdated++;
         }
     }
 
@@ -675,11 +1017,6 @@ public sealed class ModuleDependencyService
         }
     }
 
-    private static bool AuraEquals(ClassBlocksStore.AuraEntry left, ModuleAuraSnapshot right)
-        => left.SpellId == right.SpellId
-           && left.MaxApps == right.MaxApps
-           && left.SpellIds.SequenceEqual(right.SpellIds);
-
     private static bool SpellEquals(ClassBlocksStore.SpellEntry left, ModuleSpellSnapshot right)
         => left.SpellId == right.SpellId
            && left.Charge == right.Charge
@@ -688,9 +1025,6 @@ public sealed class ModuleDependencyService
            && left.ForcedKnown == right.ForcedKnown
            && left.InSpellBook == right.InSpellBook;
 
-    private static bool GroupAuraEquals(ClassBlocksStore.GroupAuraEntry left, ModuleGroupAuraSnapshot right)
-        => left.SpellId == right.SpellId && left.SpellIds.SequenceEqual(right.SpellIds);
-
     private static bool MacroEntryEquals(ModuleMacroEntrySnapshot left, ModuleMacroEntrySnapshot right)
         => string.Equals(NormalizeMacroText(left.Text), NormalizeMacroText(right.Text), StringComparison.Ordinal)
            && string.Equals(left.Comment?.Trim(), right.Comment?.Trim(), StringComparison.Ordinal);
@@ -698,8 +1032,11 @@ public sealed class ModuleDependencyService
     private sealed class MergeCounters
     {
         public int ConfigAdded { get; set; }
+        public int ConfigUpdated { get; set; }
         public int MacrosAdded { get; set; }
         public List<string> Conflicts { get; } = new();
+
+        public bool HasConfigChanges => ConfigAdded > 0 || ConfigUpdated > 0;
     }
 
     // 静态宏和特殊宏可以解析成相同的目标/技能/条件，但仍是两个独立槽位。
@@ -710,11 +1047,12 @@ public sealed class ModuleDependencyService
 public sealed class ModuleDependencyImportResult
 {
     public int ConfigAdded { get; set; }
+    public int ConfigUpdated { get; set; }
     public int MacrosAdded { get; set; }
     public List<string> ChangedModules { get; } = new();
     public List<string> Conflicts { get; } = new();
     public List<RejectedModuleDependency> Rejected { get; } = new();
-    public bool HasChanges => ConfigAdded > 0 || MacrosAdded > 0;
+    public bool HasChanges => ConfigAdded > 0 || ConfigUpdated > 0 || MacrosAdded > 0;
 }
 
 public sealed record RejectedModuleDependency(string ModuleId, string ModuleName, string Reason);

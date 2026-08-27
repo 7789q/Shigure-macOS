@@ -77,6 +77,7 @@ public sealed class ModuleRule
 {
     public bool Enabled { get; set; } = true;
     public string Condition { get; set; } = string.Empty;
+    public string Comment { get; set; } = string.Empty;
     // 此规则命中后，两次实际发送之间的最小间隔（毫秒）；null/0 表示不限制。
     public int? DelayMs { get; set; }
     // 此规则实际发送按键后，暂停整个逻辑循环的时长（毫秒）；null/0 表示不暂停。
@@ -100,6 +101,7 @@ public sealed class ModuleRule
         {
             Enabled = Enabled,
             Condition = Condition,
+            Comment = Comment,
             DelayMs = DelayMs,
             LogicDelayMs = LogicDelayMs,
             Unit = Unit,
@@ -538,6 +540,7 @@ public sealed class ModuleStore
 
         foreach (var rule in module.Rules)
         {
+            rule.Comment = rule.Comment?.Trim() ?? string.Empty;
             rule.Spell = ModuleSpecialActions.NormalizeSpellAction(rule.Spell);
             if (rule.MacroCondition is not null)
             {

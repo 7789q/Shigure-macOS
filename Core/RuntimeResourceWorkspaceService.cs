@@ -92,6 +92,8 @@ public sealed class RuntimeResourceWorkspaceService
             conflicts.Add(relativePath);
         }
 
+        var migrated = MigrateLegacyCastStates(workspaceRoot);
+
         var manifest = new RuntimeResourceManifest
         {
             FormatVersion = ManifestFormatVersion,
@@ -108,7 +110,78 @@ public sealed class RuntimeResourceWorkspaceService
             created,
             updated,
             skipped,
-            conflicts);
+            conflicts,
+            migrated);
+    }
+
+    private static IReadOnlyList<string> MigrateLegacyCastStates(string workspaceRoot)
+    {
+        const string legacyCastState = "施法";
+        const string countdownCastState = "施法(倒计时)";
+        var classDirectory = Path.Combine(workspaceRoot, "Fuyutsui", "class");
+        if (!Directory.Exists(classDirectory))
+        {
+            return [];
+        }
+
+        var migrated = new List<string>();
+        foreach (var classPath in Directory.EnumerateFiles(classDirectory, "*.lua", SearchOption.TopDirectoryOnly)
+                     .Order(StringComparer.Ordinal))
+        {
+            var document = ClassBlocksStore.Load(classPath);
+            var changed = false;
+            foreach (var spec in document.Specs.Values)
+            {
+                changed |= ReplaceLegacyState(spec.FlatStates, legacyCastState, countdownCastState);
+                foreach (var states in spec.CategorizedStates.Values)
+                {
+                    changed |= ReplaceLegacyState(states, legacyCastState, countdownCastState);
+                }
+            }
+
+            if (!changed)
+            {
+                continue;
+            }
+
+            ClassBlocksStore.Save(document);
+            migrated.Add(NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, classPath)));
+        }
+
+        if (migrated.Count == 0)
+        {
+            return migrated;
+        }
+
+        var configDirectory = Path.Combine(workspaceRoot, "config");
+        var config = FuyutsuiConfigConverter.UpdateFromClassDirectory(classDirectory, configDirectory);
+        migrated.AddRange(config.UpdatedFiles.Select(path =>
+            NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, path))));
+        return migrated.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool ReplaceLegacyState(List<string> states, string legacyName, string replacement)
+    {
+        var changed = false;
+        for (var index = states.Count - 1; index >= 0; index--)
+        {
+            if (!string.Equals(states[index], legacyName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (states.Contains(replacement, StringComparer.Ordinal))
+            {
+                states.RemoveAt(index);
+            }
+            else
+            {
+                states[index] = replacement;
+            }
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static IReadOnlyList<ManagedSourceFile> EnumerateManagedFiles(string sourceRoot)
@@ -375,4 +448,20 @@ public sealed record RuntimeResourceWorkspaceResult(
     IReadOnlyList<string> CreatedFiles,
     IReadOnlyList<string> UpdatedFiles,
     IReadOnlyList<string> SkippedFiles,
-    IReadOnlyList<string> ConflictingFiles);
+    IReadOnlyList<string> ConflictingFiles,
+    IReadOnlyList<string> MigratedFiles)
+{
+    private static readonly HashSet<string> NonProtocolCoreFiles = new(StringComparer.Ordinal)
+    {
+        "Fuyutsui/core/classmacros.lua",
+        "Fuyutsui/core/macro.lua",
+        "Fuyutsui/core/quickbutton.lua"
+    };
+
+    public IReadOnlyList<string> ProtocolConflictingFiles => ConflictingFiles
+        .Where(path => string.Equals(path, "Fuyutsui/main.lua", StringComparison.Ordinal)
+            || path.StartsWith("Fuyutsui/core/", StringComparison.Ordinal)
+               && path.EndsWith(".lua", StringComparison.Ordinal)
+               && !NonProtocolCoreFiles.Contains(path))
+        .ToArray();
+}

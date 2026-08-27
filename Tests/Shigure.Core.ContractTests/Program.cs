@@ -24,6 +24,7 @@ var tests = new (string Name, Action Run)[]
     ("top row requires start marker", TopRowRequiresStartMarker),
     ("count bars markers", CountBarsMarkers),
     ("heal absorb units", HealAbsorbUnits),
+    ("unit selector without any aura contract", UnitSelectorWithoutAnyAuraContract),
     ("state builder fixture", StateBuilderFixture),
     ("module match selection", ModuleMatchSelection),
     ("module marketplace install contract", ModuleMarketplaceInstallContract),
@@ -40,6 +41,7 @@ var tests = new (string Name, Action Run)[]
     ("mac runtime factory contract", MacRuntimeFactoryContract),
     ("runtime adaptive scan cadence", RuntimeAdaptiveScanCadenceContract),
     ("runtime toggle snapshot priority", RuntimeToggleSnapshotPriorityContract),
+    ("runtime short trigger pulse contract", RuntimeShortTriggerPulseContract),
     ("runtime failure snapshot contract", RuntimeFailureSnapshotContract),
     ("runtime startup failure ownership contract", RuntimeStartupFailureOwnershipContract),
     ("runtime session ownership contract", RuntimeSessionOwnershipContract),
@@ -60,6 +62,7 @@ var tests = new (string Name, Action Run)[]
     ("fuyutsui global burst mouse contract", FuyutsuiGlobalBurstMouseContract),
     ("fuyutsui UI scale contract", FuyutsuiUiScaleContract),
     ("fuyutsui macro combat retry contract", FuyutsuiMacroCombatRetryContract),
+    ("fuyutsui protocol 1.2.1.11 contract", FuyutsuiProtocolContract),
     ("mac user data path contract", MacUserDataPathContract),
     ("mac UI state persistence contract", MacUiStatePersistenceContract),
     ("runtime resource workspace contract", RuntimeResourceWorkspaceContract),
@@ -178,6 +181,53 @@ static void HealAbsorbUnits()
     Equal(2, decoded.Count, "valid heal absorb units");
     Equal(7, decoded[4], "unit 4 heal absorb");
     Equal(0, decoded[30], "unit 30 lower bound value");
+}
+
+static void UnitSelectorWithoutAnyAuraContract()
+{
+    var group = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+    {
+        ["1"] = new Dictionary<string, object?>
+        {
+            ["职责"] = 1,
+            ["生命值"] = 20,
+            ["治疗吸收"] = 50,
+            ["光环甲"] = 1,
+            ["光环乙"] = 0
+        },
+        ["2"] = new Dictionary<string, object?>
+        {
+            ["职责"] = 1,
+            ["生命值"] = 30,
+            ["治疗吸收"] = 80,
+            ["光环甲"] = 0,
+            ["光环乙"] = 0
+        },
+        ["3"] = new Dictionary<string, object?>
+        {
+            ["职责"] = 1,
+            ["生命值"] = 10,
+            ["治疗吸收"] = 60,
+            ["光环甲"] = 0,
+            ["光环乙"] = 1
+        }
+    };
+    var state = new GameState(new Dictionary<string, object?> { ["group"] = group });
+    var withoutAnyAura = new ModuleUnit
+    {
+        Kind = UnitSelectorKind.LowestHealthWithoutAnyAura,
+        AuraNames = ["光环甲", "光环乙"]
+    };
+    var absorbWithoutAnyAura = new ModuleUnit
+    {
+        Kind = UnitSelectorKind.HighestHealingAbsorbWithoutAnyAura,
+        AuraNames = ["光环甲", "光环乙"]
+    };
+
+    Equal("2", UnitSelector.Resolve(withoutAnyAura, state), "lowest health excludes units with any selected aura");
+    Equal("2", UnitSelector.Resolve(absorbWithoutAnyAura, state), "highest absorb excludes units with any selected aura");
+    withoutAnyAura.AuraNames = [];
+    Equal(null, UnitSelector.Resolve(withoutAnyAura, state), "without-any selector requires at least one aura");
 }
 
 static void StateBuilderFixture()
@@ -435,6 +485,7 @@ static void ModuleEditorPersistenceContract()
             new ModuleRule
             {
                 Enabled = true,
+                Comment = "优先治疗规则",
                 Spell = "治疗术",
                 UnitName = "最低生命",
                 MacroCondition = MacroConditionText.ParseDisplayText("引导中"),
@@ -474,6 +525,7 @@ static void ModuleEditorPersistenceContract()
         Equal("光环甲,光环乙", string.Join(',', loaded.Units.Single().AuraNames!), "module aura list round trips");
         Equal(CountKind.UnitsWithoutAuraBelowHealth, loaded.Counts.Single().Kind, "module count kind round trips");
         Equal(-5, loaded.ValueAdjustments.Single().Delta, "module adjustment round trips");
+        Equal("优先治疗规则", loaded.Rules[0].Comment, "module rule comment round trips");
         Equal("channeling", loaded.Rules[0].MacroCondition, "shared macro condition parser");
         Equal(ReservedUnit.Target, loaded.Rules[1].Unit, "shared reserved unit parser");
         Equal(2, loaded.Rules[0].SubConditions?.Count, "module subconditions round trip");
@@ -538,6 +590,12 @@ static void ModuleDependencyCaptureAndImportContract()
             .First(entry => entry.Value.Count > 0);
         var removedState = stateCategory.Value[0];
         stateCategory.Value.RemoveAt(0);
+        var auraWithId = configDocument.Specs[1].PlayerAuras.First(aura => aura.SpellId is > 0);
+        configDocument.Specs[1].PlayerAuras.Add(new ClassBlocksStore.AuraEntry
+        {
+            Name = "同 SpellId 的旧名称",
+            SpellId = auraWithId.SpellId
+        });
         ClassBlocksStore.Save(configDocument);
 
         var macrosDocument = ClassMacrosStore.Load(macrosPath);
@@ -548,12 +606,17 @@ static void ModuleDependencyCaptureAndImportContract()
 
         var imported = service.Import([module]);
         Equal(true, imported.ConfigAdded > 0, "dependency import restores missing config");
+        Equal(true, imported.ConfigUpdated > 0, "dependency import compacts same-spellId config entries");
         Equal(true, imported.MacrosAdded > 0, "dependency import restores missing macro");
         Equal("依赖合同模块", imported.ChangedModules.Single(), "dependency import reports changed module");
         Equal(
             true,
             ClassBlocksStore.Load(classPath).Specs[1].CategorizedStates[stateCategory.Key].Contains(removedState),
             "dependency import persists config");
+        Equal(
+            1,
+            ClassBlocksStore.Load(classPath).Specs[1].PlayerAuras.Count(aura => aura.SpellId == auraWithId.SpellId),
+            "dependency import identifies auras by spellId instead of display name");
         Equal(
             true,
             ClassMacrosStore.Load(macrosPath).Classes[ClassMacrosStore.ToClassFileKey(8)].DynamicCommon.Contains(removedMacro),
@@ -574,8 +637,10 @@ static void ModuleDependencyCaptureAndImportContract()
         invalid.Dependencies!.SchemaVersion = ModuleDependencySnapshot.CurrentSchemaVersion + 1;
 
         var guarded = service.Import([conflicting, invalid]);
-        Equal(false, guarded.HasChanges, "conflicting and invalid dependencies do not write");
-        Equal(true, guarded.Conflicts.Any(item => item.Contains("依赖冲突模块", StringComparison.Ordinal)), "dependency import reports local-first conflict");
+        Equal(true, guarded.HasChanges, "different spellId is imported even when the display name matches");
+        Equal(true, guarded.ConfigAdded > 0, "spellId identity allows same-name distinct auras");
+        Equal(false, guarded.Conflicts.Any(item => item.Contains("依赖冲突模块", StringComparison.Ordinal)),
+            "same-name distinct spellIds are not reported as a conflict");
         Equal("dependency-invalid", guarded.Rejected.Single().ModuleId, "dependency import rejects invalid schema per module");
 
         var unmatched = ModuleDefinition.CreateDefault("无匹配模块");
@@ -788,15 +853,36 @@ static void MacTriggerInputMapContract()
     Equal(true, counter.ConsumePulse(MacTriggerInputMap.WheelDownCode), "first wheel-down gesture pulse");
     Equal(true, counter.ConsumePulse(MacTriggerInputMap.WheelDownCode), "second wheel-down gesture pulse after gap");
     Equal(false, counter.ConsumePulse(MacTriggerInputMap.WheelDownCode), "wheel pulses are consumed once");
+
+    var keyPulse = new TriggerInputBinding(TriggerInputKind.Keyboard, 0);
+    var latch = new TriggerPulseLatch();
+    latch.Record(keyPulse);
+    latch.Record(keyPulse);
+    Equal(true, latch.Consume(keyPulse), "key press pulse is consumed once");
+    Equal(false, latch.Consume(keyPulse), "pending key press pulses are coalesced");
+
+    var triggerSource = File.ReadAllText(Path.Combine(
+        FindRepositoryRoot(),
+        "Platforms",
+        "Shigure.Platform.Mac",
+        "MacTriggerInput.cs"));
+    Equal(true, triggerSource.Contains("EventKeyDown", StringComparison.Ordinal),
+        "trigger tap listens for keyboard presses");
+    Equal(true, triggerSource.Contains("EventOtherMouseDown", StringComparison.Ordinal),
+        "trigger tap listens for other mouse presses");
+    Equal(true, triggerSource.Contains("EventScrollWheel", StringComparison.Ordinal),
+        "trigger tap retains wheel events");
+    Equal(true, triggerSource.Contains("KeyboardEventAutorepeat", StringComparison.Ordinal),
+        "trigger tap filters keyboard autorepeat");
 }
 
 static void MacTriggerInputLifecycleContract()
 {
     var stateApi = new FakeMacTriggerStateApi();
-    var sources = new List<FakeMacWheelPulseSource>();
-    IMacWheelPulseSource CreateSource()
+    var sources = new List<FakeMacTriggerPulseSource>();
+    IMacTriggerPulseSource CreateSource()
     {
-        var source = new FakeMacWheelPulseSource();
+        var source = new FakeMacTriggerPulseSource();
         sources.Add(source);
         return source;
     }
@@ -805,15 +891,20 @@ static void MacTriggerInputLifecycleContract()
     var key = input.Resolve("A") ?? throw new InvalidOperationException("mac key was not resolved");
     stateApi.PressedKeyCode = checked((ushort)key.Code);
     Equal(true, input.IsPressed(key), "mac keyboard state uses mapped key code");
-    Equal(0, sources.Count, "keyboard trigger does not create event tap");
+    Equal(1, sources.Count, "keyboard trigger lazily creates one event tap");
+    sources[0].PressPulses.Add(key);
+    Equal(true, input.ConsumePulse(key), "keyboard press pulse is consumed");
+    Equal(false, input.ConsumePulse(key), "keyboard press pulse does not repeat");
 
     var mouse = input.Resolve("MOUSE4") ?? throw new InvalidOperationException("mac mouse button was not resolved");
     stateApi.PressedMouseButton = checked((uint)mouse.Code);
     Equal(true, input.IsPressed(mouse), "mac mouse state uses mapped button");
-    Equal(0, sources.Count, "mouse trigger does not create event tap");
+    Equal(1, sources.Count, "mouse trigger reuses the event tap");
+    sources[0].PressPulses.Add(mouse);
+    Equal(true, input.ConsumePulse(mouse), "mouse press pulse is consumed");
 
     var wheel = input.Resolve("WHEELDOWN") ?? throw new InvalidOperationException("mac wheel was not resolved");
-    Equal(1, sources.Count, "wheel trigger lazily creates one event tap");
+    Equal(1, sources.Count, "wheel trigger reuses the event tap");
     Equal(wheel, input.Resolve("MOUSEWHEELDOWN"), "wheel aliases reuse binding");
     Equal(1, sources.Count, "wheel alias does not create another event tap");
     sources[0].Pulses = 1;
@@ -1191,9 +1282,22 @@ static void MacRuntimeFactoryContract()
 
 static void RuntimeToggleSnapshotPriorityContract()
 {
+    AssertTogglePublishedBeforeBlockingScan(
+        new PressedTriggerInput(),
+        "toggle state is published before a blocking scan");
+}
+
+static void RuntimeShortTriggerPulseContract()
+{
+    AssertTogglePublishedBeforeBlockingScan(
+        new PulseOnlyTriggerInput(),
+        "short trigger pulse is published before a blocking scan");
+}
+
+static void AssertTogglePublishedBeforeBlockingScan(ITriggerInput trigger, string message)
+{
     using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
     var scanner = new BlockingRuntimeScanner();
-    var trigger = new PressedTriggerInput();
     var snapshots = new System.Collections.Concurrent.ConcurrentQueue<RenderSnapshot>();
     var runtime = new ShigureRuntime(
         new AppOptions(
@@ -1218,8 +1322,7 @@ static void RuntimeToggleSnapshotPriorityContract()
             throw new TimeoutException("runtime scanner did not block");
         }
 
-        Equal(true, snapshots.Any(snapshot => snapshot.Enabled),
-            "toggle state is published before a blocking scan");
+        Equal(true, snapshots.Any(snapshot => snapshot.Enabled), message);
     }
     finally
     {
@@ -2079,6 +2182,33 @@ static void FuyutsuiGlobalBurstMouseContract()
         "global mouse event does not require combat-lockdown retry state");
 }
 
+static void FuyutsuiProtocolContract()
+{
+    var repositoryRoot = FindRepositoryRoot();
+    var curves = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "curves.lua"));
+    var main = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "main.lua"));
+    var stateBlocks = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "stateblocks.lua"));
+
+    Equal(true, curves.Contains("CreateColorCurve(25.5, 255)", StringComparison.Ordinal),
+        "cast protocol encodes one second as ten units");
+    Equal(true, ClassStateCatalog.IsKnown(ClassStateCatalog.CategoryState, "施法(正计时)"),
+        "state catalog exposes elapsed cast time");
+    Equal(true, ClassStateCatalog.IsKnown(ClassStateCatalog.CategoryState, "施法(倒计时)"),
+        "state catalog exposes remaining cast time");
+    Equal(false, ClassStateCatalog.IsKnown(ClassStateCatalog.CategoryState, "施法"),
+        "legacy cast state is no longer selectable");
+    Equal(true, ClassStateCatalog.TopCategories.Contains(ClassStateCatalog.CategoryMouseover),
+        "state catalog exposes mouseover category");
+    Equal(true, ClassStateCatalog.TopCategories.Contains(ClassStateCatalog.CategoryBoss5),
+        "state catalog exposes every boss category");
+    Equal(true, main.Contains("\"鼠标\"", StringComparison.Ordinal)
+        && main.Contains("\"首领5\"", StringComparison.Ordinal),
+        "addon block loader includes mouseover and boss categories");
+    Equal(true, stateBlocks.Contains("[\"施法(正计时)\"]", StringComparison.Ordinal)
+        && stateBlocks.Contains("[\"施法(倒计时)\"]", StringComparison.Ordinal),
+        "addon runtime registers both cast directions");
+}
+
 static void ClassBlocksEditorPersistenceContract()
 {
     var repositoryRoot = FindRepositoryRoot();
@@ -2223,6 +2353,20 @@ static void ProjectConfigUpdateContract()
         Equal(false, result.AddonSync.TargetFound, "missing game skips deployment without failing local update");
         Equal(true, File.Exists(Path.Combine(fixtureRoot, "config", "Mage.json")), "config update writes runtime workspace config");
         Equal(true, File.Exists(Path.Combine(fixtureRoot, "keymap", "mage.json")), "config update writes runtime workspace keymap");
+        foreach (var generatedPath in result.Config.UpdatedFiles)
+        {
+            var checkedInPath = Path.Combine(repositoryRoot, "config", Path.GetFileName(generatedPath));
+            var generated = JsonNode.Parse(File.ReadAllText(generatedPath));
+            var checkedIn = JsonNode.Parse(File.ReadAllText(checkedInPath));
+            Equal(true, JsonNode.DeepEquals(generated, checkedIn),
+                $"checked-in config is reproducible: {Path.GetFileName(generatedPath)}");
+        }
+        var mageConfig = JsonNode.Parse(File.ReadAllText(Path.Combine(fixtureRoot, "config", "Mage.json")))
+            ?? throw new InvalidDataException("generated mage config is empty");
+        Equal("状态", mageConfig["1"]?["施法(正计时)"]?["category"]?.GetValue<string>(),
+            "generated state records its source category");
+        Equal("鼠标", mageConfig["1"]?["鼠标类型"]?["category"]?.GetValue<string>(),
+            "generated config includes mouseover state metadata");
         Equal(
             sourceHashBefore,
             Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(savedFile))),
@@ -2446,26 +2590,30 @@ static void RuntimeResourceWorkspaceContract()
 
     try
     {
+        var repositoryRoot = FindRepositoryRoot();
         var sourceRoot = Path.Combine(fixtureRoot, "bundle");
         var userDataRoot = Path.Combine(fixtureRoot, "application-support", "Shigure");
         var sourceLua = Path.Combine(sourceRoot, "Fuyutsui", "core", "state.lua");
         var sourceTexture = Path.Combine(sourceRoot, "Fuyutsui", "media", "icon.blp");
+        var sourceClass = Path.Combine(sourceRoot, "Fuyutsui", "class", "Mage.lua");
         var sourceConfig = Path.Combine(sourceRoot, "config", "common.json");
         var sourceKeymap = Path.Combine(sourceRoot, "keymap", "base.json");
         var sourceProcess = Path.Combine(sourceRoot, "wow_process.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(sourceLua)!);
         Directory.CreateDirectory(Path.GetDirectoryName(sourceTexture)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceClass)!);
         Directory.CreateDirectory(Path.GetDirectoryName(sourceConfig)!);
         Directory.CreateDirectory(Path.GetDirectoryName(sourceKeymap)!);
         File.WriteAllText(sourceLua, "source-v1");
         File.WriteAllBytes(sourceTexture, [0, 1, 2, 255]);
+        File.Copy(Path.Combine(repositoryRoot, "Fuyutsui", "class", "Mage.lua"), sourceClass);
         File.WriteAllText(sourceConfig, "{\"version\":1}");
         File.WriteAllText(sourceKeymap, "{\"key\":1}");
         File.WriteAllText(sourceProcess, "Wow");
 
         var service = new RuntimeResourceWorkspaceService();
         var first = service.Initialize(sourceRoot, userDataRoot);
-        Equal(5, first.CreatedFiles.Count, "workspace first initialization creates every source");
+        Equal(6, first.CreatedFiles.Count, "workspace first initialization creates every source");
         Equal(0, first.UpdatedFiles.Count, "workspace first initialization has no updates");
         Equal(0, first.ConflictingFiles.Count, "workspace first initialization has no conflicts");
         Equal(
@@ -2480,12 +2628,16 @@ static void RuntimeResourceWorkspaceContract()
             "workspace copies binary resources exactly");
 
         var second = service.Initialize(sourceRoot, userDataRoot);
-        Equal(5, second.SkippedFiles.Count, "workspace unchanged files are skipped");
+        Equal(6, second.SkippedFiles.Count, "workspace unchanged files are skipped");
 
         var targetLua = Path.Combine(first.WorkspaceDirectory, "Fuyutsui", "core", "state.lua");
         var targetConfig = Path.Combine(first.WorkspaceDirectory, "config", "common.json");
+        var targetClass = Path.Combine(first.WorkspaceDirectory, "Fuyutsui", "class", "Mage.lua");
         var targetOldKeymap = Path.Combine(first.WorkspaceDirectory, "keymap", "base.json");
         File.WriteAllText(targetLua, "user-change");
+        File.WriteAllText(
+            targetClass,
+            File.ReadAllText(targetClass).Replace("\"施法(倒计时)\"", "\"施法\"", StringComparison.Ordinal));
         File.WriteAllText(sourceLua, "source-v2");
         File.WriteAllText(sourceConfig, "{\"version\":2}");
         File.Delete(sourceKeymap);
@@ -2496,6 +2648,17 @@ static void RuntimeResourceWorkspaceContract()
         Equal(true, upgraded.UpdatedFiles.Contains("config/common.json"), "unchanged target receives source update");
         Equal(true, upgraded.CreatedFiles.Contains("keymap/new.json"), "new source file is created");
         Equal(true, upgraded.ConflictingFiles.Contains("Fuyutsui/core/state.lua"), "user edit is reported as conflict");
+        Equal(true, upgraded.ConflictingFiles.Contains("Fuyutsui/class/Mage.lua"), "custom class is reported as preserved conflict");
+        Equal(true, upgraded.ProtocolConflictingFiles.Contains("Fuyutsui/core/state.lua"), "core conflict blocks mixed protocol runtime");
+        Equal(false, upgraded.ProtocolConflictingFiles.Contains("Fuyutsui/class/Mage.lua"), "migratable class customization does not block runtime");
+        Equal(true, upgraded.MigratedFiles.Contains("Fuyutsui/class/Mage.lua"), "legacy cast field is structurally migrated");
+        Equal(true, upgraded.MigratedFiles.Contains("config/Mage.json"), "legacy cast migration regenerates derived config");
+        Equal(
+            false,
+            ClassBlocksStore.Load(targetClass).Specs.Values.Any(spec =>
+                spec.FlatStates.Contains("施法", StringComparer.Ordinal)
+                || spec.CategorizedStates.Values.Any(states => states.Contains("施法", StringComparer.Ordinal))),
+            "legacy cast state is removed from every class spec");
         Equal("user-change", File.ReadAllText(targetLua), "user edit is preserved");
         Equal("{\"version\":2}", File.ReadAllText(targetConfig), "managed target is updated");
         Equal(true, File.Exists(targetOldKeymap), "removed source does not delete target");
@@ -2513,7 +2676,6 @@ static void RuntimeResourceWorkspaceContract()
             "damaged workspace manifest fails closed");
         Equal("{\"version\":2}", File.ReadAllText(targetConfig), "manifest failure writes no resources");
 
-        var repositoryRoot = FindRepositoryRoot();
         var macAppProgram = File.ReadAllText(Path.Combine(
             repositoryRoot,
             "Apps",
@@ -2526,8 +2688,10 @@ static void RuntimeResourceWorkspaceContract()
             "MacUiComposition.cs"));
         Equal(true, macAppProgram.Contains("RuntimeResourceWorkspaceService", StringComparison.Ordinal), "MacApp initializes runtime workspace");
         Equal(true, macAppProgram.Contains("workspace.WorkspaceDirectory", StringComparison.Ordinal), "MacApp runs from runtime workspace");
+        Equal(true, macAppProgram.Contains("workspace.ProtocolConflictingFiles", StringComparison.Ordinal), "MacApp blocks mixed plugin protocols");
         Equal(true, macUiComposition.Contains("RuntimeResourceWorkspaceService", StringComparison.Ordinal), "MacUI initializes runtime workspace");
         Equal(true, macUiComposition.Contains("workspace.WorkspaceDirectory", StringComparison.Ordinal), "MacUI runs from runtime workspace");
+        Equal(true, macUiComposition.Contains("workspace.ProtocolConflictingFiles", StringComparison.Ordinal), "MacUI blocks mixed plugin protocols");
     }
     finally
     {
@@ -3268,8 +3432,13 @@ static void MacUiTechnicalSampleContract()
         "Mac UI creates addon deployment from the runtime workspace");
     Equal(true, compositionText.Contains("addonSync.SynchronizeAll()", StringComparison.Ordinal),
         "Mac UI deploys the runtime addon at startup");
+    Equal(true, compositionText.Contains("workspace.ProtocolConflictingFiles", StringComparison.Ordinal)
+        && compositionText.Contains("FuyutsuiAddonSyncResult.Skipped", StringComparison.Ordinal),
+        "Mac UI skips addon deployment when protocol files conflict");
     Equal(true, mainWindowText.Contains("游戏插件已同步", StringComparison.Ordinal),
         "Mac UI reports startup addon deployment");
+    Equal(true, mainWindowText.Contains("RunButton.IsEnabled = false", StringComparison.Ordinal),
+        "Mac UI disables runtime controls when protocol files conflict");
     Equal(false, mainWindowText.Contains("new MacPermissionService()", StringComparison.Ordinal), "Mac UI controls do not construct native permission services");
     Equal(true, mainWindowText.Contains("_permissions.Check()", StringComparison.Ordinal), "Mac UI exposes side-effect-free permission checks");
     Equal(true, mainWindowText.Contains("_permissions.Request(permission)", StringComparison.Ordinal), "Mac UI permission prompts require an explicit button path");
@@ -3289,6 +3458,9 @@ static void MacUiTechnicalSampleContract()
     Equal(true, sourceText.Contains("ConfigEditorView", StringComparison.Ordinal), "Mac UI provides the real class configuration editor");
     Equal(true, sourceText.Contains("ClassBlocksStore", StringComparison.Ordinal), "Mac UI edits shared ClassBlocks models");
     Equal(true, sourceText.Contains("ProjectConfigUpdateService", StringComparison.Ordinal), "Mac UI uses the shared save and deployment workflow");
+    Equal(true, sourceText.Contains("nameof(RuleRow.Comment)", StringComparison.Ordinal)
+        && sourceText.Contains("Comment = model.Comment", StringComparison.Ordinal),
+        "Mac module editor round trips rule comments");
     Equal(false, sourceText.Contains("配置编辑样例", StringComparison.Ordinal), "Mac UI no longer exposes the in-memory config sample");
     Equal(true, sourceText.Contains("MacroEditorView", StringComparison.Ordinal), "Mac UI provides the real class macro editor");
     Equal(true, sourceText.Contains("ClassMacrosStore", StringComparison.Ordinal), "Mac UI edits shared ClassMacros models");
@@ -3309,6 +3481,12 @@ static void MacUiTechnicalSampleContract()
     Equal(true, sourceText.Contains("MacApplicationRuntimeFactory", StringComparison.Ordinal), "Mac UI reuses Mac application runtime composition");
     Equal(true, sourceText.Contains("RuntimeSessionController", StringComparison.Ordinal), "Mac UI consumes shared runtime controller");
     Equal(true, sourceText.Contains("SingleInstanceLease.TryAcquire", StringComparison.Ordinal), "Mac UI shares the runtime single-instance lease");
+    Equal(
+        true,
+        sourceText.Contains("Interlocked.Exchange(ref _applicationLease, null)?.Dispose()", StringComparison.Ordinal),
+        "Mac UI application lease release is idempotent across repeated exit callbacks");
+    Equal(false, sourceText.Contains("_applicationLease.Dispose()", StringComparison.Ordinal),
+        "Mac UI repeated exit callbacks never dereference a cleared application lease");
     Equal(true, sourceText.Contains("_runtime.StartAsync", StringComparison.Ordinal), "Mac UI starts the real runtime controller");
     Equal(true, sourceText.Contains("_runtime.RestartAsync", StringComparison.Ordinal), "Mac UI restarts after setting changes");
     Equal(true, sourceText.Contains("_runtime.StopAsync", StringComparison.Ordinal), "Mac UI stops the real runtime controller");
@@ -3916,15 +4094,21 @@ sealed class FakeMacTriggerStateApi : IMacTriggerStateApi
     public bool IsMouseButtonPressed(uint button) => PressedMouseButton == button;
 }
 
-sealed class FakeMacWheelPulseSource : IMacWheelPulseSource
+sealed class FakeMacTriggerPulseSource : IMacTriggerPulseSource
 {
+    public HashSet<TriggerInputBinding> PressPulses { get; } = [];
     public int Pulses { get; set; }
     public int UpPulses { get; set; }
     public int DisposeCount { get; private set; }
 
-    public bool ConsumePulse(int direction)
+    public bool ConsumePulse(TriggerInputBinding input)
     {
-        if (direction == MacTriggerInputMap.WheelUpCode)
+        if (!input.IsPulse)
+        {
+            return PressPulses.Remove(input);
+        }
+
+        if (input.Code == MacTriggerInputMap.WheelUpCode)
         {
             if (UpPulses <= 0)
             {
@@ -4312,6 +4496,23 @@ sealed class PressedTriggerInput : ITriggerInput
     public bool IsPressed(TriggerInputBinding input) => true;
 
     public bool ConsumePulse(TriggerInputBinding input) => false;
+
+    public void Dispose()
+    {
+    }
+}
+
+sealed class PulseOnlyTriggerInput : ITriggerInput
+{
+    private int _pending = 1;
+
+    public TriggerInputBinding? Resolve(string triggerName) =>
+        new(TriggerInputKind.Keyboard, 0);
+
+    public bool IsPressed(TriggerInputBinding input) => false;
+
+    public bool ConsumePulse(TriggerInputBinding input) =>
+        Interlocked.Exchange(ref _pending, 0) != 0;
 
     public void Dispose()
     {

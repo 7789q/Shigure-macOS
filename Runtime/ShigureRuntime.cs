@@ -131,9 +131,10 @@ public sealed class ShigureRuntime : IDisposable
             {
                 DrainPendingCommands();
                 var now = _timeProvider.GetUtcNow();
+                var pulse = _triggerInput.ConsumePulse(trigger.Value);
                 var edges = isPulseTrigger
-                    ? TriggerInputEdgeTracker.ObservePulse(_triggerInput.ConsumePulse(trigger.Value))
-                    : edgeTracker.ObserveState(_triggerInput.IsPressed(trigger.Value));
+                    ? TriggerInputEdgeTracker.ObservePulse(pulse)
+                    : edgeTracker.ObserveState(_triggerInput.IsPressed(trigger.Value) || pulse);
                 var rising = edges.Rising
                     && (isPulseTrigger || now - lastToggleAt >= TimeSpan.FromMilliseconds(120));
 

@@ -86,14 +86,16 @@ function Fuyutsui:UpdatePlayerMoving(boolean)
 end
 
 function Fuyutsui:UpdatePlayerCastBlocks()
-    self:UpdateStateBlock("状态", "施法")
+    self:UpdateStateBlock("状态", "施法(正计时)")
+    self:UpdateStateBlock("状态", "施法(倒计时)")
     self:UpdateStateBlock("状态", "引导")
     self:UpdateStateBlock("状态", "蓄力")
     self:UpdateStateBlock("状态", "蓄力层数")
 end
 
 function Fuyutsui:UpdatePlayerCastingInfo()
-    self:UpdateStateBlock("状态", "施法")
+    self:UpdateStateBlock("状态", "施法(正计时)")
+    self:UpdateStateBlock("状态", "施法(倒计时)")
 end
 
 function Fuyutsui:UpdatePlayerChannelingInfo()

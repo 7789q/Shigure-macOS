@@ -1,6 +1,7 @@
 local addon, ns = ...
 -- 命名宏体：出现在 staticSpells/specialSpells 中的名称若在此表，则用表内文本创建宏
 Fuyutsui.MacroBodies = {
+    ["光注法力药水"] = "item:241300\n/cast item:241301",
     ["鲁莽药水"] = "item:241288\n/cast item:241289",
     ["圣光潜力"] = "item:241308\n/cast item:241309",
     ["银月城生命药水"] = "item:241304\n/cast item:241305\n/cast item:271884\n/cast item:271885",
@@ -107,6 +108,11 @@ Fuyutsui.ClassMacros = {
             "复仇者之盾",
             "责难",
             "[@mouseover]圣洁鸣钟",
+            "[@target]荣耀圣令",
+            "[@target]神圣震击",
+            "[@target]圣光术",
+            "[@target]圣光闪现",
+            "[@player]神圣壁垒",
         },
         specialSpells = {},
     },
@@ -231,7 +237,7 @@ Fuyutsui.ClassMacros = {
         },
         staticSpells = {
             "心灵震爆",
-            "惩击",
+            "[@target]惩击",
             "暗言术：痛",
             "[@player]真言术：韧",
             "神圣新星",
@@ -251,7 +257,7 @@ Fuyutsui.ClassMacros = {
             "虚空冲击",
             "虚空齐射",
             "圣言术：罚",
-            "神圣之火",
+            "[@target]神圣之火",
             "治疗祷言",
             "神圣化身",
             "奥术洪流",
@@ -268,6 +274,11 @@ Fuyutsui.ClassMacros = {
             "银月城生命药水",
             "渐隐术",
             "[@player]真言术：耀",
+            "[@target]圣言术：静\t",
+            "[@target]圣言术：罚",
+            "[@target]快速治疗",
+            "惩击",
+            "神圣之火",
         },
         specialSpells = {
             "/castsequence reset=0.4 真言术：耀,x",
@@ -376,6 +387,8 @@ Fuyutsui.ClassMacros = {
             "[@cursor]狂风图腾",
             "[@target]净化灵魂",
             "净化术",
+            "[@target]激流",
+            "[@target]治疗波",
         },
         specialSpells = {},
     },
@@ -653,6 +666,8 @@ Fuyutsui.ClassMacros = {
             "根除",
             "坍缩之星",
             "收割者战刃",
+            "灵魂裂劈",
+            "破裂",
         },
         specialSpells = {
             "/castsequence reset=0.5 恶魔变形,x",

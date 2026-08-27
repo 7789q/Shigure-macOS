@@ -181,9 +181,6 @@ function Fuyutsui:UpdateGroup()
     if self.RefreshGroupAuraContainers then
         self:RefreshGroupAuraContainers()
     end
-    if self.RefreshOtherPriestAuraContainers then
-        self:RefreshOtherPriestAuraContainers()
-    end
     if self.RefreshGroupHealAbsorbBars then
         self:RefreshGroupHealAbsorbBars()
     end

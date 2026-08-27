@@ -5,6 +5,8 @@ local rc = LibStub("LibRangeCheck-3.0")
 local state = Fuyutsui.state
 local target = Fuyutsui.target
 local focus = Fuyutsui.focus
+local mouseover = Fuyutsui.mouseover
+local boss = Fuyutsui.boss
 local nameplate = Fuyutsui.nameplate
 
 function Fuyutsui:GetUnitRange(unit)
@@ -15,6 +17,7 @@ end
 local unitZHMap = {
     ["target"] = "目标",
     ["focus"] = "焦点",
+    ["mouseover"] = "鼠标",
     ["boss1"] = "首领1",
     ["boss2"] = "首领2",
     ["boss3"] = "首领3",
@@ -25,28 +28,35 @@ local unitZHMap = {
 local function GetUnitCache(unit)
     if unit == "target" then return target end
     if unit == "focus" then return focus end
+    if unit == "mouseover" then return mouseover end
+    if boss and boss[unit] then return boss[unit] end
 end
 
 local function isSameUnit(unit1, unit2)
     local isSame = UnitIsUnit(unit1, unit2)
+    if issecretvalue(isSame) then
+        return false
+    end
     return isSame
 end
 
 local function getUnitTypeIndex(unit)
-    for index = 1, 40 do
-        if isSameUnit(unit, "raid" .. index) then
-            return index
+    if IsInRaid() then
+        for index = 1, 40 do
+            if isSameUnit(unit, "raid" .. index) then
+                return index
+            end
+        end
+    elseif UnitInParty("player") then
+        for index = 1, 4 do
+            if isSameUnit(unit, "party" .. index) then
+                return 41 + index
+            end
         end
     end
 
     if isSameUnit(unit, "player") then
         return 41
-    end
-
-    for index = 1, 4 do
-        if isSameUnit(unit, "party" .. index) then
-            return 41 + index
-        end
     end
 
     for index = 1, 5 do
@@ -61,8 +71,12 @@ end
 local function getUnitType(unit)
     if not UnitExists(unit) then return 0 end
 
+    local canAttack = UnitCanAttack("player", unit)
+    local canAssist = UnitCanAssist("player", unit)
+    if not canAttack and not canAssist then return 0 end
+
     local index = getUnitTypeIndex(unit)
-    if UnitCanAssist("player", unit) then
+    if canAssist then
         index = index + 100
     end
     return index / 255
@@ -72,6 +86,13 @@ function Fuyutsui:UpdateUnitType(unit)
     local cache = GetUnitCache(unit)
     local category = unitZHMap[unit]
     if not cache or not category then return end
+
+    if boss and boss[unit] then
+        cache.type = (cache.canAttack and 1 or 2) / 255
+        self:UpdateStateBlock(category, "类型")
+        return
+    end
+
     local unitType = 0
     if not cache.isDead then
         unitType = getUnitType(unit)
@@ -84,7 +105,11 @@ function Fuyutsui:UpdateUnitCanAttack(unit)
     local cache = GetUnitCache(unit)
     if not cache then return end
     cache.canAttack = UnitCanAttack("player", unit)
-    cache.canAssist = UnitCanAssist("player", unit)
+    if boss and boss[unit] then
+        cache.canAssist = false
+    else
+        cache.canAssist = UnitCanAssist("player", unit)
+    end
     self:UpdateUnitType(unit)
 end
 
@@ -110,11 +135,11 @@ function Fuyutsui:UpdateUnitRangeBlock(unit)
 end
 
 function Fuyutsui:UpdateUnitCastingOrChannelingInfo(unit)
-    if not UnitExists(unit) then return end
     local obj = unitZHMap[unit]
     if not obj then return end
 
-    self:UpdateStateBlock(obj, "施法")
+    self:UpdateStateBlock(obj, "施法(倒计时)")
+    self:UpdateStateBlock(obj, "施法(正计时)")
     self:UpdateStateBlock(obj, "施法可打断")
     self:UpdateStateBlock(obj, "引导")
     self:UpdateStateBlock(obj, "引导可打断")
@@ -192,6 +217,31 @@ end
 
 function Fuyutsui:UpdateFocusFullInfo()
     self:UpdateUnitFullInfo("focus")
+end
+
+-- 鼠标指向包装
+function Fuyutsui:UpdateMouseoverType()
+    self:UpdateUnitType("mouseover")
+end
+
+function Fuyutsui:UpdateMouseoverCanAttack()
+    self:UpdateUnitCanAttack("mouseover")
+end
+
+function Fuyutsui:UpdateMouseoverRangeBlock()
+    self:UpdateUnitRangeBlock("mouseover")
+end
+
+function Fuyutsui:UpdateMouseoverDeath()
+    self:UpdateUnitDeathStatus("mouseover")
+end
+
+function Fuyutsui:UpdateMouseoverHealth()
+    self:UpdateUnitHealthBlock("mouseover")
+end
+
+function Fuyutsui:UpdateMouseoverFullInfo()
+    self:UpdateUnitFullInfo("mouseover")
 end
 
 function Fuyutsui:AddNameplate(unit)

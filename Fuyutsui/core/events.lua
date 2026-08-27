@@ -253,6 +253,12 @@ function Fuyutsui:UNIT_HEALTH(_, unit)
     if unit == "focus" then
         self:UpdateFocusHealth()
     end
+    if unit == "mouseover" then
+        self:UpdateMouseoverHealth()
+    end
+    if unit and unit:match("^boss[1-5]$") then
+        self:UpdateUnitHealthBlock(unit)
+    end
     if self.group[unit] then
         self:UpdateUnitDeath(unit, "health")
     end
@@ -261,6 +267,12 @@ end
 function Fuyutsui:UNIT_MAXHEALTH(_, unit)
     if unit == "player" then
         self:UpdatePlayerHealth()
+    end
+    if unit == "mouseover" then
+        self:UpdateMouseoverHealth()
+    end
+    if unit and unit:match("^boss[1-5]$") then
+        self:UpdateUnitHealthBlock(unit)
     end
     if self.group[unit] then
         self:UpdateUnitDeath(unit, "health")
@@ -370,6 +382,10 @@ function Fuyutsui:PLAYER_FOCUS_CHANGED()
     self:UpdateUnitAuraContainer("focus")
 end
 
+function Fuyutsui:UPDATE_MOUSEOVER_UNIT()
+    self:UpdateMouseoverFullInfo()
+end
+
 --- 过场/影片结束后重绑 spellId 过滤（槽位否则会落到排序第一的光环）
 function Fuyutsui:CINEMATIC_STOP()
     C_Timer.After(1, function()
@@ -386,6 +402,11 @@ end
 function Fuyutsui:NAME_PLATE_UNIT_ADDED(_, unit)
     self:AddNameplate(unit)
     self:UpdateTargetCanAttack()
+    for index = 1, 5 do
+        local boss = "boss" .. index
+        self:UpdateUnitCanAttack(boss)
+        self:UpdateUnitRangeBlock(boss)
+    end
 end
 
 function Fuyutsui:NAME_PLATE_UNIT_REMOVED(_, unit)
@@ -453,6 +474,10 @@ function Fuyutsui:OnUpdate(elapsed)
     self:UpdatePlayerCastBlocks()
     self:UpdateUnitCastingOrChannelingInfo("target")
     self:UpdateUnitCastingOrChannelingInfo("focus")
+    self:UpdateUnitCastingOrChannelingInfo("mouseover")
+    for index = 1, 5 do
+        self:UpdateUnitCastingOrChannelingInfo("boss" .. index)
+    end
     self:UpdateGroupInRangeAndHealth()
 
     self.timeElapsed = self.timeElapsed + elapsed
@@ -462,6 +487,8 @@ function Fuyutsui:OnUpdate(elapsed)
         self:UpdateRune()
         self:UpdateTargetRangeBlock()
         self:UpdateFocusRangeBlock()
+        self:UpdateMouseoverRangeBlock()
+
         self:UpdateEnemyCount()
         self:UpdateItemCooldown()
         self.timeElapsed = 0

@@ -35,6 +35,12 @@ public static class UnitSelector
                     threshold,
                     data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role) && HasAnyAura(data, names))
                 : null,
+            UnitSelectorKind.LowestHealthWithoutAnyAura => unit.AuraNames is { Count: > 0 } names
+                ? LowestHealth(
+                    group,
+                    threshold,
+                    data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role) && !HasAnyAura(data, names))
+                : null,
             UnitSelectorKind.LowestHealthWithoutAura => aura is null
                 ? null
                 : LowestHealth(
@@ -67,6 +73,9 @@ public static class UnitSelector
             UnitSelectorKind.HighestHealingAbsorb => HighestHealingAbsorb(group, threshold, _ => true),
             UnitSelectorKind.HighestHealingAbsorbWithAnyAura => unit.AuraNames is { Count: > 0 } names
                 ? HighestHealingAbsorb(group, threshold, data => HasAnyAura(data, names))
+                : null,
+            UnitSelectorKind.HighestHealingAbsorbWithoutAnyAura => unit.AuraNames is { Count: > 0 } names
+                ? HighestHealingAbsorb(group, threshold, data => !HasAnyAura(data, names))
                 : null,
             UnitSelectorKind.HighestHealingAbsorbWithoutAura => aura is null
                 ? null
@@ -316,6 +325,7 @@ public static class UnitSelector
     private static bool IsHealingAbsorbKind(UnitSelectorKind kind)
         => kind is UnitSelectorKind.HighestHealingAbsorb
             or UnitSelectorKind.HighestHealingAbsorbWithAnyAura
+            or UnitSelectorKind.HighestHealingAbsorbWithoutAnyAura
             or UnitSelectorKind.HighestHealingAbsorbWithoutAura
             or UnitSelectorKind.HighestHealingAbsorbWithAura
             or UnitSelectorKind.HighestHealingAbsorbWithAuraCount;

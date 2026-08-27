@@ -7,11 +7,18 @@ namespace Shigure;
 public static class ClassStateCatalog
 {
     public const string CategoryState = "状态";
+    public const string CategoryPlayerDisplay = "玩家";
     public const string CategoryConfig = "配置开关";
     public const string CategoryItem = "物品";
     public const string CategoryResource = "能量";
     public const string CategoryTarget = "目标";
     public const string CategoryFocus = "焦点";
+    public const string CategoryMouseover = "鼠标";
+    public const string CategoryBoss1 = "首领1";
+    public const string CategoryBoss2 = "首领2";
+    public const string CategoryBoss3 = "首领3";
+    public const string CategoryBoss4 = "首领4";
+    public const string CategoryBoss5 = "首领5";
 
     public static readonly string[] TopCategories =
     [
@@ -20,7 +27,13 @@ public static class ClassStateCatalog
         CategoryItem,
         CategoryConfig,
         CategoryTarget,
-        CategoryFocus
+        CategoryFocus,
+        CategoryMouseover,
+        CategoryBoss1,
+        CategoryBoss2,
+        CategoryBoss3,
+        CategoryBoss4,
+        CategoryBoss5
     ];
 
     private static readonly (string Category, string[] Names)[] Categories =
@@ -30,10 +43,9 @@ public static class ClassStateCatalog
             "职业", "专精", "有效性", "战斗时间", "移动",
             "生命值", "一键辅助", "插入法术", "队伍类型", "队伍人数",
             "首领战", "难度", "英雄天赋", "施法目标", "施法技能",
-            "敌人数量", "敌人数-无仇恨", "敌人数-有仇恨","施法",
-            "引导", "蓄力", "蓄力层数", "酒池", "符文", "姿态",
-            "救赎之魂1", "救赎之魂2", "神圣军备", "自律", "英勇打击",
-            "收割者战刃"
+            "敌人数量", "敌人数-无仇恨", "敌人数-有仇恨",
+            "施法(正计时)", "施法(倒计时)", "引导", "蓄力", "蓄力层数",
+            "酒池", "符文", "姿态", "神圣军备", "自律", "英勇打击", "收割者战刃",
         ]),
         (CategoryConfig,
         [
@@ -51,11 +63,35 @@ public static class ClassStateCatalog
         ]),
         (CategoryTarget,
         [
-            "类型", "驱散类型", "生命值", "距离", "施法", "施法可打断", "引导", "引导可打断"
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
         ]),
         (CategoryFocus,
         [
-            "类型", "驱散类型", "生命值", "距离", "施法", "施法可打断", "引导", "引导可打断"
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
+        ]),
+        (CategoryMouseover,
+        [
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
+        ]),
+        (CategoryBoss1,
+        [
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
+        ]),
+        (CategoryBoss2,
+        [
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
+        ]),
+        (CategoryBoss3,
+        [
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
+        ]),
+        (CategoryBoss4,
+        [
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
+        ]),
+        (CategoryBoss5,
+        [
+            "类型", "驱散类型", "生命值", "距离", "施法(倒计时)", "施法(正计时)", "施法可打断", "引导", "引导可打断"
         ])
     ];
 
@@ -70,6 +106,16 @@ public static class ClassStateCatalog
 
     public static IReadOnlyList<StateOption> GetAllOptions(string category)
         => GetOptions(category);
+
+    public static string GetCategoryDisplayName(string category)
+        => string.Equals(category, CategoryState, StringComparison.Ordinal)
+            ? CategoryPlayerDisplay
+            : category;
+
+    public static string GetStorageCategoryFromDisplay(string displayName)
+        => string.Equals(displayName, CategoryPlayerDisplay, StringComparison.Ordinal)
+            ? CategoryState
+            : displayName;
 
     public static bool IsKnown(string category, string name)
         => !string.IsNullOrWhiteSpace(name)

@@ -36,6 +36,7 @@
     "33": "祈福",
     "34": "暗影愈合",
     "35": "福音",
+    "36": "驱散魔法",
     "101": "奥术洪流",
     "102": "石像形态",
     "103": "影遁",
@@ -69,176 +70,279 @@
   "1": {
     "队伍类型": {
       "step": 4,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "英雄天赋": {
       "step": 5,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "有效性": {
       "step": 6,
-      "type": "bool"
+      "type": "bool",
+      "category": "状态"
     },
     "一键辅助": {
       "step": 7,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "插入法术": {
       "step": 8,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "战斗时间": {
       "step": 9,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "移动": {
       "step": 10,
-      "type": "bool"
+      "type": "bool",
+      "category": "状态"
     },
-    "施法": {
+    "施法(正计时)": {
       "step": 11,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
+    },
+    "施法(倒计时)": {
+      "step": 12,
+      "type": "int",
+      "category": "状态"
     },
     "引导": {
-      "step": 12,
-      "type": "int"
+      "step": 13,
+      "type": "int",
+      "category": "状态"
     },
     "蓄力": {
-      "step": 13,
-      "type": "int"
+      "step": 14,
+      "type": "int",
+      "category": "状态"
     },
     "蓄力层数": {
-      "step": 14,
-      "type": "int"
+      "step": 15,
+      "type": "int",
+      "category": "状态"
     },
     "生命值": {
-      "step": 15,
-      "type": "int"
+      "step": 16,
+      "type": "int",
+      "category": "状态"
     },
     "队伍人数": {
-      "step": 16,
-      "type": "int"
+      "step": 17,
+      "type": "int",
+      "category": "状态"
     },
     "首领战": {
-      "step": 17,
-      "type": "int"
+      "step": 18,
+      "type": "int",
+      "category": "状态"
     },
     "难度": {
-      "step": 18,
-      "type": "int"
+      "step": 19,
+      "type": "int",
+      "category": "状态"
     },
     "施法技能": {
-      "step": 19,
-      "type": "int"
+      "step": 20,
+      "type": "int",
+      "category": "状态"
     },
     "施法目标": {
-      "step": 20,
-      "type": "int"
+      "step": 21,
+      "type": "int",
+      "category": "状态"
     },
     "敌人数量": {
-      "step": 21,
-      "type": "int"
+      "step": 22,
+      "type": "int",
+      "category": "状态"
     },
     "法力值": {
-      "step": 22,
-      "type": "int"
+      "step": 23,
+      "type": "int",
+      "category": "能量"
     },
     "魔法药水": {
-      "step": 23,
-      "type": "int"
+      "step": 24,
+      "type": "int",
+      "category": "物品"
     },
     "治疗药水": {
-      "step": 24,
-      "type": "int"
+      "step": 25,
+      "type": "int",
+      "category": "物品"
     },
     "治疗石": {
-      "step": 25,
-      "type": "int"
+      "step": 26,
+      "type": "int",
+      "category": "物品"
     },
     "鲁莽药水": {
-      "step": 26,
-      "type": "int"
+      "step": 27,
+      "type": "int",
+      "category": "物品"
     },
     "延迟": {
-      "step": 27,
-      "type": "int"
+      "step": 28,
+      "type": "int",
+      "category": "配置开关"
     },
     "目标类型": {
-      "step": 28,
-      "type": "int"
+      "step": 29,
+      "type": "int",
+      "category": "目标"
     },
     "目标生命值": {
-      "step": 29,
-      "type": "int"
-    },
-    "目标施法": {
       "step": 30,
-      "type": "int"
+      "type": "int",
+      "category": "目标"
+    },
+    "目标施法(倒计时)": {
+      "step": 31,
+      "type": "int",
+      "category": "目标"
+    },
+    "目标施法(正计时)": {
+      "step": 32,
+      "type": "int",
+      "category": "目标"
     },
     "目标施法可打断": {
-      "step": 31,
-      "type": "int"
+      "step": 33,
+      "type": "int",
+      "category": "目标"
+    },
+    "目标驱散类型": {
+      "step": 34,
+      "type": "int",
+      "category": "目标"
+    },
+    "鼠标类型": {
+      "step": 35,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标驱散类型": {
+      "step": 36,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标生命值": {
+      "step": 37,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标距离": {
+      "step": 38,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法(倒计时)": {
+      "step": 39,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法(正计时)": {
+      "step": 40,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法可打断": {
+      "step": 41,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导": {
+      "step": 42,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导可打断": {
+      "step": 43,
+      "type": "int",
+      "category": "鼠标"
     },
     "auras": {
       "熵能裂隙": {
-        "step": 32,
-        "type": "int"
+        "step": 44,
+        "type": "int",
+        "category": "玩家"
       },
       "天使长": {
-        "step": 33,
-        "type": "int"
+        "step": 45,
+        "type": "int",
+        "category": "玩家"
       },
       "阴暗面之力": {
-        "step": 34,
-        "type": "int"
+        "step": 46,
+        "type": "int",
+        "category": "玩家"
       },
       "黑暗主宰": {
-        "step": 35,
-        "type": "int"
+        "step": 47,
+        "type": "int",
+        "category": "玩家"
       },
       "圣光涌动": {
-        "step": 36,
-        "type": "int"
+        "step": 48,
+        "type": "int",
+        "category": "玩家"
       },
       "福音": {
-        "step": 37,
-        "type": "int"
+        "step": 49,
+        "type": "int",
+        "category": "玩家"
       },
       "强效惩击": {
-        "step": 38,
-        "type": "int"
+        "step": 50,
+        "type": "int",
+        "category": "玩家"
       },
       "严酷戒律": {
-        "step": 39,
-        "type": "int"
+        "step": 51,
+        "type": "int",
+        "category": "玩家"
       },
       "祸福相依": {
-        "step": 40,
-        "type": "int"
+        "step": 52,
+        "type": "int",
+        "category": "玩家"
       },
       "目标暗言术：痛": {
-        "step": 41,
-        "type": "int"
+        "step": 53,
+        "type": "int",
+        "category": "目标减益"
       },
       "目标救赎": {
-        "step": 42,
-        "type": "int"
+        "step": 54,
+        "type": "int",
+        "category": "目标增益"
       },
       "目标真言术：盾": {
-        "step": 43,
-        "type": "int"
+        "step": 55,
+        "type": "int",
+        "category": "目标增益"
       },
       "焦点暗言术：痛": {
-        "step": 44,
-        "type": "int"
+        "step": 56,
+        "type": "int",
+        "category": "焦点减益"
       },
       "焦点救赎": {
-        "step": 45,
-        "type": "int"
+        "step": 57,
+        "type": "int",
+        "category": "焦点增益"
       },
       "焦点真言术：盾": {
-        "step": 46,
-        "type": "int"
+        "step": 58,
+        "type": "int",
+        "category": "焦点增益"
       },
       "黑暗主宰层数": {
         "step": "bar",
@@ -273,31 +377,31 @@
     },
     "spells": {
       "心灵尖啸": {
-        "step": 47,
+        "step": 59,
         "type": "int"
       },
       "群体驱散": {
-        "step": 48,
+        "step": 60,
         "type": "int"
       },
       "纯净术": {
-        "step": 49,
+        "step": 61,
         "type": "int"
       },
       "绝望祷言": {
-        "step": 50,
+        "step": 62,
         "type": "int"
       },
       "奥术洪流": {
-        "step": 51,
+        "step": 63,
         "type": "int"
       },
       "苦修": {
-        "step": 52,
+        "step": 64,
         "type": "int"
       },
       "苦修充能": {
-        "step": 53,
+        "step": 65,
         "type": "int"
       },
       "苦修层数": {
@@ -306,11 +410,11 @@
         "type": "int"
       },
       "真言术：耀": {
-        "step": 54,
+        "step": 66,
         "type": "int"
       },
       "真言术：耀充能": {
-        "step": 55,
+        "step": 67,
         "type": "int"
       },
       "真言术：耀层数": {
@@ -319,44 +423,44 @@
         "type": "int"
       },
       "真言术：盾": {
-        "step": 56,
+        "step": 68,
         "type": "int"
       },
       "真言术：障": {
-        "step": 57,
+        "step": 69,
         "type": "int"
       },
       "终极苦修": {
-        "step": 58,
+        "step": 70,
         "type": "int"
       },
       "福音": {
-        "step": 59,
+        "step": 71,
         "type": "int"
       },
       "心灵震爆": {
-        "step": 60,
+        "step": 72,
         "type": "int"
       },
       "暗言术：灭": {
-        "step": 61,
+        "step": 73,
         "type": "int"
       },
       "暗影魔": {
-        "step": 62,
+        "step": 74,
         "type": "int"
       },
       "暗影分流": {
-        "step": 63,
+        "step": 75,
         "type": "int"
       },
       "渐隐术": {
-        "step": 64,
+        "step": 76,
         "type": "int"
       }
     },
     "group": {
-      "start": 65,
+      "start": 77,
       "num": 5,
       "生命值": {
         "step": 1,
@@ -383,182 +487,283 @@
   "2": {
     "队伍类型": {
       "step": 4,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "英雄天赋": {
       "step": 5,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "有效性": {
       "step": 6,
-      "type": "bool"
+      "type": "bool",
+      "category": "状态"
     },
     "一键辅助": {
       "step": 7,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "插入法术": {
       "step": 8,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "战斗时间": {
       "step": 9,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "移动": {
       "step": 10,
-      "type": "bool"
+      "type": "bool",
+      "category": "状态"
     },
-    "施法": {
+    "施法(正计时)": {
       "step": 11,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
+    },
+    "施法(倒计时)": {
+      "step": 12,
+      "type": "int",
+      "category": "状态"
     },
     "引导": {
-      "step": 12,
-      "type": "int"
+      "step": 13,
+      "type": "int",
+      "category": "状态"
     },
     "蓄力": {
-      "step": 13,
-      "type": "int"
+      "step": 14,
+      "type": "int",
+      "category": "状态"
     },
     "蓄力层数": {
-      "step": 14,
-      "type": "int"
+      "step": 15,
+      "type": "int",
+      "category": "状态"
     },
     "生命值": {
-      "step": 15,
-      "type": "int"
+      "step": 16,
+      "type": "int",
+      "category": "状态"
     },
     "队伍人数": {
-      "step": 16,
-      "type": "int"
+      "step": 17,
+      "type": "int",
+      "category": "状态"
     },
     "首领战": {
-      "step": 17,
-      "type": "int"
+      "step": 18,
+      "type": "int",
+      "category": "状态"
     },
     "难度": {
-      "step": 18,
-      "type": "int"
+      "step": 19,
+      "type": "int",
+      "category": "状态"
     },
     "施法技能": {
-      "step": 19,
-      "type": "int"
+      "step": 20,
+      "type": "int",
+      "category": "状态"
     },
     "施法目标": {
-      "step": 20,
-      "type": "int"
-    },
-    "救赎之魂1": {
       "step": 21,
-      "type": "int"
-    },
-    "救赎之魂2": {
-      "step": 22,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "法力值": {
+      "step": 22,
+      "type": "int",
+      "category": "能量"
+    },
+    "治疗药水": {
       "step": 23,
-      "type": "int"
+      "type": "int",
+      "category": "物品"
+    },
+    "延迟": {
+      "step": 24,
+      "type": "int",
+      "category": "配置开关"
     },
     "目标类型": {
-      "step": 24,
-      "type": "int"
-    },
-    "目标施法": {
       "step": 25,
-      "type": "int"
+      "type": "int",
+      "category": "目标"
+    },
+    "目标施法(倒计时)": {
+      "step": 26,
+      "type": "int",
+      "category": "目标"
+    },
+    "目标施法(正计时)": {
+      "step": 27,
+      "type": "int",
+      "category": "目标"
     },
     "目标施法可打断": {
-      "step": 26,
-      "type": "int"
+      "step": 28,
+      "type": "int",
+      "category": "目标"
+    },
+    "目标驱散类型": {
+      "step": 29,
+      "type": "int",
+      "category": "目标"
+    },
+    "鼠标类型": {
+      "step": 30,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标驱散类型": {
+      "step": 31,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标生命值": {
+      "step": 32,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标距离": {
+      "step": 33,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法(倒计时)": {
+      "step": 34,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法(正计时)": {
+      "step": 35,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法可打断": {
+      "step": 36,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导": {
+      "step": 37,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导可打断": {
+      "step": 38,
+      "type": "int",
+      "category": "鼠标"
     },
     "auras": {
       "神圣化身": {
-        "step": 27,
-        "type": "int"
+        "step": 39,
+        "type": "int",
+        "category": "玩家"
       },
       "神圣镜像": {
-        "step": 28,
-        "type": "int"
+        "step": 40,
+        "type": "int",
+        "category": "玩家"
       },
       "圣光涌动": {
-        "step": 29,
-        "type": "int"
+        "step": 41,
+        "type": "int",
+        "category": "玩家"
       },
       "祈福": {
-        "step": 30,
-        "type": "int"
+        "step": 42,
+        "type": "int",
+        "category": "玩家"
       },
       "救赎之魂": {
-        "step": 31,
-        "type": "int"
+        "step": 43,
+        "type": "int",
+        "category": "玩家"
       },
       "目标暗言术：痛": {
-        "step": 32,
-        "type": "int"
+        "step": 44,
+        "type": "int",
+        "category": "目标减益"
       },
       "目标神圣之火": {
-        "step": 33,
-        "type": "int"
+        "step": 45,
+        "type": "int",
+        "category": "目标减益"
       },
       "目标愈合祷言": {
-        "step": 34,
-        "type": "int"
+        "step": 46,
+        "type": "int",
+        "category": "目标增益"
       },
       "目标恢复": {
-        "step": 35,
-        "type": "int"
+        "step": 47,
+        "type": "int",
+        "category": "目标增益"
       },
       "焦点暗言术：痛": {
-        "step": 36,
-        "type": "int"
+        "step": 48,
+        "type": "int",
+        "category": "焦点减益"
       },
       "焦点神圣之火": {
-        "step": 37,
-        "type": "int"
+        "step": 49,
+        "type": "int",
+        "category": "焦点减益"
       },
       "焦点愈合祷言": {
-        "step": 38,
-        "type": "int"
+        "step": 50,
+        "type": "int",
+        "category": "焦点增益"
       },
       "焦点恢复": {
-        "step": 39,
-        "type": "int"
+        "step": 51,
+        "type": "int",
+        "category": "焦点增益"
       },
       "圣光涌动层数": {
         "step": "bar",
         "bar": 3,
         "type": "int"
+      },
+      "祈福层数": {
+        "step": "bar",
+        "bar": 4,
+        "type": "int"
       }
     },
     "spells": {
       "心灵尖啸": {
-        "step": 40,
+        "step": 52,
         "type": "int"
       },
       "群体驱散": {
-        "step": 41,
+        "step": 53,
         "type": "int"
       },
       "纯净术": {
-        "step": 42,
+        "step": 54,
         "type": "int"
       },
       "绝望祷言": {
-        "step": 43,
+        "step": 55,
         "type": "int"
       },
       "奥术洪流": {
-        "step": 44,
+        "step": 56,
         "type": "int"
       },
       "愈合祷言": {
-        "step": 45,
+        "step": 57,
         "type": "int"
       },
       "愈合祷言充能": {
-        "step": 46,
+        "step": 58,
         "type": "int"
       },
       "愈合祷言层数": {
@@ -567,11 +772,11 @@
         "type": "int"
       },
       "圣言术：静": {
-        "step": 47,
+        "step": 59,
         "type": "int"
       },
       "圣言术：静充能": {
-        "step": 48,
+        "step": 60,
         "type": "int"
       },
       "圣言术：静层数": {
@@ -580,29 +785,33 @@
         "type": "int"
       },
       "圣言术：罚": {
-        "step": 49,
+        "step": 61,
         "type": "int"
       },
       "神圣化身": {
-        "step": 50,
+        "step": 62,
         "type": "int"
       },
       "神圣之火": {
-        "step": 51,
+        "step": 63,
         "type": "int"
       },
       "光晕": {
-        "step": 52,
+        "step": 64,
         "type": "int"
       },
       "神圣赞美诗": {
-        "step": 53,
+        "step": 65,
+        "type": "int"
+      },
+      "渐隐术": {
+        "step": 66,
         "type": "int"
       }
     },
     "group": {
-      "start": 54,
-      "num": 5,
+      "start": 67,
+      "num": 6,
       "生命值": {
         "step": 1,
         "type": "int"
@@ -622,206 +831,319 @@
       "愈合祷言": {
         "step": 5,
         "type": "int"
+      },
+      "救赎之魂": {
+        "step": 6,
+        "type": "int"
       }
     }
   },
   "3": {
     "队伍类型": {
       "step": 4,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "英雄天赋": {
       "step": 5,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "有效性": {
       "step": 6,
-      "type": "bool"
+      "type": "bool",
+      "category": "状态"
     },
     "一键辅助": {
       "step": 7,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "插入法术": {
       "step": 8,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "战斗时间": {
       "step": 9,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
     },
     "移动": {
       "step": 10,
-      "type": "bool"
+      "type": "bool",
+      "category": "状态"
     },
-    "施法": {
+    "施法(正计时)": {
       "step": 11,
-      "type": "int"
+      "type": "int",
+      "category": "状态"
+    },
+    "施法(倒计时)": {
+      "step": 12,
+      "type": "int",
+      "category": "状态"
     },
     "引导": {
-      "step": 12,
-      "type": "int"
+      "step": 13,
+      "type": "int",
+      "category": "状态"
     },
     "蓄力": {
-      "step": 13,
-      "type": "int"
+      "step": 14,
+      "type": "int",
+      "category": "状态"
     },
     "蓄力层数": {
-      "step": 14,
-      "type": "int"
+      "step": 15,
+      "type": "int",
+      "category": "状态"
     },
     "生命值": {
-      "step": 15,
-      "type": "int"
+      "step": 16,
+      "type": "int",
+      "category": "状态"
     },
     "队伍人数": {
-      "step": 16,
-      "type": "int"
+      "step": 17,
+      "type": "int",
+      "category": "状态"
     },
     "首领战": {
-      "step": 17,
-      "type": "int"
+      "step": 18,
+      "type": "int",
+      "category": "状态"
     },
     "难度": {
-      "step": 18,
-      "type": "int"
+      "step": 19,
+      "type": "int",
+      "category": "状态"
     },
     "敌人数量": {
-      "step": 19,
-      "type": "int"
+      "step": 20,
+      "type": "int",
+      "category": "状态"
     },
     "施法技能": {
-      "step": 20,
-      "type": "int"
+      "step": 21,
+      "type": "int",
+      "category": "状态"
     },
     "姿态": {
-      "step": 21,
-      "type": "int"
+      "step": 22,
+      "type": "int",
+      "category": "状态"
     },
     "狂乱值": {
-      "step": 22,
-      "type": "int"
+      "step": 23,
+      "type": "int",
+      "category": "能量"
     },
     "法力值": {
-      "step": 23,
-      "type": "int"
+      "step": 24,
+      "type": "int",
+      "category": "能量"
     },
     "爆发开关": {
-      "step": 24,
-      "type": "int"
+      "step": 25,
+      "type": "int",
+      "category": "配置开关"
     },
     "输出模式": {
-      "step": 25,
-      "type": "int"
+      "step": 26,
+      "type": "int",
+      "category": "配置开关"
     },
     "AOE开关": {
-      "step": 26,
-      "type": "int"
+      "step": 27,
+      "type": "int",
+      "category": "配置开关"
     },
     "目标类型": {
-      "step": 27,
-      "type": "int"
+      "step": 28,
+      "type": "int",
+      "category": "目标"
     },
     "目标距离": {
-      "step": 28,
-      "type": "int"
+      "step": 29,
+      "type": "int",
+      "category": "目标"
     },
     "目标生命值": {
-      "step": 29,
-      "type": "int"
-    },
-    "目标施法": {
       "step": 30,
-      "type": "int"
+      "type": "int",
+      "category": "目标"
+    },
+    "目标施法(倒计时)": {
+      "step": 31,
+      "type": "int",
+      "category": "目标"
+    },
+    "目标施法(正计时)": {
+      "step": 32,
+      "type": "int",
+      "category": "目标"
     },
     "目标施法可打断": {
-      "step": 31,
-      "type": "int"
+      "step": 33,
+      "type": "int",
+      "category": "目标"
     },
     "目标引导": {
-      "step": 32,
-      "type": "int"
+      "step": 34,
+      "type": "int",
+      "category": "目标"
     },
     "目标引导可打断": {
-      "step": 33,
-      "type": "int"
+      "step": 35,
+      "type": "int",
+      "category": "目标"
     },
-    "焦点施法": {
-      "step": 34,
-      "type": "int"
+    "焦点施法(倒计时)": {
+      "step": 36,
+      "type": "int",
+      "category": "焦点"
+    },
+    "焦点施法(正计时)": {
+      "step": 37,
+      "type": "int",
+      "category": "焦点"
     },
     "焦点施法可打断": {
-      "step": 35,
-      "type": "int"
+      "step": 38,
+      "type": "int",
+      "category": "焦点"
     },
     "焦点引导": {
-      "step": 36,
-      "type": "int"
+      "step": 39,
+      "type": "int",
+      "category": "焦点"
     },
     "焦点引导可打断": {
-      "step": 37,
-      "type": "int"
+      "step": 40,
+      "type": "int",
+      "category": "焦点"
+    },
+    "鼠标类型": {
+      "step": 41,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标驱散类型": {
+      "step": 42,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标生命值": {
+      "step": 43,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标距离": {
+      "step": 44,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法(倒计时)": {
+      "step": 45,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法(正计时)": {
+      "step": 46,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标施法可打断": {
+      "step": 47,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导": {
+      "step": 48,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导可打断": {
+      "step": 49,
+      "type": "int",
+      "category": "鼠标"
     },
     "auras": {
       "虚空齐射": {
-        "step": 38,
-        "type": "int"
+        "step": 50,
+        "type": "int",
+        "category": "玩家"
       },
       "命运多舛": {
-        "step": 39,
-        "type": "int"
+        "step": 51,
+        "type": "int",
+        "category": "玩家"
       },
       "熵能裂隙": {
-        "step": 40,
-        "type": "int"
+        "step": 52,
+        "type": "int",
+        "category": "玩家"
       },
       "暗影洞察": {
-        "step": 41,
-        "type": "int"
+        "step": 53,
+        "type": "int",
+        "category": "玩家"
       },
       "尤格-萨隆的神像": {
-        "step": 42,
-        "type": "int"
+        "step": 54,
+        "type": "int",
+        "category": "玩家"
       },
       "目标暗言术：痛": {
-        "step": 43,
-        "type": "int"
+        "step": 55,
+        "type": "int",
+        "category": "目标减益"
       },
       "目标吸血鬼之触": {
-        "step": 44,
-        "type": "int"
+        "step": 56,
+        "type": "int",
+        "category": "目标减益"
       },
       "目标暗言术：癫": {
-        "step": 45,
-        "type": "int"
+        "step": 57,
+        "type": "int",
+        "category": "目标减益"
       },
       "目标精神鞭笞": {
-        "step": 46,
-        "type": "int"
+        "step": 58,
+        "type": "int",
+        "category": "目标减益"
       },
       "目标惊魂幻象": {
-        "step": 47,
-        "type": "int"
+        "step": 59,
+        "type": "int",
+        "category": "目标减益"
       },
       "焦点暗言术：痛": {
-        "step": 48,
-        "type": "int"
+        "step": 60,
+        "type": "int",
+        "category": "焦点减益"
       },
       "焦点吸血鬼之触": {
-        "step": 49,
-        "type": "int"
+        "step": 61,
+        "type": "int",
+        "category": "焦点减益"
       },
       "焦点暗言术：癫": {
-        "step": 50,
-        "type": "int"
+        "step": 62,
+        "type": "int",
+        "category": "焦点减益"
       },
       "焦点精神鞭笞": {
-        "step": 51,
-        "type": "int"
+        "step": 63,
+        "type": "int",
+        "category": "焦点减益"
       },
       "焦点惊魂幻象": {
-        "step": 52,
-        "type": "int"
+        "step": 64,
+        "type": "int",
+        "category": "焦点减益"
       },
       "虚空齐射层数": {
         "step": "bar",
@@ -832,59 +1154,69 @@
         "step": "bar",
         "bar": 2,
         "type": "int"
+      },
+      "目标惊魂幻象层数": {
+        "step": "bar",
+        "bar": 3,
+        "type": "int"
+      },
+      "焦点惊魂幻象层数": {
+        "step": "bar",
+        "bar": 4,
+        "type": "int"
       }
     },
     "spells": {
       "心灵尖啸": {
-        "step": 53,
+        "step": 65,
         "type": "int"
       },
       "群体驱散": {
-        "step": 54,
+        "step": 66,
         "type": "int"
       },
       "纯净术": {
-        "step": 55,
+        "step": 67,
         "type": "int"
       },
       "绝望祷言": {
-        "step": 56,
+        "step": 68,
         "type": "int"
       },
       "奥术洪流": {
-        "step": 57,
+        "step": 69,
         "type": "int"
       },
       "心灵震爆": {
-        "step": 58,
+        "step": 70,
         "type": "int"
       },
       "暗言术：灭": {
-        "step": 59,
+        "step": 71,
         "type": "int"
       },
       "虚空洪流": {
-        "step": 60,
+        "step": 72,
         "type": "int"
       },
       "虚空形态": {
-        "step": 61,
+        "step": 73,
         "type": "int"
       },
       "触须猛击": {
-        "step": 62,
+        "step": 74,
         "type": "int"
       },
       "吸血鬼的拥抱": {
-        "step": 63,
+        "step": 75,
         "type": "int"
       },
       "光晕": {
-        "step": 64,
+        "step": 76,
         "type": "int"
       },
       "虚空齐射": {
-        "step": 65,
+        "step": 77,
         "type": "int"
       }
     }

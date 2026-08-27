@@ -30,10 +30,7 @@ public sealed partial class App : Application
             }
 
             desktop.Exit += (_, _) =>
-            {
-                _applicationLease.Dispose();
-                _applicationLease = null;
-            };
+                Interlocked.Exchange(ref _applicationLease, null)?.Dispose();
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _mainWindow = new MainWindow();
             desktop.MainWindow = _mainWindow;

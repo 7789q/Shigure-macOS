@@ -113,6 +113,7 @@ public sealed class ModuleEditorView : UserControl
             TextColumn("公式", nameof(AdjustmentRow.Formula), 260));
         _rulesGrid = CreateGrid(_rules,
             CheckColumn("启用", nameof(RuleRow.Enabled), 62),
+            TextColumn("备注", nameof(RuleRow.Comment), 160),
             TextColumn("技能/动作", nameof(RuleRow.Spell), 150),
             TextColumn("目标", nameof(RuleRow.Unit), 100),
             TextColumn("宏条件", nameof(RuleRow.MacroCondition), 120),
@@ -626,7 +627,8 @@ public sealed class ModuleEditorView : UserControl
         var result = new List<ModuleRule>();
         foreach (var row in _rules)
         {
-            if (string.IsNullOrWhiteSpace(row.Spell)
+            if (string.IsNullOrWhiteSpace(row.Comment)
+                && string.IsNullOrWhiteSpace(row.Spell)
                 && string.IsNullOrWhiteSpace(row.Condition)
                 && string.IsNullOrWhiteSpace(row.Unit)
                 && string.IsNullOrWhiteSpace(row.MacroCondition)
@@ -647,6 +649,7 @@ public sealed class ModuleEditorView : UserControl
             result.Add(new ModuleRule
             {
                 Enabled = row.Enabled,
+                Comment = (row.Comment ?? string.Empty).Trim(),
                 Spell = (row.Spell ?? string.Empty).Trim(),
                 Unit = unit,
                 UnitName = dynamicUnit ? unitText : null,
@@ -1196,6 +1199,7 @@ public sealed class ModuleEditorView : UserControl
     public sealed class RuleRow
     {
         public bool Enabled { get; set; } = true;
+        public string Comment { get; set; } = string.Empty;
         public string Spell { get; set; } = string.Empty;
         public string Unit { get; set; } = string.Empty;
         public string MacroCondition { get; set; } = string.Empty;
@@ -1207,6 +1211,7 @@ public sealed class ModuleEditorView : UserControl
         public static RuleRow FromModel(ModuleRule model) => new()
         {
             Enabled = model.Enabled,
+            Comment = model.Comment,
             Spell = model.Spell,
             Unit = !string.IsNullOrWhiteSpace(model.UnitName)
                 ? model.UnitName

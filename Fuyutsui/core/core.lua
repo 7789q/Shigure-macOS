@@ -126,6 +126,7 @@ function Fuyutsui:OnEnable()
     self:RegisterEvent("UI_ERROR_MESSAGE")
     self:RegisterEvent("PLAYER_TARGET_CHANGED")
     self:RegisterEvent("PLAYER_FOCUS_CHANGED")
+    self:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
     self:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
@@ -166,6 +167,11 @@ Fuyutsui.state = {
 Fuyutsui.blocks = {}
 Fuyutsui.target = {}
 Fuyutsui.focus = {}
+Fuyutsui.mouseover = {}
+Fuyutsui.boss = {}
+for index = 1, 5 do
+    Fuyutsui.boss["boss" .. index] = {}
+end
 Fuyutsui.nameplate = {}
 Fuyutsui.group = {}
 Fuyutsui.groupList = {}

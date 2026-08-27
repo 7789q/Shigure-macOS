@@ -155,4 +155,12 @@ public sealed record FuyutsuiAddonSyncResult(
         [],
         [],
         "未找到目标游戏进程，已跳过游戏插件同步。");
+
+    public static FuyutsuiAddonSyncResult Skipped(string sourceRoot, string reason) => new(
+        sourceRoot,
+        null,
+        [],
+        [],
+        [],
+        reason);
 }

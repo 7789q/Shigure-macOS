@@ -37,6 +37,7 @@ public sealed partial class MainWindow : Window
     private readonly ModuleDependencyService? _moduleDependencies;
     private readonly ModuleMarketplaceClient _moduleMarketplace;
     private readonly ProjectConfigUpdateService? _configUpdates;
+    private readonly string? _runtimeBlockedReason;
     private readonly MacUiStateStore? _uiStateStore;
     private readonly MacUiState _uiState;
     private readonly Dictionary<string, DataGrid> _trackedColumnGrids = new(StringComparer.Ordinal);
@@ -93,10 +94,15 @@ public sealed partial class MainWindow : Window
             services.ConfigUpdates,
             services.ModuleDependencies,
             services.UiStateStore,
-            services.Permissions)
+            services.Permissions,
+            services.RuntimeBlockedReason)
     {
         AppendLocalLog(
             $"运行资源工作副本已就绪：新增 {services.Workspace.CreatedFiles.Count}，更新 {services.Workspace.UpdatedFiles.Count}，保留冲突 {services.Workspace.ConflictingFiles.Count}");
+        if (services.Workspace.MigratedFiles.Count > 0)
+        {
+            AppendLocalLog($"已迁移旧施法字段并重新生成配置：{services.Workspace.MigratedFiles.Count} 个文件");
+        }
         AppendLocalLog(services.AddonSync.TargetFound
             ? $"游戏插件已同步：更新 {services.AddonSync.CopiedFiles.Count}，无需更新 {services.AddonSync.SkippedFiles.Count}，失败 {services.AddonSync.Failures.Count}"
             : $"游戏插件未同步：{services.AddonSync.SkippedReason}");
@@ -109,13 +115,15 @@ public sealed partial class MainWindow : Window
         ProjectConfigUpdateService? configUpdates = null,
         ModuleDependencyService? moduleDependencies = null,
         MacUiStateStore? uiStateStore = null,
-        IPlatformPermissionService? permissions = null)
+        IPlatformPermissionService? permissions = null,
+        string? runtimeBlockedReason = null)
     {
         _moduleStore = moduleStore;
         _runtime = runtime;
         _permissions = permissions;
         _baseDirectory = Path.GetFullPath(baseDirectory ?? AppContext.BaseDirectory);
         _configUpdates = configUpdates;
+        _runtimeBlockedReason = runtimeBlockedReason;
         _moduleDependencies = moduleDependencies;
         _uiStateStore = uiStateStore;
         var stateLoad = _uiStateStore?.Load() ?? new MacUiStateLoadResult(new MacUiState(), null);
@@ -151,6 +159,12 @@ public sealed partial class MainWindow : Window
         PageList.SelectedIndex = ResolveSelectedPageIndex(_uiState.SelectedPage);
         RunButton.Click += async (_, _) => await ToggleRuntimeAsync();
         EnableButton.Click += (_, _) => _runtime.ToggleEnabled();
+        if (_runtimeBlockedReason is not null)
+        {
+            RunButton.IsEnabled = false;
+            EnableButton.IsEnabled = false;
+            AppendLocalLog(_runtimeBlockedReason);
+        }
         OverlayButton.Click += (_, _) => ShowOverlay();
         KeyDown += HandleTriggerCapture;
         AddHandler(PointerPressedEvent, HandleTriggerPointerPressed, RoutingStrategies.Tunnel, true);
@@ -1624,6 +1638,12 @@ public sealed partial class MainWindow : Window
 
     private async Task ToggleRuntimeAsync()
     {
+        if (_runtimeBlockedReason is not null)
+        {
+            await ShowMessageAsync("运行资源需要处理", _runtimeBlockedReason);
+            return;
+        }
+
         try
         {
             if (_runtime.Status.IsRunning)

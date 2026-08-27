@@ -44,4 +44,4 @@ end
 Fuyutsui.powerCurves = powerCurves
 Fuyutsui.curve100 = Fuyutsui:CreateColorCurveScaling(100)
 Fuyutsui.curve255 = Fuyutsui:CreateColorCurve(255, 255)
-Fuyutsui.castCurve = Fuyutsui:CreateColorCurve(2.55, 255)
+Fuyutsui.castCurve = Fuyutsui:CreateColorCurve(25.5, 255)

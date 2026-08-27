@@ -11,6 +11,9 @@ public enum UnitSelectorKind
     /// <summary>拥有任一光环且生命值最低。get_lowest_health_unit_with_any_aura</summary>
     LowestHealthWithAnyAura,
 
+    /// <summary>不拥有所选任一光环且生命值最低。</summary>
+    LowestHealthWithoutAnyAura,
+
     /// <summary>不带某光环且生命值最低。get_lowest_health_unit_without_aura</summary>
     LowestHealthWithoutAura,
 
@@ -37,6 +40,9 @@ public enum UnitSelectorKind
 
     /// <summary>拥有任一光环、治疗吸收高于阈值且治疗吸收最高的单位。</summary>
     HighestHealingAbsorbWithAnyAura,
+
+    /// <summary>不拥有所选任一光环、治疗吸收高于阈值且治疗吸收最高的单位。</summary>
+    HighestHealingAbsorbWithoutAnyAura,
 
     /// <summary>不带某光环、治疗吸收高于阈值且治疗吸收最高的单位。</summary>
     HighestHealingAbsorbWithoutAura,

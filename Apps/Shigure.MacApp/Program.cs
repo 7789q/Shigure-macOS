@@ -115,7 +115,14 @@ internal static class Program
             var baseDirectory = workspace.WorkspaceDirectory;
             WriteEvent(
                 "runtime-resources",
-                $"运行资源就绪：新增 {workspace.CreatedFiles.Count}，更新 {workspace.UpdatedFiles.Count}，保留冲突 {workspace.ConflictingFiles.Count}。");
+                $"运行资源就绪：新增 {workspace.CreatedFiles.Count}，更新 {workspace.UpdatedFiles.Count}，保留冲突 {workspace.ConflictingFiles.Count}，迁移 {workspace.MigratedFiles.Count}。");
+            if (workspace.ProtocolConflictingFiles.Count > 0)
+            {
+                WriteEvent(
+                    "runtime-resources-conflict",
+                    $"插件协议冲突，已禁止同步和启动：{string.Join("、", workspace.ProtocolConflictingFiles)}。");
+                return 1;
+            }
             SynchronizeAddon(baseDirectory);
 
             var moduleStore = new ModuleStore(MacUserDataPaths.ModuleDirectory);

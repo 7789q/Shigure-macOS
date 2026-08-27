@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -8,22 +9,22 @@ namespace Shigure.Platform.MacOS;
 public sealed class MacTriggerInput : ITriggerInput
 {
     private readonly IMacTriggerStateApi _stateApi;
-    private readonly Func<IMacWheelPulseSource> _wheelSourceFactory;
-    private IMacWheelPulseSource? _wheelSource;
+    private readonly Func<IMacTriggerPulseSource> _pulseSourceFactory;
+    private IMacTriggerPulseSource? _pulseSource;
     private bool _disposed;
 
     [SupportedOSPlatform("macos")]
     public MacTriggerInput()
-        : this(new MacTriggerStateApi(), static () => new MacWheelEventTap())
+        : this(new MacTriggerStateApi(), static () => new MacTriggerEventTap())
     {
     }
 
     internal MacTriggerInput(
         IMacTriggerStateApi stateApi,
-        Func<IMacWheelPulseSource> wheelSourceFactory)
+        Func<IMacTriggerPulseSource> pulseSourceFactory)
     {
         _stateApi = stateApi;
-        _wheelSourceFactory = wheelSourceFactory;
+        _pulseSourceFactory = pulseSourceFactory;
     }
 
     public TriggerInputBinding? Resolve(string triggerName)
@@ -34,9 +35,9 @@ public sealed class MacTriggerInput : ITriggerInput
         }
 
         var binding = MacTriggerInputMap.Resolve(triggerName);
-        if (binding?.IsPulse == true)
+        if (binding is not null)
         {
-            _wheelSource ??= _wheelSourceFactory();
+            _pulseSource ??= _pulseSourceFactory();
         }
 
         return binding;
@@ -59,9 +60,7 @@ public sealed class MacTriggerInput : ITriggerInput
 
     public bool ConsumePulse(TriggerInputBinding input)
     {
-        return !_disposed
-            && input.IsPulse
-            && _wheelSource?.ConsumePulse(input.Code) == true;
+        return !_disposed && _pulseSource?.ConsumePulse(input) == true;
     }
 
     public void Dispose()
@@ -72,8 +71,8 @@ public sealed class MacTriggerInput : ITriggerInput
         }
 
         _disposed = true;
-        _wheelSource?.Dispose();
-        _wheelSource = null;
+        _pulseSource?.Dispose();
+        _pulseSource = null;
     }
 }
 
@@ -154,9 +153,18 @@ internal sealed class MacTriggerStateApi : IMacTriggerStateApi
         MacTriggerInterop.CGEventSourceButtonState(MacTriggerInterop.EventSourceStateHidSystem, button);
 }
 
-internal interface IMacWheelPulseSource : IDisposable
+internal interface IMacTriggerPulseSource : IDisposable
 {
-    bool ConsumePulse(int direction);
+    bool ConsumePulse(TriggerInputBinding input);
+}
+
+internal sealed class TriggerPulseLatch
+{
+    private readonly ConcurrentDictionary<TriggerInputBinding, byte> _pending = new();
+
+    public void Record(TriggerInputBinding input) => _pending[input] = 0;
+
+    public bool Consume(TriggerInputBinding input) => _pending.TryRemove(input, out _);
 }
 
 internal sealed class WheelPulseCounter
@@ -212,14 +220,15 @@ internal sealed class WheelPulseCounter
 }
 
 [SupportedOSPlatform("macos")]
-internal sealed class MacWheelEventTap : IMacWheelPulseSource
+internal sealed class MacTriggerEventTap : IMacTriggerPulseSource
 {
     private const string DefaultRunLoopMode = "kCFRunLoopDefaultMode";
     private static readonly long WheelGestureGapTicks =
         Math.Max(1, Stopwatch.Frequency * 500 / 1000);
 
     private readonly MacTriggerInterop.EventTapCallback _callback;
-    private readonly WheelPulseCounter _pulses = new(WheelGestureGapTicks);
+    private readonly WheelPulseCounter _wheelPulses = new(WheelGestureGapTicks);
+    private readonly TriggerPulseLatch _pressPulses = new();
     private readonly ManualResetEventSlim _started = new(false);
     private readonly Thread _eventThread;
     private nint _runLoop;
@@ -228,20 +237,29 @@ internal sealed class MacWheelEventTap : IMacWheelPulseSource
     private nint _mode;
     private int _disposed;
 
-    public MacWheelEventTap()
+    public MacTriggerEventTap()
     {
         _callback = HandleEvent;
         _eventThread = new Thread(RunEventLoop)
         {
             IsBackground = true,
-            Name = "Shigure macOS wheel event tap"
+            Name = "Shigure macOS trigger event tap"
         };
         _eventThread.Start();
         _started.Wait(TimeSpan.FromSeconds(2));
     }
 
-    public bool ConsumePulse(int direction) =>
-        Volatile.Read(ref _disposed) == 0 && _pulses.ConsumePulse(direction);
+    public bool ConsumePulse(TriggerInputBinding input)
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return false;
+        }
+
+        return input.IsPulse
+            ? _wheelPulses.ConsumePulse(input.Code)
+            : _pressPulses.Consume(input);
+    }
 
     public void Dispose()
     {
@@ -282,7 +300,7 @@ internal sealed class MacWheelEventTap : IMacWheelPulseSource
                 MacTriggerInterop.EventTapLocationSession,
                 MacTriggerInterop.HeadInsertEventTap,
                 MacTriggerInterop.EventTapOptionListenOnly,
-                1UL << (int)MacTriggerInterop.EventScrollWheel,
+                MacTriggerInterop.TriggerEventMask,
                 _callback,
                 0);
             if (_tap == 0)
@@ -364,18 +382,46 @@ internal sealed class MacWheelEventTap : IMacWheelPulseSource
             return eventRef;
         }
 
-        if (type == MacTriggerInterop.EventScrollWheel && eventRef != 0)
+        if (eventRef == 0)
+        {
+            return eventRef;
+        }
+
+        if (type == MacTriggerInterop.EventScrollWheel)
         {
             var delta = MacTriggerInterop.CGEventGetIntegerValueField(
                 eventRef,
                 MacTriggerInterop.ScrollWheelEventDeltaAxis1);
             if (delta > 0)
             {
-                _pulses.RecordWheelUp(Stopwatch.GetTimestamp());
+                _wheelPulses.RecordWheelUp(Stopwatch.GetTimestamp());
             }
             else if (delta < 0)
             {
-                _pulses.RecordWheelDown(Stopwatch.GetTimestamp());
+                _wheelPulses.RecordWheelDown(Stopwatch.GetTimestamp());
+            }
+        }
+        else if (type == MacTriggerInterop.EventKeyDown
+                 && MacTriggerInterop.CGEventGetIntegerValueField(
+                     eventRef,
+                     MacTriggerInterop.KeyboardEventAutorepeat) == 0)
+        {
+            var keyCode = MacTriggerInterop.CGEventGetIntegerValueField(
+                eventRef,
+                MacTriggerInterop.KeyboardEventKeycode);
+            if (keyCode is >= 0 and <= ushort.MaxValue)
+            {
+                _pressPulses.Record(new TriggerInputBinding(TriggerInputKind.Keyboard, (int)keyCode));
+            }
+        }
+        else if (type == MacTriggerInterop.EventOtherMouseDown)
+        {
+            var button = MacTriggerInterop.CGEventGetIntegerValueField(
+                eventRef,
+                MacTriggerInterop.MouseEventButtonNumber);
+            if (button is >= 0 and <= int.MaxValue)
+            {
+                _pressPulses.Record(new TriggerInputBinding(TriggerInputKind.MouseButton, (int)button));
             }
         }
 
@@ -392,8 +438,17 @@ internal static class MacTriggerInterop
         "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
 
     public const int EventSourceStateHidSystem = 1;
+    public const uint EventKeyDown = 10;
     public const uint EventScrollWheel = 22;
+    public const uint EventOtherMouseDown = 25;
+    public const int MouseEventButtonNumber = 3;
+    public const int KeyboardEventAutorepeat = 8;
+    public const int KeyboardEventKeycode = 9;
     public const int ScrollWheelEventDeltaAxis1 = 11;
+    public const ulong TriggerEventMask =
+        1UL << (int)EventKeyDown
+        | 1UL << (int)EventScrollWheel
+        | 1UL << (int)EventOtherMouseDown;
     public const uint EventTapLocationSession = 1;
     public const uint HeadInsertEventTap = 0;
     public const uint EventTapOptionListenOnly = 1;
