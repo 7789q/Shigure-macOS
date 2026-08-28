@@ -502,9 +502,9 @@ public sealed class ModuleStore
 
         foreach (var adjustment in module.ValueAdjustments)
         {
-            adjustment.Field = adjustment.Field.Trim();
-            adjustment.Condition = adjustment.Condition?.Trim() ?? string.Empty;
-            adjustment.Formula = adjustment.Formula?.Trim() ?? string.Empty;
+            adjustment.Field = ClassStateCatalog.NormalizeLegacyStateName(adjustment.Field.Trim());
+            adjustment.Condition = ClassStateCatalog.NormalizeLegacyStateReferences(adjustment.Condition).Trim();
+            adjustment.Formula = ClassStateCatalog.NormalizeLegacyStateReferences(adjustment.Formula).Trim();
         }
 
         module.Rules ??= new List<ModuleRule>();
@@ -541,6 +541,7 @@ public sealed class ModuleStore
         foreach (var rule in module.Rules)
         {
             rule.Comment = rule.Comment?.Trim() ?? string.Empty;
+            rule.Condition = ClassStateCatalog.NormalizeLegacyStateReferences(rule.Condition).Trim();
             rule.Spell = ModuleSpecialActions.NormalizeSpellAction(rule.Spell);
             if (rule.MacroCondition is not null)
             {
@@ -555,12 +556,21 @@ public sealed class ModuleStore
 
             // 去空白、丢空项; 整组为空则回到 null, 保持文件干净且求值不见空子条件。
             rule.SubConditions = rule.SubConditions
-                .Select(sub => sub?.Trim() ?? string.Empty)
+                .Select(sub => ClassStateCatalog.NormalizeLegacyStateReferences(sub).Trim())
                 .Where(sub => sub.Length > 0)
                 .ToList();
             if (rule.SubConditions.Count == 0)
             {
                 rule.SubConditions = null;
+            }
+        }
+
+        if (module.Dependencies?.Config?.Spec is { } spec)
+        {
+            ClassStateCatalog.NormalizeLegacyStateNames(spec.FlatStates);
+            foreach (var states in spec.CategorizedStates.Values)
+            {
+                ClassStateCatalog.NormalizeLegacyStateNames(states);
             }
         }
     }
@@ -1375,6 +1385,12 @@ public static class ModuleConditionEvaluator
         matched = false;
         error = null;
 
+        if (left is null)
+        {
+            matched = op == "==" && right is null;
+            return true;
+        }
+
         if (TryToDouble(left, out var leftNumber) && TryToDouble(right, out var rightNumber))
         {
             matched = op switch
@@ -1397,7 +1413,7 @@ public static class ModuleConditionEvaluator
             return true;
         }
 
-        // 关系比较(> < >= <=)遇到非数字/缺失值(如未解析的动态单位字段)时不报错, 视为不命中, 继续判断下一条规则。
+        // 关系比较(> < >= <=)遇到非数字值时不报错, 视为不命中, 继续判断下一条规则。
         matched = false;
         return true;
     }

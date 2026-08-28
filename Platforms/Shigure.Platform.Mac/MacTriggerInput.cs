@@ -37,7 +37,7 @@ public sealed class MacTriggerInput : ITriggerInput
         var binding = MacTriggerInputMap.Resolve(triggerName);
         if (binding is not null)
         {
-            _pulseSource ??= _pulseSourceFactory();
+            _ = GetPulseSource();
         }
 
         return binding;
@@ -60,7 +60,18 @@ public sealed class MacTriggerInput : ITriggerInput
 
     public bool ConsumePulse(TriggerInputBinding input)
     {
-        return !_disposed && _pulseSource?.ConsumePulse(input) == true;
+        return !_disposed && GetPulseSource().ConsumePulse(input);
+    }
+
+    private IMacTriggerPulseSource GetPulseSource()
+    {
+        if (_pulseSource?.RequiresRestart == true)
+        {
+            _pulseSource.Dispose();
+            _pulseSource = null;
+        }
+
+        return _pulseSource ??= _pulseSourceFactory();
     }
 
     public void Dispose()
@@ -155,6 +166,8 @@ internal sealed class MacTriggerStateApi : IMacTriggerStateApi
 
 internal interface IMacTriggerPulseSource : IDisposable
 {
+    bool RequiresRestart { get; }
+
     bool ConsumePulse(TriggerInputBinding input);
 }
 
@@ -235,6 +248,7 @@ internal sealed class MacTriggerEventTap : IMacTriggerPulseSource
     private nint _tap;
     private nint _source;
     private nint _mode;
+    private int _startedSuccessfully;
     private int _disposed;
 
     public MacTriggerEventTap()
@@ -260,6 +274,11 @@ internal sealed class MacTriggerEventTap : IMacTriggerPulseSource
             ? _wheelPulses.ConsumePulse(input.Code)
             : _pressPulses.Consume(input);
     }
+
+    public bool RequiresRestart =>
+        Volatile.Read(ref _disposed) == 0
+        && Volatile.Read(ref _startedSuccessfully) != 0
+        && !_eventThread.IsAlive;
 
     public void Dispose()
     {
@@ -320,6 +339,7 @@ internal sealed class MacTriggerEventTap : IMacTriggerPulseSource
 
             MacTriggerInterop.CFRunLoopAddSource(_runLoop, _source, _mode);
             MacTriggerInterop.CGEventTapEnable(_tap, true);
+            Volatile.Write(ref _startedSuccessfully, 1);
             _started.Set();
             MacTriggerInterop.CFRunLoopRun();
         }

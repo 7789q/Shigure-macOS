@@ -145,7 +145,7 @@
     },
     "Core/RuntimeResourceWorkspaceService.cs": {
       "category": "shared-contract",
-      "sha256": "922894e8458ac40ab91293300c9f47e1742c0065827573cef980ef6f23de5321"
+      "sha256": "5c753ff9d4c702d8bcf0bb0cd15cf95953368707a306cd8ccd75c423c859499f"
     },
     "Core/Shigure.Core.csproj": {
       "category": "shared-contract",
@@ -181,7 +181,7 @@
     },
     "Modules/ModuleStore.cs": {
       "category": "shared-contract",
-      "sha256": "7a85cc77d738b2f94ce663b3c6cfda53357643cb2eeb122478c307d4012c6440"
+      "sha256": "b75f60364854e1ce54f7943a5f506356cf04012463a6ed30684e196921c43084"
     },
     "Modules/ModuleUnit.cs": {
       "category": "shared-contract",
@@ -273,7 +273,7 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "5f6d62c4ee9686ebee2df8996bd3c22514c8d33d01eeaed79f3e6579a46bb4f2"
+      "sha256": "31bed288b286f98bf8add26cdcb8f803fd954a77d15cfb46ffc82c9bd84c63ef"
     },
     "Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj": {
       "category": "shared-contract",
@@ -281,7 +281,7 @@
     },
     "Infrastructure/ClassStateCatalog.cs": {
       "category": "configuration-schema",
-      "sha256": "641cb6a1c57435e145fe278751317d44d5092e8823ba820af5f06c2c102a8a84"
+      "sha256": "89c48a8d00794c7a58f25df0b69ac200116ce3af73e482688e8040a239559d86"
     },
     "Infrastructure/ConfigService.cs": {
       "category": "configuration-schema",
@@ -553,7 +553,7 @@
     },
     "Fuyutsui/main.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "f65cb89f6e1db8e392273181b4144c4bebddc81bcb9fa57b6847b5cc6622355a"
+      "sha256": "0e558edcc8b12038a065bcb7f274a4f442d8ca5f48d8099c42d89e4f0b3d11bf"
     },
     "Infrastructure/ClassBlocksStore.cs": {
       "category": "fuyutsui-generation",
@@ -613,7 +613,7 @@
     },
     "Platforms/Shigure.Platform.Mac/MacTriggerInput.cs": {
       "category": "macos-platform",
-      "sha256": "88887a415f78db8983df389fe8d3dbdcf13364ef2fbb204054006f6a5356fc08"
+      "sha256": "40ca27fa0a8bef82d43da8ce00006781a4d2bbb04a9ca1a8a8c8a7c668129803"
     },
     "Platforms/Shigure.Platform.Mac/MacUserDataPaths.cs": {
       "category": "macos-platform",

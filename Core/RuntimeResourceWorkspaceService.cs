@@ -116,8 +116,6 @@ public sealed class RuntimeResourceWorkspaceService
 
     private static IReadOnlyList<string> MigrateLegacyCastStates(string workspaceRoot)
     {
-        const string legacyCastState = "施法";
-        const string countdownCastState = "施法(倒计时)";
         var classDirectory = Path.Combine(workspaceRoot, "Fuyutsui", "class");
         if (!Directory.Exists(classDirectory))
         {
@@ -132,10 +130,10 @@ public sealed class RuntimeResourceWorkspaceService
             var changed = false;
             foreach (var spec in document.Specs.Values)
             {
-                changed |= ReplaceLegacyState(spec.FlatStates, legacyCastState, countdownCastState);
+                changed |= ClassStateCatalog.NormalizeLegacyStateNames(spec.FlatStates);
                 foreach (var states in spec.CategorizedStates.Values)
                 {
-                    changed |= ReplaceLegacyState(states, legacyCastState, countdownCastState);
+                    changed |= ClassStateCatalog.NormalizeLegacyStateNames(states);
                 }
             }
 
@@ -158,30 +156,6 @@ public sealed class RuntimeResourceWorkspaceService
         migrated.AddRange(config.UpdatedFiles.Select(path =>
             NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, path))));
         return migrated.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-    }
-
-    private static bool ReplaceLegacyState(List<string> states, string legacyName, string replacement)
-    {
-        var changed = false;
-        for (var index = states.Count - 1; index >= 0; index--)
-        {
-            if (!string.Equals(states[index], legacyName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (states.Contains(replacement, StringComparer.Ordinal))
-            {
-                states.RemoveAt(index);
-            }
-            else
-            {
-                states[index] = replacement;
-            }
-            changed = true;
-        }
-
-        return changed;
     }
 
     private static IReadOnlyList<ManagedSourceFile> EnumerateManagedFiles(string sourceRoot)

@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Shigure;
 
 /// <summary>
@@ -6,6 +8,13 @@ namespace Shigure;
 /// </summary>
 public static class ClassStateCatalog
 {
+    public const string LegacyCastState = "施法";
+    public const string RemainingCastState = "施法(倒计时)";
+
+    private static readonly Regex LegacyCastReferenceRegex = new(
+        @"(?<![\p{L}\p{N}_])施法(?![\p{L}\p{N}_（(])",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     public const string CategoryState = "状态";
     public const string CategoryPlayerDisplay = "玩家";
     public const string CategoryConfig = "配置开关";
@@ -148,6 +157,38 @@ public static class ClassStateCatalog
 
     public static string GetStorageCategory(string category)
         => category;
+
+    public static string NormalizeLegacyStateName(string name) =>
+        string.Equals(name, LegacyCastState, StringComparison.Ordinal)
+            ? RemainingCastState
+            : name;
+
+    public static string NormalizeLegacyStateReferences(string? expression) =>
+        LegacyCastReferenceRegex.Replace(expression ?? string.Empty, RemainingCastState);
+
+    public static bool NormalizeLegacyStateNames(List<string> states)
+    {
+        var changed = false;
+        for (var index = states.Count - 1; index >= 0; index--)
+        {
+            if (!string.Equals(states[index], LegacyCastState, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (states.Contains(RemainingCastState, StringComparer.Ordinal))
+            {
+                states.RemoveAt(index);
+            }
+            else
+            {
+                states[index] = RemainingCastState;
+            }
+            changed = true;
+        }
+
+        return changed;
+    }
 
     private static string[] GetNames(string category)
         => Categories.FirstOrDefault(item =>

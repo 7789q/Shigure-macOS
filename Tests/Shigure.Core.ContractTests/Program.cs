@@ -29,6 +29,7 @@ var tests = new (string Name, Action Run)[]
     ("module match selection", ModuleMatchSelection),
     ("module marketplace install contract", ModuleMarketplaceInstallContract),
     ("module editor persistence contract", ModuleEditorPersistenceContract),
+    ("legacy module state compatibility contract", LegacyModuleStateCompatibilityContract),
     ("module dependency capture and import contract", ModuleDependencyCaptureAndImportContract),
     ("target identity contract", TargetIdentityContract),
     ("permission status contract", PermissionStatusContract),
@@ -559,6 +560,76 @@ static void ModuleEditorPersistenceContract()
     }
 }
 
+static void LegacyModuleStateCompatibilityContract()
+{
+    var legacy = new ModuleDefinition
+    {
+        Id = "legacy-cast-module",
+        Name = "旧施法字段模块",
+        ValueAdjustments =
+        [
+            new ModuleValueAdjustment
+            {
+                Field = "施法",
+                Condition = "施法 != 0",
+                Formula = "施法 * 2"
+            }
+        ],
+        Rules =
+        [
+            new ModuleRule
+            {
+                Condition = "施法 != 0 && 施法技能 == 0",
+                SubConditions = ["state.施法 > 0", "目标施法可打断 == 1"],
+                Spell = "暂停"
+            }
+        ],
+        Dependencies = new ModuleDependencySnapshot
+        {
+            Config = new ModuleConfigSnapshot
+            {
+                Spec = new ModuleSpecSnapshot
+                {
+                    FlatStates = ["施法"],
+                    CategorizedStates = new Dictionary<string, List<string>>
+                    {
+                        [ClassStateCatalog.CategoryState] = ["施法", "施法(倒计时)"]
+                    }
+                }
+            }
+        }
+    };
+
+    var parsed = ModuleStore.Parse(JsonSerializer.SerializeToUtf8Bytes(legacy));
+    Equal("施法(倒计时)", parsed.ValueAdjustments.Single().Field, "legacy adjustment field is migrated");
+    Equal("施法(倒计时) != 0", parsed.ValueAdjustments.Single().Condition, "legacy adjustment condition is migrated");
+    Equal("施法(倒计时) * 2", parsed.ValueAdjustments.Single().Formula, "legacy adjustment formula is migrated");
+    Equal("施法(倒计时) != 0 && 施法技能 == 0", parsed.Rules.Single().Condition,
+        "standalone legacy rule field is migrated without rewriting prefixed fields");
+    Equal("state.施法(倒计时) > 0", parsed.Rules.Single().SubConditions![0], "qualified legacy field is migrated");
+    Equal("目标施法可打断 == 1", parsed.Rules.Single().SubConditions![1], "different cast field is preserved");
+    Equal("施法(倒计时)", parsed.Dependencies!.Config.Spec.FlatStates.Single(), "flat dependency state is migrated");
+    Equal("施法(倒计时)", parsed.Dependencies.Config.Spec.CategorizedStates[ClassStateCatalog.CategoryState].Single(),
+        "categorized dependency state is migrated and deduplicated");
+
+    var idle = new GameState(new Dictionary<string, object?>
+    {
+        ["施法(倒计时)"] = 0,
+        ["施法技能"] = 0
+    });
+    Equal(true, ModuleConditionEvaluator.TryEvaluate(parsed.Rules.Single().Condition, idle, out var idleMatched, out _),
+        "migrated idle condition evaluates");
+    Equal(false, idleMatched, "migrated idle cast condition does not pause");
+    Equal(true, ModuleConditionEvaluator.TryEvaluate("不存在字段 != 0", idle, out var missingMatched, out _),
+        "missing field comparison evaluates safely");
+    Equal(false, missingMatched, "missing field inequality does not become true");
+
+    idle.Values["施法(倒计时)"] = 5;
+    Equal(true, ModuleConditionEvaluator.TryEvaluate(parsed.Rules.Single().Condition, idle, out var castingMatched, out _),
+        "migrated casting condition evaluates");
+    Equal(true, castingMatched, "remaining cast time still pauses while casting");
+}
+
 static void ModuleDependencyCaptureAndImportContract()
 {
     var repositoryRoot = FindRepositoryRoot();
@@ -915,15 +986,23 @@ static void MacTriggerInputLifecycleContract()
     sources[0].UpPulses = 1;
     Equal(true, input.ConsumePulse(wheelUp), "wheel-up pulse is consumed independently");
 
+    sources[0].RequiresRestart = true;
+    Equal(false, input.ConsumePulse(key), "stopped event tap is replaced before pulse consumption");
+    Equal(2, sources.Count, "stopped event tap creates one replacement");
+    Equal(1, sources[0].DisposeCount, "stopped event tap is disposed");
+    sources[1].PressPulses.Add(key);
+    Equal(true, input.ConsumePulse(key), "replacement event tap supplies keyboard pulses");
+
     input.Dispose();
     input.Dispose();
     Equal(1, sources[0].DisposeCount, "event tap is disposed once");
+    Equal(1, sources[1].DisposeCount, "replacement event tap is disposed once");
     Equal(false, input.ConsumePulse(wheel), "disposed input does not expose pulses");
     Equal(null, input.Resolve("A"), "disposed input does not resolve triggers");
 
     using var rebuilt = new MacTriggerInput(stateApi, CreateSource);
     Equal(wheel, rebuilt.Resolve("WHEELDOWN"), "new input rebuilds wheel trigger");
-    Equal(2, sources.Count, "new input owns a new event tap");
+    Equal(3, sources.Count, "new input owns a new event tap");
 }
 
 static void HotkeyParserContract()
@@ -2197,6 +2276,8 @@ static void FuyutsuiProtocolContract()
         "state catalog exposes remaining cast time");
     Equal(false, ClassStateCatalog.IsKnown(ClassStateCatalog.CategoryState, "施法"),
         "legacy cast state is no longer selectable");
+    Equal("施法(倒计时)", ClassStateCatalog.NormalizeLegacyStateName("施法"),
+        "legacy cast state has one shared compatibility mapping");
     Equal(true, ClassStateCatalog.TopCategories.Contains(ClassStateCatalog.CategoryMouseover),
         "state catalog exposes mouseover category");
     Equal(true, ClassStateCatalog.TopCategories.Contains(ClassStateCatalog.CategoryBoss5),
@@ -2204,6 +2285,9 @@ static void FuyutsuiProtocolContract()
     Equal(true, main.Contains("\"鼠标\"", StringComparison.Ordinal)
         && main.Contains("\"首领5\"", StringComparison.Ordinal),
         "addon block loader includes mouseover and boss categories");
+    Equal(true, main.Contains("AppendAuraList(t.auras.player, \"player\", \"HELPFUL\")", StringComparison.Ordinal)
+        && main.Contains("AppendAuraList(t.auras.target.harmful, \"target\", \"HARMFUL|PLAYER\")", StringComparison.Ordinal),
+        "player auras accept any source while target auras retain player ownership");
     Equal(true, stateBlocks.Contains("[\"施法(正计时)\"]", StringComparison.Ordinal)
         && stateBlocks.Contains("[\"施法(倒计时)\"]", StringComparison.Ordinal),
         "addon runtime registers both cast directions");
@@ -4099,6 +4183,7 @@ sealed class FakeMacTriggerPulseSource : IMacTriggerPulseSource
     public HashSet<TriggerInputBinding> PressPulses { get; } = [];
     public int Pulses { get; set; }
     public int UpPulses { get; set; }
+    public bool RequiresRestart { get; set; }
     public int DisposeCount { get; private set; }
 
     public bool ConsumePulse(TriggerInputBinding input)
