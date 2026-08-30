@@ -4,6 +4,8 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 本仓库只发布 macOS 应用及其必需的共享核心，不包含 Windows WinForms/Win32 项目。Windows 原版与上游源码位于 [waynebian01/Shigure](https://github.com/waynebian01/Shigure)。本项目基于其 MIT 许可源码继续开发，基线记录在 [`upstream.json`](upstream.json)，许可证与原作者声明见 [LICENSE](LICENSE)。
 
+当前版本的用户可见变化见 [更新日志](CHANGELOG.md)。
+
 ## 主要功能
 
 - 原生 macOS 13+ Avalonia 桌面界面，支持 Apple Silicon 与 Intel 构建。
