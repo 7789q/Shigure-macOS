@@ -84,6 +84,7 @@ public sealed class ModuleDependencyService
             },
             Macros = new ModuleMacrosSnapshot
             {
+                RoutingMode = macros.RoutingMode,
                 UsesSpecDynamicSpells = macros.UsesSpecDynamicSpells,
                 DynamicCommon = new List<string>(macros.DynamicCommon),
                 DynamicForSpec = macros.UsesSpecDynamicSpells
@@ -724,7 +725,7 @@ public sealed class ModuleDependencyService
 
         if (occupied.Count > 0)
         {
-            local.Num = Math.Max(local.Num, occupied.Max());
+            local.Num = Math.Max(incoming.Num, occupied.Max());
         }
 
         void AddOffset(int? offset)
@@ -740,25 +741,22 @@ public sealed class ModuleDependencyService
         ClassBlocksStore.GroupAuraEntry left,
         ModuleGroupAuraSnapshot right)
     {
-        // offset 是队伍光环的槽位，同一 spellId 出现在不同槽位时仍然是两个槽位。
-        return left.Offset == right.Offset
-            && SpellIdentityMatches(
-                GetAuraSpellIds(left.SpellId, left.SpellIds),
-                left.Name,
-                GetAuraSpellIds(right.SpellId, right.SpellIds),
-                right.Name);
+        return SpellIdentityMatches(
+            GetAuraSpellIds(left.SpellId, left.SpellIds),
+            left.Name,
+            GetAuraSpellIds(right.SpellId, right.SpellIds),
+            right.Name);
     }
 
     private static bool GroupAuraIdentityMatches(
         ClassBlocksStore.GroupAuraEntry left,
         ClassBlocksStore.GroupAuraEntry right)
     {
-        return left.Offset == right.Offset
-            && SpellIdentityMatches(
-                GetAuraSpellIds(left.SpellId, left.SpellIds),
-                left.Name,
-                GetAuraSpellIds(right.SpellId, right.SpellIds),
-                right.Name);
+        return SpellIdentityMatches(
+            GetAuraSpellIds(left.SpellId, left.SpellIds),
+            left.Name,
+            GetAuraSpellIds(right.SpellId, right.SpellIds),
+            right.Name);
     }
 
     private static void CompactLocalGroupAuras(
@@ -859,6 +857,14 @@ public sealed class ModuleDependencyService
         ModuleMacrosSnapshot incoming,
         MergeCounters counters)
     {
+        var incomingRoutingMode = ClassMacrosStore.NormalizeRoutingMode(incoming.RoutingMode);
+        if (incomingRoutingMode is not null
+            && !string.Equals(local.RoutingMode, incomingRoutingMode, StringComparison.Ordinal))
+        {
+            local.RoutingMode = incomingRoutingMode;
+            counters.MacrosAdded++;
+        }
+
         var commonNames = new HashSet<string>(local.DynamicCommon.Select(NormalizeMacroText), StringComparer.Ordinal);
         foreach (var value in incoming.DynamicCommon)
         {
@@ -960,7 +966,9 @@ public sealed class ModuleDependencyService
             var slots = FuyutsuiKeymapConverter.CalculateRequiredSlots(
                 dynamicCount,
                 macros.StaticSpells.Count,
-                macros.SpecialSpells.Count);
+                macros.SpecialSpells.Count,
+                macros.KeyOffset,
+                routingMode: macros.RoutingMode);
             if (slots > FuyutsuiKeymapConverter.MacroSlotCapacity)
             {
                 throw new InvalidOperationException(

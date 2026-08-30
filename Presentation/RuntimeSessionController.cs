@@ -27,6 +27,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
     private readonly RuntimeSessionCoordinator _coordinator;
     private readonly TimeProvider _timeProvider;
     private readonly Func<IDisposable?>? _runtimeLeaseFactory;
+    private readonly HealAbsorbLogTracker _healAbsorbLogTracker = new();
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly object _stateSync = new();
     private RuntimeSessionStatus _status = new(
@@ -398,6 +399,12 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             }
         }
 
+        var healAbsorbLog = _healAbsorbLogTracker.Observe(snapshot.State?.HealAbsorbDiagnostic);
+        if (healAbsorbLog is not null)
+        {
+            AddLog(healAbsorbLog);
+        }
+
         if (string.IsNullOrWhiteSpace(snapshot.CurrentStep))
         {
             return;
@@ -418,6 +425,11 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         var fields = new (string Key, string Label)[]
         {
             ("动作单位", "目标"),
+            ("目标生命值", "目标生命"),
+            ("目标治疗吸收", "目标吸收"),
+            ("自身生命值", "自身生命"),
+            ("安全确认", "安全确认"),
+            ("确认帧", "确认帧"),
             ("动作按键", "按键"),
             ("动作延迟", "动作延迟"),
             ("逻辑延迟", "逻辑延迟"),
@@ -446,6 +458,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         _lastLoggedClass = null;
         _lastLoggedModule = null;
         _lastLoggedEnabled = null;
+        _healAbsorbLogTracker.Reset();
     }
 
     private void EnsureRuntimeLease()

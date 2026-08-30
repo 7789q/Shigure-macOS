@@ -77,6 +77,13 @@ local function getUnitType(unit)
 
     local index = getUnitTypeIndex(unit)
     if canAssist then
+        -- 151 保留给队伍外友方玩家；152 表示队伍外友方 NPC。复用类型字段，不新增像素槽位。
+        if index == 51 then
+            local isPlayer = UnitIsPlayer(unit)
+            if not issecretvalue(isPlayer) and not isPlayer then
+                index = 52
+            end
+        end
         index = index + 100
     end
     return index / 255

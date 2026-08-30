@@ -7,7 +7,14 @@ public sealed record LogicDecision(
     string? ModuleName = null,
     int DelayMs = 0,
     string? RateLimitKey = null,
-    int LogicDelayMs = 0);
+    int LogicDelayMs = 0,
+    IReadOnlyList<string>? HotkeySequence = null)
+{
+    public IReadOnlyList<string> ResolveHotkeySequence() =>
+        HotkeySequence is { Count: > 0 }
+            ? HotkeySequence
+            : string.IsNullOrWhiteSpace(Hotkey) ? [] : [Hotkey];
+}
 
 public interface IRuntimeLogic
 {

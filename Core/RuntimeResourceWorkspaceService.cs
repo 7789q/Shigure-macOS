@@ -428,7 +428,6 @@ public sealed record RuntimeResourceWorkspaceResult(
     private static readonly HashSet<string> NonProtocolCoreFiles = new(StringComparer.Ordinal)
     {
         "Fuyutsui/core/classmacros.lua",
-        "Fuyutsui/core/macro.lua",
         "Fuyutsui/core/quickbutton.lua"
     };
 

@@ -69,7 +69,14 @@ public sealed class SingleInstanceLease : IDisposable
                 try
                 {
                     release.Wait();
-                    mutex!.ReleaseMutex();
+                    try
+                    {
+                        mutex!.ReleaseMutex();
+                    }
+                    catch (ApplicationException)
+                    {
+                        // macOS can report an abandoned version-handoff mutex as unowned during shutdown.
+                    }
                 }
                 finally
                 {

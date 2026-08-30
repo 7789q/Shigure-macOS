@@ -25,6 +25,25 @@ public readonly record struct KeySendResult(
 public interface ITargetKeyOutput
 {
     KeySendResult Send(string hotkey, TargetIdentity? expectedTarget);
+
+    KeySendResult SendSequence(IReadOnlyList<string> hotkeys, TargetIdentity? expectedTarget)
+    {
+        if (hotkeys.Count == 0)
+        {
+            return KeySendResult.Failure(KeySendFailureKind.InvalidHotkey, "按键序列为空");
+        }
+
+        foreach (var hotkey in hotkeys)
+        {
+            var result = Send(hotkey, expectedTarget);
+            if (!result.Succeeded)
+            {
+                return result;
+            }
+        }
+
+        return KeySendResult.Success;
+    }
 }
 
 public enum HotkeyModifier

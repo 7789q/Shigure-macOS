@@ -166,6 +166,7 @@ public sealed class ModuleStore
 
     private readonly object _gate = new();
     private List<ModuleDefinition> _modules = new();
+    private List<ModuleLoadFailure> _loadFailures = new();
 
     public ModuleStore(string moduleDirectory)
     {
@@ -189,6 +190,14 @@ public sealed class ModuleStore
         lock (_gate)
         {
             return _modules.Select(module => module.Clone()).ToList();
+        }
+    }
+
+    public IReadOnlyList<ModuleLoadFailure> GetLoadFailures()
+    {
+        lock (_gate)
+        {
+            return _loadFailures.ToList();
         }
     }
 
@@ -221,6 +230,7 @@ public sealed class ModuleStore
         {
             Directory.CreateDirectory(ModuleDirectory);
             var loaded = new List<ModuleDefinition>();
+            var failures = new List<ModuleLoadFailure>();
             foreach (var file in Directory.EnumerateFiles(ModuleDirectory, "*.json", SearchOption.AllDirectories))
             {
                 try
@@ -235,13 +245,14 @@ public sealed class ModuleStore
                     module.FilePath = file;
                     loaded.Add(module);
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // 单个模块损坏时跳过，避免影响其它模块加载。
+                    failures.Add(new ModuleLoadFailure(file, exception.GetType().Name, exception.Message));
                 }
             }
 
             _modules = SortModules(loaded).ToList();
+            _loadFailures = failures;
         }
     }
 
@@ -636,6 +647,8 @@ public sealed class ModuleStore
     }
 }
 
+public sealed record ModuleLoadFailure(string FilePath, string ErrorType, string Message);
+
 public static class ModuleLogic
 {
     public static LogicDecision Run(ModuleDefinition module, GameState state, IKeymapResolver keymap)
@@ -644,6 +657,7 @@ public static class ModuleLogic
         var unitSlots = ResolveDynamicFields(module, state);
         var failedSpells = keymap.GetCurrentFailedSpells();
         var oneKeySpells = keymap.GetCurrentOneKeySpells();
+        var missingBindings = new List<string>();
 
         for (var ruleIndex = 0; ruleIndex < module.Rules.Count; ruleIndex++)
         {
@@ -669,6 +683,10 @@ public static class ModuleLogic
 
             if (ModuleSpecialActions.IsPauseSpell(rule.Spell))
             {
+                if (missingBindings.Count > 0)
+                {
+                    info["缺失按键"] = string.Join("；", missingBindings);
+                }
                 info["命中条件"] = string.IsNullOrWhiteSpace(rule.DescribeCondition()) ? "始终" : rule.DescribeCondition();
                 info["动作技能"] = ModuleSpecialActions.PauseSpell;
                 info["动作按键"] = "-";
@@ -713,20 +731,32 @@ public static class ModuleLogic
             }
 
             var resolvedMacroCondition = rule.MacroCondition;
-            var hotkey = string.IsNullOrWhiteSpace(rule.Hotkey)
-                ? string.IsNullOrWhiteSpace(actionSpell) ? null : keymap.GetHotkey(resolvedUnit, actionSpell, resolvedMacroCondition)
-                : rule.Hotkey.Trim();
+            var binding = string.IsNullOrWhiteSpace(rule.Hotkey)
+                ? string.IsNullOrWhiteSpace(actionSpell) ? null : keymap.GetBinding(resolvedUnit, actionSpell, resolvedMacroCondition)
+                : KeyInputBinding.Single(rule.Hotkey.Trim());
             if (isOneKeySpell
                 && string.IsNullOrWhiteSpace(rule.Hotkey)
-                && string.IsNullOrWhiteSpace(hotkey)
+                && binding is null
                 && !string.IsNullOrWhiteSpace(actionSpell))
             {
-                hotkey = keymap.GetHotkey(ReservedUnit.None, actionSpell, MacroConditionText.NoChanneling);
-                if (!string.IsNullOrWhiteSpace(hotkey))
+                binding = keymap.GetBinding(ReservedUnit.None, actionSpell, MacroConditionText.NoChanneling);
+                if (binding is not null)
                 {
                     resolvedUnit = ReservedUnit.None;
                     resolvedMacroCondition = MacroConditionText.NoChanneling;
                 }
+            }
+
+            if (binding is null && !string.IsNullOrWhiteSpace(actionSpell))
+            {
+                missingBindings.Add($"规则 {ruleIndex + 1}: {actionSpell} / 单位 {resolvedUnit.GetValueOrDefault()}");
+                continue;
+            }
+
+            var hotkey = binding?.DisplayText;
+            if (missingBindings.Count > 0)
+            {
+                info["已跳过缺失按键"] = string.Join("；", missingBindings);
             }
 
             var step = BuildStep(module, rule, hotkey, actionSpell);
@@ -739,6 +769,14 @@ public static class ModuleLogic
             info["动作单位"] = string.IsNullOrWhiteSpace(rule.UnitName)
                 ? resolvedUnit.GetValueOrDefault()
                 : $"{rule.UnitName} → {resolvedUnit.GetValueOrDefault()}";
+            info["动作单位槽位"] = resolvedUnit.GetValueOrDefault();
+            info["自身生命值"] = state.GetInt("生命值");
+            if (resolvedUnit is > 0
+                && state.Group.TryGetValue(resolvedUnit.Value.ToString(), out var actionUnit))
+            {
+                info["目标生命值"] = actionUnit.TryGetValue("生命值", out var health) ? health : 0;
+                info["目标治疗吸收"] = actionUnit.TryGetValue("治疗吸收", out var absorb) ? absorb : 0;
+            }
             AddRuleLogInfo(info, rule, ruleIndex, rateLimitKey, hotkey);
             return new LogicDecision(
                 hotkey,
@@ -747,10 +785,15 @@ public static class ModuleLogic
                 module.Name,
                 rule.DelayMs.GetValueOrDefault(),
                 rateLimitKey,
-                rule.LogicDelayMs.GetValueOrDefault());
+                rule.LogicDelayMs.GetValueOrDefault(),
+                binding?.Hotkeys);
         }
 
         info["命中条件"] = "-";
+        if (missingBindings.Count > 0)
+        {
+            info["缺失按键"] = string.Join("；", missingBindings);
+        }
         return new LogicDecision(null, $"{module.Name}: 无匹配规则", info, module.Name);
     }
 
@@ -812,11 +855,7 @@ public static class ModuleLogic
 
             if (!string.IsNullOrWhiteSpace(unit.HealthName))
             {
-                unitHealth[unit.HealthName] = slot is not null
-                    && state.Group.TryGetValue(slot, out var member)
-                    && member.TryGetValue("生命值", out var value)
-                        ? value
-                        : null;
+                unitHealth[unit.HealthName] = UnitSelector.ResolveHealth(slot, state);
             }
         }
 

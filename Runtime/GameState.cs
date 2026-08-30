@@ -2,12 +2,17 @@
 
 public sealed class GameState
 {
-    public GameState(Dictionary<string, object?> values)
+    public GameState(
+        Dictionary<string, object?> values,
+        HealAbsorbDiagnosticSnapshot? healAbsorbDiagnostic = null)
     {
         Values = values;
+        HealAbsorbDiagnostic = healAbsorbDiagnostic;
     }
 
     public Dictionary<string, object?> Values { get; }
+
+    public HealAbsorbDiagnosticSnapshot? HealAbsorbDiagnostic { get; }
 
     public IReadOnlyDictionary<string, object?> Spells =>
         Values.TryGetValue("spells", out var value) && value is IReadOnlyDictionary<string, object?> spells
@@ -91,3 +96,13 @@ public sealed class GameState
         return Values.TryGetValue(normalized, out var directValue) ? directValue : null;
     }
 }
+
+public sealed record HealAbsorbDiagnosticSnapshot(
+    int DecodedUnitCount,
+    IReadOnlyList<HealAbsorbUnitDiagnostic> PositiveUnits);
+
+public sealed record HealAbsorbUnitDiagnostic(
+    int Unit,
+    int RawHealth,
+    int HealAbsorb,
+    int EvaluatedHealth);

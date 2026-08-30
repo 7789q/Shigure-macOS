@@ -61,7 +61,19 @@ local BAR_CONFIG = {
 
 local HEAL_ABSORB_SLOT_UNITS = 1 + HEAL_ABSORB_BAR_UNITS + 1 -- 前锚点 + 条身 + 终点
 local HEAL_ABSORB_ROWS = HEAL_ABSORB_MAX_SLOTS / HEAL_ABSORB_COLS
-local HEAL_ABSORB_UNIT_WIDTH = BAR_CONFIG.width * HEAL_ABSORB_WIDTH_SCALE
+
+local function AlignToPhysicalPixel(width)
+    local effectiveScale = UIParent:GetEffectiveScale()
+    if not effectiveScale or effectiveScale <= 0 then
+        return math.max(2, math.floor(width + 0.5))
+    end
+    local physicalPixels = math.max(2, math.floor(width * effectiveScale + 0.5))
+    return physicalPixels / effectiveScale
+end
+
+-- 每个百分比单元至少占两个完整物理像素，零值 StatusBar 的边缘不会盖住整个单元。
+local HEAL_ABSORB_UNIT_WIDTH =
+    AlignToPhysicalPixel(BAR_CONFIG.width * HEAL_ABSORB_WIDTH_SCALE)
 
 local AURA_BLOCK_W = BLOCK_FIX_CONFIG.blockWidth
 local AURA_BLOCK_H = AURA_BLOCK_HEIGHT
@@ -380,7 +392,7 @@ local function CreateHealAbsorbSlot(slot)
     endTex:SetColorTexture(BAR_END_COLOR[1], BAR_END_COLOR[2], BAR_END_COLOR[3], BAR_END_COLOR[4])
 
     local bar = CreateFrame("StatusBar", nil, slotFrame)
-    bar:SetSize(HEAL_ABSORB_BAR_UNITS * HEAL_ABSORB_UNIT_WIDTH + 1, BAR_CONFIG.height)
+    bar:SetSize(HEAL_ABSORB_BAR_UNITS * HEAL_ABSORB_UNIT_WIDTH, BAR_CONFIG.height)
     bar:SetPoint("TOPLEFT", slotFrame, "TOPLEFT", HEAL_ABSORB_UNIT_WIDTH, 0)
     StyleHorizontalStatusBar(bar)
     bar:SetFrameLevel(BAR_STATUS_LEVEL)

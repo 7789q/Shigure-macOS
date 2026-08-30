@@ -25,12 +25,18 @@ var tests = new (string Name, Action Run)[]
     ("count bars markers", CountBarsMarkers),
     ("heal absorb units", HealAbsorbUnits),
     ("unit selector without any aura contract", UnitSelectorWithoutAnyAuraContract),
+    ("unit selector excludes unavailable role contract", UnitSelectorExcludesUnavailableRoleContract),
+    ("healing deficit selector contract", HealingDeficitSelectorContract),
+    ("module missing binding fallback contract", ModuleMissingBindingFallbackContract),
     ("state builder fixture", StateBuilderFixture),
+    ("heal absorb diagnostic log contract", HealAbsorbDiagnosticLogContract),
     ("module match selection", ModuleMatchSelection),
     ("module marketplace install contract", ModuleMarketplaceInstallContract),
     ("module editor persistence contract", ModuleEditorPersistenceContract),
+    ("module load failure contract", ModuleLoadFailureContract),
     ("legacy module state compatibility contract", LegacyModuleStateCompatibilityContract),
     ("module dependency capture and import contract", ModuleDependencyCaptureAndImportContract),
+    ("emergency action guard contract", EmergencyActionGuardContract),
     ("target identity contract", TargetIdentityContract),
     ("permission status contract", PermissionStatusContract),
     ("mac permission service contract", MacPermissionServiceContract),
@@ -162,26 +168,51 @@ static void CountBarsMarkers()
 
 static void HealAbsorbUnits()
 {
-    var white = Argb(255, 255, 255);
-    var row = new[]
-    {
-        white,
-        white,
-        Argb(0, 8, 4),
-        Argb(0, 0, 0),
-        white,
-        Argb(0, 1, 30),
-        Argb(0, 0, 0),
-        white,
-        Argb(0, 9, 31)
-    };
+    var row = new List<int>();
+    AddHealAbsorbSlot(row, expectedRow: 2, unit: 4, value: 7, unitWidth: 2);
+    AddHealAbsorbSlot(row, expectedRow: 2, unit: 30, value: 0, unitWidth: 2, zeroEdgePixels: 1);
+    AddHealAbsorbSlot(row, expectedRow: 2, unit: 5, value: 1, unitWidth: 2);
+    AddHealAbsorbSlot(row, expectedRow: 2, unit: 6, value: 2, unitWidth: 2);
+    AddHealAbsorbSlot(row, expectedRow: 2, unit: 7, value: 3, unitWidth: 2);
+    AddHealAbsorbSlot(row, expectedRow: 2, unit: 8, value: 100, unitWidth: 2);
     var decoded = new Dictionary<int, int>();
 
-    PixelProtocolDecoder.DecodeHealAbsorbRow(row, decoded);
+    PixelProtocolDecoder.DecodeHealAbsorbRow(CollectionsMarshal.AsSpan(row), 2, decoded);
 
-    Equal(2, decoded.Count, "valid heal absorb units");
+    Equal(6, decoded.Count, "valid heal absorb units");
     Equal(7, decoded[4], "unit 4 heal absorb");
     Equal(0, decoded[30], "unit 30 lower bound value");
+    Equal(1, decoded[5], "one percent heal absorb remains precise");
+    Equal(2, decoded[6], "two percent heal absorb remains precise");
+    Equal(3, decoded[7], "three percent heal absorb remains precise");
+    Equal(100, decoded[8], "full heal absorb remains precise");
+
+    var wrongRow = new Dictionary<int, int>();
+    PixelProtocolDecoder.DecodeHealAbsorbRow(CollectionsMarshal.AsSpan(row), 1, wrongRow);
+    Equal(0, wrongRow.Count, "heal absorb row requires a matching row anchor");
+}
+
+static void AddHealAbsorbSlot(
+    List<int> row,
+    int expectedRow,
+    int unit,
+    int value,
+    int unitWidth,
+    int zeroEdgePixels = 0)
+{
+    row.AddRange(Enumerable.Repeat(Argb(expectedRow, unit, 0), unitWidth));
+    row.AddRange(Enumerable.Repeat(Argb(255, 255, 255), value * unitWidth + zeroEdgePixels));
+    if (value >= 100)
+    {
+        row.Add(Argb(200, 200, 200));
+    }
+    else
+    {
+        row.AddRange(Enumerable.Repeat(
+            Argb(expectedRow, value + 1, unit),
+            Math.Max(1, unitWidth - zeroEdgePixels)));
+    }
+    row.Add(Argb(0, 0, 0));
 }
 
 static void UnitSelectorWithoutAnyAuraContract()
@@ -229,6 +260,156 @@ static void UnitSelectorWithoutAnyAuraContract()
     Equal("2", UnitSelector.Resolve(absorbWithoutAnyAura, state), "highest absorb excludes units with any selected aura");
     withoutAnyAura.AuraNames = [];
     Equal(null, UnitSelector.Resolve(withoutAnyAura, state), "without-any selector requires at least one aura");
+}
+
+static void UnitSelectorExcludesUnavailableRoleContract()
+{
+    var group = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+    {
+        ["1"] = new Dictionary<string, object?>
+        {
+            ["职责"] = 1,
+            ["生命值"] = 80,
+            ["治疗吸收"] = 0,
+            ["驱散"] = 0
+        },
+        ["2"] = new Dictionary<string, object?>
+        {
+            ["职责"] = 0,
+            ["生命值"] = 35,
+            ["治疗吸收"] = 45,
+            ["驱散"] = 2
+        }
+    };
+    var state = new GameState(new Dictionary<string, object?> { ["group"] = group });
+
+    Equal(
+        "1",
+        UnitSelector.Resolve(new ModuleUnit { Kind = UnitSelectorKind.LowestHealth }, state),
+        "lowest health excludes an unavailable unit whose encoded role is zero");
+    Equal(
+        null,
+        UnitSelector.Resolve(new ModuleUnit { Kind = UnitSelectorKind.HighestHealingAbsorb }, state),
+        "healing absorb excludes an unavailable unit whose encoded role is zero");
+    Equal(
+        null,
+        UnitSelector.Resolve(new ModuleUnit { Kind = UnitSelectorKind.UnitWithDispelType, DispelType = 2 }, state),
+        "dispel excludes an unavailable unit whose encoded role is zero");
+    Equal(
+        0,
+        UnitSelector.Resolve(new ModuleCountField { Kind = CountKind.UnitsBelowHealth, HealthThreshold = 50 }, state),
+        "health count excludes an unavailable unit whose encoded role is zero");
+    Equal(
+        0,
+        UnitSelector.Resolve(new ModuleCountField { Kind = CountKind.UnitsAboveHealingAbsorb, HealthThreshold = 20 }, state),
+        "healing absorb count excludes an unavailable unit whose encoded role is zero");
+
+    var stalePlayer = new GameState(new Dictionary<string, object?>
+    {
+        ["生命值"] = 45,
+        ["队伍类型"] = 46,
+        ["group"] = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+        {
+            ["1"] = new Dictionary<string, object?> { ["职责"] = 0, ["生命值"] = 100 },
+            ["2"] = new Dictionary<string, object?> { ["职责"] = 1, ["生命值"] = 50 }
+        }
+    });
+    Equal(
+        "1",
+        UnitSelector.Resolve(new ModuleUnit { Kind = UnitSelectorKind.LowestHealth }, stalePlayer),
+        "party player slot uses the fresher independent player health");
+    Equal(
+        1,
+        UnitSelector.Resolve(new ModuleCountField { Kind = CountKind.UnitsBelowHealth, HealthThreshold = 46 }, stalePlayer),
+        "party health count reconciles the player slot");
+    var playerModule = ModuleDefinition.CreateDefault("玩家血量校正");
+    playerModule.Units =
+    [
+        new ModuleUnit { Name = "最低单位", HealthName = "最低生命值", Kind = UnitSelectorKind.LowestHealth }
+    ];
+    ModuleLogic.ResolveDynamicFields(playerModule, stalePlayer);
+    Equal(
+        true,
+        ModuleConditionEvaluator.TryResolveInt(stalePlayer, "最低生命值", out var reconciledPlayerHealth),
+        "selected player health field resolves through the module condition path");
+    Equal(45, reconciledPlayerHealth, "selected player health field uses the same reconciled value");
+
+    var staleRaidPlayer = new GameState(new Dictionary<string, object?>
+    {
+        ["生命值"] = 40,
+        ["队伍类型"] = 7,
+        ["group"] = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+        {
+            ["2"] = new Dictionary<string, object?> { ["职责"] = 1, ["生命值"] = 50 },
+            ["7"] = new Dictionary<string, object?> { ["职责"] = 0, ["生命值"] = 100 }
+        }
+    });
+    Equal(
+        "7",
+        UnitSelector.Resolve(new ModuleUnit { Kind = UnitSelectorKind.LowestHealth }, staleRaidPlayer),
+        "raid player slot is resolved from group type before health reconciliation");
+}
+
+static void ModuleMissingBindingFallbackContract()
+{
+    var module = ModuleDefinition.CreateDefault("缺键回退");
+    module.Id = "missing-binding-fallback";
+    module.Rules =
+    [
+        new ModuleRule { Condition = "职业 == 2", Unit = 1, Spell = "缺失技能", MacroCondition = "" },
+        new ModuleRule { Condition = "职业 == 2", Unit = 0, Spell = "可用技能", MacroCondition = "" }
+    ];
+    var state = new GameState(new Dictionary<string, object?> { ["职业"] = 2 });
+    var decision = ModuleLogic.Run(module, state, new ContractKeymapResolver());
+
+    Equal("CTRL-A", decision.Hotkey, "a matched rule without a binding falls through to an executable rule");
+    Equal(true, decision.UnitInfo.ContainsKey("已跳过缺失按键"), "missing high-priority binding remains diagnosable");
+}
+
+static void HealingDeficitSelectorContract()
+{
+    var group = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+    {
+        ["1"] = new Dictionary<string, object?> { ["生命值"] = 60, ["治疗吸收"] = 0 },
+        ["2"] = new Dictionary<string, object?> { ["生命值"] = 100, ["治疗吸收"] = 35 },
+        ["3"] = new Dictionary<string, object?> { ["生命值"] = 90, ["治疗吸收"] = 50 },
+        ["4"] = new Dictionary<string, object?> { ["生命值"] = 0, ["治疗吸收"] = 100 },
+        ["5"] = new Dictionary<string, object?> { ["生命值"] = 100, ["治疗吸收"] = 0 }
+    };
+    var state = new GameState(new Dictionary<string, object?> { ["group"] = group });
+
+    Equal(
+        "3",
+        UnitSelector.Resolve(new ModuleUnit
+        {
+            Kind = UnitSelectorKind.HighestHealingDeficit,
+            HealthThreshold = 35
+        }, state),
+        "highest healing deficit combines missing health and absorb");
+    Equal(
+        3,
+        UnitSelector.Resolve(new ModuleCountField
+        {
+            Kind = CountKind.UnitsAboveHealingDeficit,
+            HealthThreshold = 30
+        }, state),
+        "healing deficit count includes real damage and absorb");
+    Equal(
+        1,
+        UnitSelector.Resolve(new ModuleCountField
+        {
+            Kind = CountKind.UnitsAboveHealingDeficit,
+            HealthThreshold = 40
+        }, state),
+        "healing deficit threshold is strict");
+    Equal(
+        0,
+        UnitSelector.Resolve(new ModuleCountField
+        {
+            Kind = CountKind.UnitsAboveHealingDeficit,
+            HealthThreshold = 60
+        }, state),
+        "dead units and exact-threshold deficits are excluded");
 }
 
 static void StateBuilderFixture()
@@ -310,9 +491,18 @@ static void StateBuilderFixture()
         Equal(14, Convert.ToInt32(state.Spells["快速治疗"]), "spell field");
         Equal(true, Convert.ToBoolean(state.Auras["救赎"]), "aura field");
         Equal(30, state.Group.Count, "fixed group slot count");
-        Equal(68, Convert.ToInt32(state.Group["1"]["生命值"]), "heal absorb health adjustment");
-        Equal(12, Convert.ToInt32(state.Group["1"]["治疗吸收"]), "heal absorb field");
-        Equal(0, Convert.ToInt32(state.Group["2"]["生命值"]), "heal absorb health floor");
+        Equal(80, Convert.ToInt32(state.Group["1"]["生命值"]), "heal absorb does not alter health");
+        Equal(12, Convert.ToInt32(state.Group["1"]["治疗吸收"]), "heal absorb remains independent");
+        Equal(30, Convert.ToInt32(state.Group["2"]["生命值"]), "heal absorb remains separate from health");
+        Equal(2, state.HealAbsorbDiagnostic?.DecodedUnitCount, "heal absorb decoded unit count");
+        Equal(
+            new HealAbsorbUnitDiagnostic(1, 80, 12, 80),
+            state.HealAbsorbDiagnostic?.PositiveUnits[0],
+            "heal absorb first diagnostic unit");
+        Equal(
+            new HealAbsorbUnitDiagnostic(2, 30, 50, 30),
+            state.HealAbsorbDiagnostic?.PositiveUnits[1],
+            "heal absorb second diagnostic unit");
         Equal(1, Convert.ToInt32(state.Group["2"]["职责"]), "relative group step");
         Equal(true, Convert.ToBoolean(state.Group["30"]["动作条状态"]), "group bar field");
     }
@@ -320,6 +510,38 @@ static void StateBuilderFixture()
     {
         File.Delete(fixturePath);
     }
+}
+
+static void HealAbsorbDiagnosticLogContract()
+{
+    var tracker = new HealAbsorbLogTracker();
+    Equal(
+        "治疗吸收诊断：正值 0，解码槽位 5",
+        tracker.Observe(new HealAbsorbDiagnosticSnapshot(5, [])),
+        "first valid scan records a zero baseline");
+    Equal(
+        null,
+        tracker.Observe(new HealAbsorbDiagnosticSnapshot(5, [])),
+        "unchanged zero baseline is suppressed");
+
+    var positive = new HealAbsorbDiagnosticSnapshot(
+        5,
+        [new HealAbsorbUnitDiagnostic(2, 100, 35, 100)]);
+    Equal(
+        "治疗吸收诊断：正值 1，解码槽位 5；单位 2：原始生命 100%，吸收 35%，规则生命 100%",
+        tracker.Observe(positive),
+        "positive absorb records the full decision path");
+    Equal(null, tracker.Observe(positive), "unchanged absorb is suppressed");
+    Equal(
+        "治疗吸收诊断：正值 0，解码槽位 5",
+        tracker.Observe(new HealAbsorbDiagnosticSnapshot(5, [])),
+        "absorb removal is recorded");
+
+    tracker.Reset();
+    Equal(
+        "治疗吸收诊断：正值 0，解码槽位 5",
+        tracker.Observe(new HealAbsorbDiagnosticSnapshot(5, [])),
+        "a new runtime session records its own baseline");
 }
 
 static void ModuleMarketplaceInstallContract()
@@ -458,6 +680,12 @@ static void ModuleEditorPersistenceContract()
                 AuraNames = ["光环甲", "光环乙"],
                 AuraCount = 2,
                 DispelType = 4
+            },
+            new ModuleUnit
+            {
+                Name = "治疗缺口目标",
+                Kind = UnitSelectorKind.HighestHealingDeficit,
+                HealthThreshold = 10
             }
         ];
         module.Counts =
@@ -468,6 +696,12 @@ static void ModuleEditorPersistenceContract()
                 Kind = CountKind.UnitsWithoutAuraBelowHealth,
                 HealthThresholdField = "治疗阈值",
                 AuraName = "光环甲"
+            },
+            new ModuleCountField
+            {
+                Name = "大缺口人数",
+                Kind = CountKind.UnitsAboveHealingDeficit,
+                HealthThreshold = 30
             }
         ];
         module.ValueAdjustments =
@@ -522,9 +756,11 @@ static void ModuleEditorPersistenceContract()
         var loaded = store.GetModules().Single();
         Equal(false, loaded.Enabled, "module enabled state round trips");
         Equal("1-40", loaded.Match.PartyType, "module party type normalized");
-        Equal(UnitSelectorKind.LowestHealthWithAnyAura, loaded.Units.Single().Kind, "module unit kind round trips");
-        Equal("光环甲,光环乙", string.Join(',', loaded.Units.Single().AuraNames!), "module aura list round trips");
-        Equal(CountKind.UnitsWithoutAuraBelowHealth, loaded.Counts.Single().Kind, "module count kind round trips");
+        Equal(UnitSelectorKind.LowestHealthWithAnyAura, loaded.Units[0].Kind, "module unit kind round trips");
+        Equal("光环甲,光环乙", string.Join(',', loaded.Units[0].AuraNames!), "module aura list round trips");
+        Equal(UnitSelectorKind.HighestHealingDeficit, loaded.Units[1].Kind, "healing deficit unit kind round trips");
+        Equal(CountKind.UnitsWithoutAuraBelowHealth, loaded.Counts[0].Kind, "module count kind round trips");
+        Equal(CountKind.UnitsAboveHealingDeficit, loaded.Counts[1].Kind, "healing deficit count kind round trips");
         Equal(-5, loaded.ValueAdjustments.Single().Delta, "module adjustment round trips");
         Equal("优先治疗规则", loaded.Rules[0].Comment, "module rule comment round trips");
         Equal("channeling", loaded.Rules[0].MacroCondition, "shared macro condition parser");
@@ -557,6 +793,38 @@ static void ModuleEditorPersistenceContract()
         {
             Directory.Delete(fixtureRoot, recursive: true);
         }
+    }
+}
+
+static void ModuleLoadFailureContract()
+{
+    var fixtureRoot = Path.Combine(Path.GetTempPath(), $"shigure-module-load-{Guid.NewGuid():N}");
+    var moduleDirectory = Path.Combine(fixtureRoot, "module");
+    Directory.CreateDirectory(moduleDirectory);
+    try
+    {
+        File.WriteAllText(
+            Path.Combine(moduleDirectory, "unknown-enum.json"),
+            """
+            {
+              "Name": "未知枚举模块",
+              "Units": [
+                { "Name": "目标", "Kind": "UnknownSelector" }
+              ]
+            }
+            """);
+
+        var store = new ModuleStore(moduleDirectory);
+        Equal(0, store.GetModules().Count, "invalid module is not loaded");
+        var failure = store.GetLoadFailures().Single();
+        Equal("unknown-enum.json", Path.GetFileName(failure.FilePath), "failed module path is retained");
+        Equal("JsonException", failure.ErrorType, "failed module error type is retained");
+        Equal(true, failure.Message.Contains("$.Units[0].Kind", StringComparison.Ordinal),
+            "failed module error identifies the invalid enum field");
+    }
+    finally
+    {
+        Directory.Delete(fixtureRoot, recursive: true);
     }
 }
 
@@ -719,6 +987,43 @@ static void ModuleDependencyCaptureAndImportContract()
         var warning = service.Capture(unmatched);
         Equal(true, !string.IsNullOrWhiteSpace(warning), "dependency capture warns without class and spec");
         Equal(null, unmatched.Dependencies, "dependency capture clears stale snapshot without class and spec");
+
+        var paladinPath = Path.Combine(classDirectory, "Paladin.lua");
+        File.Copy(Path.Combine(repositoryRoot, "Fuyutsui", "class", "Paladin.lua"), paladinPath);
+        var paladinModule = ModuleDefinition.CreateDefault("圣骑队伍依赖");
+        paladinModule.Match.ClassId = 2;
+        paladinModule.Match.SpecId = 1;
+        Equal(null, service.Capture(paladinModule), "paladin group dependency capture succeeds");
+        Equal(
+            ClassMacrosStore.SelectorTargetRoutingMode,
+            paladinModule.Dependencies?.Macros.RoutingMode,
+            "module dependency captures selector-target routing mode");
+
+        var paladinConfig = ClassBlocksStore.Load(paladinPath);
+        var paladinGroup = paladinConfig.Specs[1].Group!;
+        var spirit = paladinGroup.Auras.Single(aura => aura.SpellId == 27827);
+        spirit.Offset = 7;
+        paladinGroup.Auras.Add(new ClassBlocksStore.GroupAuraEntry
+        {
+            Offset = 8,
+            Name = spirit.Name,
+            SpellId = spirit.SpellId
+        });
+        paladinGroup.Auras.Add(new ClassBlocksStore.GroupAuraEntry
+        {
+            Offset = 4,
+            Name = "救世道标",
+            SpellId = 1244893
+        });
+        paladinGroup.Num = 29;
+        ClassBlocksStore.Save(paladinConfig);
+
+        var repairedGroupImport = service.Import([paladinModule]);
+        Equal(true, repairedGroupImport.ConfigUpdated > 0, "group dependency compacts duplicate spell identities");
+        var repairedGroup = ClassBlocksStore.Load(paladinPath).Specs[1].Group!;
+        Equal(1, repairedGroup.Auras.Count(aura => aura.SpellId == 27827), "group aura spell is unique across offsets");
+        Equal(7, repairedGroup.Num, "group stride shrinks to its occupied offsets");
+        Equal(false, service.Import([paladinModule]).HasChanges, "repaired group import remains idempotent");
     }
     finally
     {
@@ -727,6 +1032,62 @@ static void ModuleDependencyCaptureAndImportContract()
             Directory.Delete(fixtureRoot, recursive: true);
         }
     }
+}
+
+static void EmergencyActionGuardContract()
+{
+    static GameState State(int playerHealth, params (int Unit, int Health)[] members)
+    {
+        var group = members.ToDictionary(
+            member => member.Unit.ToString(),
+            member => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
+            {
+                ["生命值"] = member.Health,
+                ["治疗吸收"] = 0
+            });
+        return new GameState(new Dictionary<string, object?>
+        {
+            ["生命值"] = playerHealth,
+            ["group"] = group
+        });
+    }
+
+    static LogicDecision Decision(string spell, int unit, string rateLimitKey = "rule-8") => new(
+        "ALT-CTRL-\\",
+        $"施放 {spell}",
+        new Dictionary<string, object?>
+        {
+            ["动作技能"] = spell,
+            ["动作单位槽位"] = unit
+        },
+        RateLimitKey: rateLimitKey);
+
+    var guard = new EmergencyActionGuard();
+    Equal(true, guard.Observe(Decision("神圣震击", 1), State(100, (1, 100))).Allowed,
+        "ordinary healing does not require emergency confirmation");
+
+    var inconsistentSelf = guard.Observe(Decision("圣疗术", 1), State(100, (1, 20)));
+    Equal(false, inconsistentSelf.Allowed, "full-health player blocks a false unit-one emergency");
+    Equal(true, inconsistentSelf.Reason?.Contains("独立自身生命值为 100%", StringComparison.Ordinal) == true,
+        "self-health disagreement is diagnosable");
+
+    var firstCritical = guard.Observe(Decision("圣疗术", 1), State(20, (1, 20)));
+    var secondCritical = guard.Observe(Decision("圣疗术", 1), State(19, (1, 19)));
+    Equal(false, firstCritical.Allowed, "first critical frame is held");
+    Equal(1, firstCritical.ConsecutiveFrames, "first critical frame is counted");
+    Equal(true, secondCritical.Allowed, "same critical target is allowed on the second frame");
+
+    guard.Reset();
+    Equal(false, guard.Observe(Decision("圣疗术", 2), State(100, (2, 20))).Allowed,
+        "party critical target starts confirmation");
+    Equal(false, guard.Observe(Decision("圣疗术", 3), State(100, (3, 20))).Allowed,
+        "switching targets restarts confirmation");
+    Equal(true, guard.Observe(Decision("圣疗术", 3), State(100, (3, 18))).Allowed,
+        "new party target is allowed after its own second frame");
+
+    guard.Reset();
+    Equal(false, guard.Observe(Decision("圣疗术", 2), State(100, (2, 100))).Allowed,
+        "non-critical target is rejected even if a module condition is wrong");
 }
 
 static void ModuleMatchSelection()
@@ -930,7 +1291,8 @@ static void MacTriggerInputMapContract()
     latch.Record(keyPulse);
     latch.Record(keyPulse);
     Equal(true, latch.Consume(keyPulse), "key press pulse is consumed once");
-    Equal(false, latch.Consume(keyPulse), "pending key press pulses are coalesced");
+    Equal(true, latch.Consume(keyPulse), "rapid key press pulses are queued independently");
+    Equal(false, latch.Consume(keyPulse), "queued key press pulses are consumed exactly once");
 
     var triggerSource = File.ReadAllText(Path.Combine(
         FindRepositoryRoot(),
@@ -1204,10 +1566,22 @@ static void RegionPixelScannerEquivalence()
     logicalPixels[markerOffset + 5] = Argb(0, 4, 0);
     logicalPixels[markerOffset + 6] = Argb(200, 200, 200);
 
-    logicalPixels[(markerY + 1) * width] = Argb(255, 255, 255);
-    logicalPixels[(markerY + 1) * width + 1] = Argb(0, 11, 1);
-    logicalPixels[(markerY + 6) * width] = Argb(255, 255, 255);
-    logicalPixels[(markerY + 6) * width + 1] = Argb(0, 21, 30);
+    const int firstHealRowY = markerY + 2;
+    logicalPixels[firstHealRowY * width] = Argb(0, 1, 0);
+    logicalPixels[firstHealRowY * width + 1] = Argb(0, 1, 0);
+    for (var x = 2; x < 22; x++)
+    {
+        logicalPixels[firstHealRowY * width + x] = Argb(255, 255, 255);
+    }
+    logicalPixels[firstHealRowY * width + 22] = Argb(0, 11, 1);
+
+    logicalPixels[(firstHealRowY + 10) * width] = Argb(5, 30, 0);
+    logicalPixels[(firstHealRowY + 10) * width + 1] = Argb(5, 30, 0);
+    for (var x = 2; x < 42; x++)
+    {
+        logicalPixels[(firstHealRowY + 10) * width + x] = Argb(255, 255, 255);
+    }
+    logicalPixels[(firstHealRowY + 10) * width + 42] = Argb(5, 21, 30);
 
     var bounds = new TargetBounds(-1440, 80, width, height);
     var windowsTarget = new TargetWindow(
@@ -1591,6 +1965,14 @@ static void MacSingleInstanceContract()
     first.Dispose();
     using var reacquired = SingleInstanceLease.TryAcquire(name);
     Equal(true, reacquired is not null, "single-instance lease can be reacquired after disposal");
+    reacquired?.Dispose();
+
+    for (var attempt = 0; attempt < 16; attempt++)
+    {
+        using var rapidHandoff = SingleInstanceLease.TryAcquire(name);
+        Equal(true, rapidHandoff is not null, "single-instance lease survives rapid version handoff");
+    }
+
     Throws<ArgumentException>(
         () => SingleInstanceLease.TryAcquire(" "),
         "blank single-instance name is rejected");
@@ -2034,6 +2416,27 @@ static void MacKeyOutputContract()
     Equal(3, eventApi.Released.Count, "two events and source are released");
     Equal(eventApi.Source, eventApi.Released[^1], "event source is released last");
     Equal(1, permissions.CheckCount, "send checks accessibility once");
+    Equal(0, eventApi.Waits.Count, "single hotkey does not add a routing delay");
+
+    var sequencePermissions = new FakePlatformPermissionService(accessibilityReady: true);
+    var sequenceApi = new FakeMacKeyEventApi();
+    var sequenceResult = new MacKeySender(locator, sequencePermissions, sequenceApi, frontmost)
+        .SendSequence(["CTRL-A", "ALT-B"], identity);
+    Equal(true, sequenceResult.Succeeded, "mac routed key sequence succeeds");
+    Equal(4, sequenceApi.Posts.Count, "two routed hotkeys post four ordered key events");
+    Equal("50", string.Join(',', sequenceApi.Waits.Select(delay => delay.TotalMilliseconds)),
+        "routed sequence waits once between selector and target hotkeys");
+    Equal("post:101,post:102,wait:50,post:103,post:104", string.Join(',', sequenceApi.Operations),
+        "routing delay occurs after selector release and before target press");
+    Equal(1, sequencePermissions.CheckCount, "routed sequence validates accessibility once");
+    Equal(5, sequenceApi.Released.Count, "four routed events and one source are released");
+
+    var invalidSequenceApi = new FakeMacKeyEventApi();
+    var invalidSequence = new MacKeySender(locator, permissions, invalidSequenceApi, frontmost)
+        .SendSequence(["CTRL-A", "CTRL-NOT_A_KEY"], identity);
+    Equal(KeySendFailureKind.UnknownKey, invalidSequence.FailureKind, "invalid routed step rejects the complete sequence");
+    Equal(0, invalidSequenceApi.Posts.Count, "invalid routed sequence never partially sends");
+    Equal(0, invalidSequenceApi.Waits.Count, "invalid routed sequence never starts its timing sequence");
 
     var unknownApi = new FakeMacKeyEventApi();
     var unknown = new MacKeySender(locator, permissions, unknownApi, frontmost).Send("CTRL-NOT_A_KEY", identity);
@@ -2221,6 +2624,19 @@ static void FuyutsuiUiScaleContract()
         "count bars use the known-decodable UIParent layout");
     Equal(true, pixelBlocks.Contains("FuyutsuiHealAbsorbBars\", UIParent", StringComparison.Ordinal),
         "heal absorb bars use the known-decodable UIParent layout");
+    Equal(true, pixelBlocks.Contains("local function AlignToPhysicalPixel(width)", StringComparison.Ordinal),
+        "heal absorb cells align to physical pixels");
+    Equal(true, pixelBlocks.Contains("math.max(2, math.floor(width * effectiveScale + 0.5))",
+            StringComparison.Ordinal),
+        "heal absorb cells retain a visible background at zero");
+    Equal(true, pixelBlocks.Contains(
+            "bar:SetSize(HEAL_ABSORB_BAR_UNITS * HEAL_ABSORB_UNIT_WIDTH, BAR_CONFIG.height)",
+            StringComparison.Ordinal),
+        "heal absorb status bar does not add zero-value width");
+    Equal(false, pixelBlocks.Contains(
+            "bar:SetSize(HEAL_ABSORB_BAR_UNITS * HEAL_ABSORB_UNIT_WIDTH + 1",
+            StringComparison.Ordinal),
+        "heal absorb status bar has no extra pixel");
     Equal(true, pixelBlocks.Contains("button:SetPoint(\"TOPLEFT\", UIParent", StringComparison.Ordinal),
         "aura pixels share the original UIParent anchor path");
     Equal(true, pixelBlocks.Contains("CreateFrame(\"AuraContainer\", frameName, UIParent", StringComparison.Ordinal),
@@ -2267,6 +2683,8 @@ static void FuyutsuiProtocolContract()
     var curves = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "curves.lua"));
     var main = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "main.lua"));
     var stateBlocks = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "stateblocks.lua"));
+    var target = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "target.lua"));
+    var macro = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "macro.lua"));
 
     Equal(true, curves.Contains("CreateColorCurve(25.5, 255)", StringComparison.Ordinal),
         "cast protocol encodes one second as ten units");
@@ -2291,6 +2709,14 @@ static void FuyutsuiProtocolContract()
     Equal(true, stateBlocks.Contains("[\"施法(正计时)\"]", StringComparison.Ordinal)
         && stateBlocks.Contains("[\"施法(倒计时)\"]", StringComparison.Ordinal),
         "addon runtime registers both cast directions");
+    Equal(true, target.Contains("UnitIsPlayer(unit)", StringComparison.Ordinal)
+        && target.Contains("index = 52", StringComparison.Ordinal),
+        "target type reuses its existing byte to distinguish friendly NPCs");
+    Equal(true, macro.Contains("SecureHandlerClickTemplate", StringComparison.Ordinal)
+        && macro.Contains("SetAttribute('macrotext'", StringComparison.Ordinal),
+        "selector-target routing changes direct target macros through a secure handler");
+    Equal(false, macro.Contains("target:SetAttribute(\"type\", \"click\")", StringComparison.Ordinal),
+        "selector-target routing avoids blocked scripted click delegation");
 }
 
 static void ClassBlocksEditorPersistenceContract()
@@ -2350,6 +2776,10 @@ static void ClassMacrosEditorPersistenceContract()
         var document = ClassMacrosStore.Load(fixturePath);
         Equal(13, document.Classes.Count, "macro editor loads every class table");
         Equal(39, document.Classes["DEATHKNIGHT"].KeyOffset, "macro editor loads class key offset");
+        Equal(
+            ClassMacrosStore.SelectorTargetRoutingMode,
+            document.Classes["PALADIN"].RoutingMode,
+            "macro editor loads selector-target routing mode");
         var warrior = document.Classes[ClassMacrosStore.ToClassFileKey(1)];
         warrior.UsesSpecDynamicSpells = true;
         warrior.DynamicBySpec[1] = ["契约动态法术"];
@@ -2379,6 +2809,14 @@ static void ClassMacrosEditorPersistenceContract()
         Equal("known:123", parsed.Condition, "macro editor uses shared condition parsing");
         Equal("契约技能", parsed.Spell, "macro editor uses shared comment spell name");
         Equal(67, FuyutsuiKeymapConverter.CalculateRequiredSlots(2, 3, 4), "macro slot calculation");
+        Equal(
+            39,
+            FuyutsuiKeymapConverter.CalculateRequiredSlots(
+                2,
+                3,
+                4,
+                routingMode: ClassMacrosStore.SelectorTargetRoutingMode),
+            "selector-target routing shares one target key block");
 
         reloadedWarrior.DynamicCommon.Clear();
         reloadedWarrior.DynamicCommon.AddRange(Enumerable.Repeat("超限法术", 10));
@@ -2406,6 +2844,34 @@ static void ClassMacrosEditorPersistenceContract()
         Equal(string.Empty, deathKnightKeymap["1"]?["技能"]?.GetValue<string>(), "death knight reserves CTRL slot block");
         Equal("亡者复生", deathKnightKeymap["40"]?["技能"]?.GetValue<string>(), "death knight starts macros after reserved slots");
         Equal("ALT-NUMPAD1", deathKnightKeymap["40"]?["热键"]?.GetValue<string>(), "death knight uses ALT hotkeys on macOS");
+
+        var paladinKeymapPath = Path.Combine(keymapDirectory, "paladin.json");
+        var paladinKeymap = JsonNode.Parse(File.ReadAllText(paladinKeymapPath))
+            ?? throw new InvalidDataException("generated paladin keymap is empty");
+        var holySpec = paladinKeymap["专精"]?["1"]
+            ?? throw new InvalidDataException("generated paladin keymap is missing holy spec");
+        Equal(
+            ClassMacrosStore.SelectorTargetRoutingMode,
+            holySpec["路由模式"]?.GetValue<string>(),
+            "holy paladin keymap uses selector-target routing");
+        Equal("清洁术", holySpec["route-2-1"]?["技能"]?.GetValue<string>(),
+            "holy paladin routes the magic-capable cleanse");
+        Equal("美德道标", holySpec["route-8-1"]?["技能"]?.GetValue<string>(), "virtue has a routed player slot");
+        Equal(1, holySpec["route-8-1"]?["unit"]?.GetValue<int>() ?? -1, "virtue route retains logical unit one");
+        Equal(
+            2,
+            holySpec["route-8-1"]?["按键序列"]?.AsArray().Count ?? 0,
+            "routed action emits selector and target hotkeys");
+        var protectionSpec = paladinKeymap["专精"]?["2"]
+            ?? throw new InvalidDataException("generated paladin keymap is missing protection spec");
+        Equal("清毒术", protectionSpec["route-2-1"]?["技能"]?.GetValue<string>(),
+            "non-holy paladin keeps cleanse toxins");
+
+        var keymap = new KeymapService(fixtureRoot, new ConfigService(Path.Combine(repositoryRoot, "config")));
+        keymap.SelectForClass(2, 1);
+        var virtue = keymap.GetBinding(1, "美德道标", "");
+        Equal(2, virtue?.Hotkeys.Count ?? 0, "keymap service preserves the routed hotkey sequence");
+        Equal(virtue?.DisplayText, keymap.GetHotkey(1, "美德道标", ""), "legacy hotkey display stays readable");
     }
     finally
     {
@@ -2678,6 +3144,7 @@ static void RuntimeResourceWorkspaceContract()
         var sourceRoot = Path.Combine(fixtureRoot, "bundle");
         var userDataRoot = Path.Combine(fixtureRoot, "application-support", "Shigure");
         var sourceLua = Path.Combine(sourceRoot, "Fuyutsui", "core", "state.lua");
+        var sourceMacro = Path.Combine(sourceRoot, "Fuyutsui", "core", "macro.lua");
         var sourceTexture = Path.Combine(sourceRoot, "Fuyutsui", "media", "icon.blp");
         var sourceClass = Path.Combine(sourceRoot, "Fuyutsui", "class", "Mage.lua");
         var sourceConfig = Path.Combine(sourceRoot, "config", "common.json");
@@ -2689,6 +3156,7 @@ static void RuntimeResourceWorkspaceContract()
         Directory.CreateDirectory(Path.GetDirectoryName(sourceConfig)!);
         Directory.CreateDirectory(Path.GetDirectoryName(sourceKeymap)!);
         File.WriteAllText(sourceLua, "source-v1");
+        File.WriteAllText(sourceMacro, "macro-v1");
         File.WriteAllBytes(sourceTexture, [0, 1, 2, 255]);
         File.Copy(Path.Combine(repositoryRoot, "Fuyutsui", "class", "Mage.lua"), sourceClass);
         File.WriteAllText(sourceConfig, "{\"version\":1}");
@@ -2697,7 +3165,7 @@ static void RuntimeResourceWorkspaceContract()
 
         var service = new RuntimeResourceWorkspaceService();
         var first = service.Initialize(sourceRoot, userDataRoot);
-        Equal(6, first.CreatedFiles.Count, "workspace first initialization creates every source");
+        Equal(7, first.CreatedFiles.Count, "workspace first initialization creates every source");
         Equal(0, first.UpdatedFiles.Count, "workspace first initialization has no updates");
         Equal(0, first.ConflictingFiles.Count, "workspace first initialization has no conflicts");
         Equal(
@@ -2712,17 +3180,20 @@ static void RuntimeResourceWorkspaceContract()
             "workspace copies binary resources exactly");
 
         var second = service.Initialize(sourceRoot, userDataRoot);
-        Equal(6, second.SkippedFiles.Count, "workspace unchanged files are skipped");
+        Equal(7, second.SkippedFiles.Count, "workspace unchanged files are skipped");
 
         var targetLua = Path.Combine(first.WorkspaceDirectory, "Fuyutsui", "core", "state.lua");
+        var targetMacro = Path.Combine(first.WorkspaceDirectory, "Fuyutsui", "core", "macro.lua");
         var targetConfig = Path.Combine(first.WorkspaceDirectory, "config", "common.json");
         var targetClass = Path.Combine(first.WorkspaceDirectory, "Fuyutsui", "class", "Mage.lua");
         var targetOldKeymap = Path.Combine(first.WorkspaceDirectory, "keymap", "base.json");
         File.WriteAllText(targetLua, "user-change");
+        File.WriteAllText(targetMacro, "user-macro-change");
         File.WriteAllText(
             targetClass,
             File.ReadAllText(targetClass).Replace("\"施法(倒计时)\"", "\"施法\"", StringComparison.Ordinal));
         File.WriteAllText(sourceLua, "source-v2");
+        File.WriteAllText(sourceMacro, "macro-v2");
         File.WriteAllText(sourceConfig, "{\"version\":2}");
         File.Delete(sourceKeymap);
         var sourceNewKeymap = Path.Combine(sourceRoot, "keymap", "new.json");
@@ -2732,8 +3203,10 @@ static void RuntimeResourceWorkspaceContract()
         Equal(true, upgraded.UpdatedFiles.Contains("config/common.json"), "unchanged target receives source update");
         Equal(true, upgraded.CreatedFiles.Contains("keymap/new.json"), "new source file is created");
         Equal(true, upgraded.ConflictingFiles.Contains("Fuyutsui/core/state.lua"), "user edit is reported as conflict");
+        Equal(true, upgraded.ConflictingFiles.Contains("Fuyutsui/core/macro.lua"), "macro engine edit is reported as conflict");
         Equal(true, upgraded.ConflictingFiles.Contains("Fuyutsui/class/Mage.lua"), "custom class is reported as preserved conflict");
         Equal(true, upgraded.ProtocolConflictingFiles.Contains("Fuyutsui/core/state.lua"), "core conflict blocks mixed protocol runtime");
+        Equal(true, upgraded.ProtocolConflictingFiles.Contains("Fuyutsui/core/macro.lua"), "macro routing conflict blocks mixed protocol runtime");
         Equal(false, upgraded.ProtocolConflictingFiles.Contains("Fuyutsui/class/Mage.lua"), "migratable class customization does not block runtime");
         Equal(true, upgraded.MigratedFiles.Contains("Fuyutsui/class/Mage.lua"), "legacy cast field is structurally migrated");
         Equal(true, upgraded.MigratedFiles.Contains("config/Mage.json"), "legacy cast migration regenerates derived config");
@@ -3937,16 +4410,25 @@ static void FuyutsuiMacroCombatRetryContract()
 
     Equal(true, macroText.Contains("if InCombatLockdown() then\n        return false", StringComparison.Ordinal),
         "macro creation reports combat lockdown");
+    Equal(true, macroText.Contains(
+            "self:GetFrameRef('t%d'):SetAttribute('macrotext', self:GetAttribute('%s'))",
+            StringComparison.Ordinal),
+        "selector target routing updates directly-bound target macros");
+    Equal(false, macroText.Contains("target:SetAttribute(\"type\", \"click\")", StringComparison.Ordinal),
+        "selector target routing does not delegate protected clicks");
+    Equal(false, macroText.Contains("self:SetBindingClick", StringComparison.Ordinal),
+        "selector target routing does not create transient target bindings in combat");
     Equal(true, macroText.Contains("return true\nend", StringComparison.Ordinal),
         "macro creation reports success");
     Equal(true, mainText.Contains("self.macrosPending = not created", StringComparison.Ordinal),
         "failed macro creation is retained for retry");
-    Equal(true, macroText.Contains("local i = 1 + (keyOffset or 0)", StringComparison.Ordinal),
+    Equal(true, macroText.Contains("local offset = keyOffset or 0", StringComparison.Ordinal)
+        && macroText.Contains("local i = 1 + offset", StringComparison.Ordinal),
         "macro creation applies the class key offset");
     Equal(true, mainText.Contains(
-            "self:CreateMacro(dynamicSpells, m.staticSpells, m.specialSpells, m.keyOffset)",
+            "self:CreateMacro(dynamicSpells, m.staticSpells, m.specialSpells, m.keyOffset, m.routingMode)",
             StringComparison.Ordinal),
-        "player macro loading forwards the class key offset");
+        "player macro loading forwards the class key offset and routing mode");
     Equal(true, eventsText.Contains(
             "if self.macrosPending then\n        C_Timer.After(0, function()\n            if self.macrosPending and not InCombatLockdown() then\n                self:LoadPlayerMacros()",
             StringComparison.Ordinal),
@@ -4304,6 +4786,8 @@ sealed class FakeMacKeyEventApi : IMacKeyEventApi
     public int? FailCreationAt { get; set; }
     public List<FakeMacKeyEvent> Events { get; } = [];
     public List<nint> Posts { get; } = [];
+    public List<TimeSpan> Waits { get; } = [];
+    public List<string> Operations { get; } = [];
     public List<nint> Released { get; } = [];
 
     public nint CreateSource() => Source;
@@ -4329,6 +4813,13 @@ sealed class FakeMacKeyEventApi : IMacKeyEventApi
     public void Post(nint eventRef)
     {
         Posts.Add(eventRef);
+        Operations.Add($"post:{eventRef}");
+    }
+
+    public void Wait(TimeSpan delay)
+    {
+        Waits.Add(delay);
+        Operations.Add($"wait:{delay.TotalMilliseconds:0}");
     }
 
     public void Release(nint value)
@@ -4477,7 +4968,7 @@ sealed class FakeScaledRegionCapturer : ITargetWindowRegionCapturer
         var pixels = Enumerable.Repeat(unchecked((int)0xFF000000), pixelWidth * pixelHeight).ToArray();
         for (var y = 0; y < pixelHeight; y++)
         {
-            var sourceY = localY + y;
+                var sourceY = localY + (int)Math.Floor(y / actualScaleY);
             if (sourceY >= _sourceBounds.Height)
             {
                 break;
@@ -4485,7 +4976,7 @@ sealed class FakeScaledRegionCapturer : ITargetWindowRegionCapturer
 
             for (var x = 0; x < pixelWidth; x++)
             {
-                var sourceX = localX + x;
+                var sourceX = localX + (int)Math.Floor(x / actualScaleX);
                 if (sourceX >= _sourceBounds.Width)
                 {
                     break;
@@ -4546,6 +5037,24 @@ sealed class FakeTargetKeyOutput : ITargetKeyOutput
 {
     public KeySendResult Send(string hotkey, TargetIdentity? expectedTarget) =>
         KeySendResult.Success;
+}
+
+sealed class ContractKeymapResolver : IKeymapResolver
+{
+    public void SelectForClass(int? classId)
+    {
+    }
+
+    public void SelectForClass(int? classId, int? specId)
+    {
+    }
+
+    public string? GetHotkey(int? unit, string spell, string? macroCondition = null) =>
+        spell == "可用技能" ? "CTRL-A" : null;
+
+    public IReadOnlyDictionary<int, string> GetCurrentFailedSpells() => new Dictionary<int, string>();
+
+    public IReadOnlyDictionary<int, string> GetCurrentOneKeySpells() => new Dictionary<int, string>();
 }
 
 sealed class TrackingTriggerInput : ITriggerInput

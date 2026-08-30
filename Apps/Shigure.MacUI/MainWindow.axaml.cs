@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -32,7 +33,7 @@ public sealed partial class MainWindow : Window
     private readonly ObservableCollection<RuntimeDisplayRow> _partyRows = [];
     private readonly ObservableCollection<RuntimeDisplayRow> _logicRows = [];
     private readonly ObservableCollection<ModuleSelectionOption> _modules = [];
-    private readonly List<string> _logLines = [];
+    private readonly ObservableCollection<string> _logLines = [];
     private readonly ModuleStore _moduleStore;
     private readonly ModuleDependencyService? _moduleDependencies;
     private readonly ModuleMarketplaceClient _moduleMarketplace;
@@ -53,7 +54,7 @@ public sealed partial class MainWindow : Window
     private TextBlock? _overlayStatus;
     private Window? _logicToast;
     private TextBlock? _logicToastText;
-    private TextBox? _runtimeLogBox;
+    private ListBox? _runtimeLogList;
     private bool _capturingTrigger;
     private bool _allowClose;
     private bool _shutdownPrepared;
@@ -106,6 +107,7 @@ public sealed partial class MainWindow : Window
         AppendLocalLog(services.AddonSync.TargetFound
             ? $"游戏插件已同步：更新 {services.AddonSync.CopiedFiles.Count}，无需更新 {services.AddonSync.SkippedFiles.Count}，失败 {services.AddonSync.Failures.Count}"
             : $"游戏插件未同步：{services.AddonSync.SkippedReason}");
+        AppendModuleLoadFailures();
     }
 
     public MainWindow(
@@ -1329,6 +1331,7 @@ public sealed partial class MainWindow : Window
             if (reloadStore)
             {
                 _moduleStore.Reload();
+                AppendModuleLoadFailures();
             }
 
             ModuleDependencyImportResult result;
@@ -1451,6 +1454,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void AppendModuleLoadFailures()
+    {
+        foreach (var failure in _moduleStore.GetLoadFailures())
+        {
+            AppendLocalLog(
+                $"模块“{Path.GetFileName(failure.FilePath)}”加载失败：{failure.ErrorType}：{failure.Message}");
+        }
+    }
+
     private int IndexOfModuleOption(string? moduleId)
     {
         for (var index = 0; index < _modules.Count; index++)
@@ -1519,17 +1531,19 @@ public sealed partial class MainWindow : Window
 
     private Control BuildLogsPage()
     {
-        _runtimeLogBox = new TextBox
+        _runtimeLogList = new ListBox
         {
-            AcceptsReturn = true,
-            IsReadOnly = true,
-            TextWrapping = TextWrapping.NoWrap,
-            FontFamily = new FontFamily("Menlo"),
-            Text = string.Join(Environment.NewLine, _logLines)
+            ItemsSource = _logLines,
+            ItemTemplate = new FuncDataTemplate<string>((line, _) => new TextBlock
+            {
+                Text = line,
+                TextWrapping = TextWrapping.NoWrap,
+                FontFamily = new FontFamily("Menlo")
+            })
         };
-        ScrollViewer.SetVerticalScrollBarVisibility(_runtimeLogBox, ScrollBarVisibility.Auto);
-        ScrollViewer.SetHorizontalScrollBarVisibility(_runtimeLogBox, ScrollBarVisibility.Auto);
-        AutomationProperties.SetName(_runtimeLogBox, "运行日志");
+        ScrollViewer.SetVerticalScrollBarVisibility(_runtimeLogList, ScrollBarVisibility.Auto);
+        ScrollViewer.SetHorizontalScrollBarVisibility(_runtimeLogList, ScrollBarVisibility.Auto);
+        AutomationProperties.SetName(_runtimeLogList, "运行日志");
         var autoScroll = new CheckBox
         {
             Content = "自动滚动",
@@ -1538,13 +1552,13 @@ public sealed partial class MainWindow : Window
         };
         autoScroll.IsCheckedChanged += (_, _) => _autoScrollLogs = autoScroll.IsChecked == true;
         return EditorPage(
-            _runtimeLogBox,
+            _runtimeLogList,
             CommandButton("复制", async (_, _) =>
             {
                 var clipboard = GetTopLevel(this)?.Clipboard;
                 if (clipboard is not null)
                 {
-                    await clipboard.SetTextAsync(_runtimeLogBox.Text ?? string.Empty);
+                    await clipboard.SetTextAsync(string.Join(Environment.NewLine, _logLines));
                 }
             }),
             CommandButton("清空", async (_, _) =>
@@ -1552,7 +1566,6 @@ public sealed partial class MainWindow : Window
                 if (await ShowConfirmationAsync("清空当前日志？", "清空"))
                 {
                     _logLines.Clear();
-                    _runtimeLogBox.Text = string.Empty;
                 }
             }),
             autoScroll);
@@ -1853,20 +1866,19 @@ public sealed partial class MainWindow : Window
     private void AppendLog(RuntimeLogEntry entry)
     {
         _logLines.Add($"[{entry.Timestamp.ToLocalTime():HH:mm:ss}] {entry.Message}");
-        if (_logLines.Count > MaximumLogLines)
+        while (_logLines.Count > MaximumLogLines)
         {
-            _logLines.RemoveRange(0, _logLines.Count - MaximumLogLines);
+            _logLines.RemoveAt(0);
         }
 
-        if (_runtimeLogBox is null)
+        if (_runtimeLogList is null)
         {
             return;
         }
 
-        _runtimeLogBox.Text = string.Join(Environment.NewLine, _logLines);
-        if (_autoScrollLogs)
+        if (_autoScrollLogs && _logLines.Count > 0)
         {
-            _runtimeLogBox.CaretIndex = _runtimeLogBox.Text.Length;
+            _runtimeLogList.ScrollIntoView(_logLines[^1]);
         }
     }
 

@@ -64,6 +64,7 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
             ReadOnlyMemory<int> protocolBand;
             int protocolWidth;
             int protocolHeight;
+            double protocolScaleY;
             string failureReason;
             try
             {
@@ -73,6 +74,7 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
                     out protocolBand,
                     out protocolWidth,
                     out protocolHeight,
+                    out protocolScaleY,
                     out failureReason);
             }
             finally
@@ -98,7 +100,8 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
             var (barData, markerY) = DecodeBestCountBarsRow(
                 protocolPixels,
                 protocolWidth,
-                protocolHeight);
+                protocolHeight,
+                stateRowY);
             if (markerY is null)
             {
                 return WithTiming(
@@ -117,15 +120,22 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
 
             var healAbsorbData = new Dictionary<int, int>();
             var direction = stateRowY is not null && markerY.Value < stateRowY.Value ? -1 : 1;
-            for (var rowY = markerY.Value + direction;
-                 rowY >= 0 && rowY < protocolHeight;
-                 rowY += direction)
+            var firstRowY = markerY.Value
+                + direction * PhysicalOffset(CountBarHeight, protocolScaleY);
+            for (var row = 0; row < HealAbsorbMaxRows; row++)
             {
+                var rowY = firstRowY
+                    + direction * PhysicalOffset(row * HealAbsorbRowHeight, protocolScaleY);
+                if (rowY < 0 || rowY >= protocolHeight)
+                {
+                    break;
+                }
+
                 PixelProtocolDecoder.DecodeHealAbsorbRow(
                     protocolPixels.Slice(rowY * protocolWidth, protocolWidth),
+                    row,
                     healAbsorbData);
             }
-
             return WithTiming(
                 Result(
                     rowData,
@@ -153,11 +163,13 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
         out ReadOnlyMemory<int> protocolPixels,
         out int protocolWidth,
         out int protocolHeight,
+        out double protocolScaleY,
         out string failureReason)
     {
         protocolPixels = ReadOnlyMemory<int>.Empty;
         protocolWidth = 0;
         protocolHeight = 0;
+        protocolScaleY = 0;
         var capture = _capturer is ITargetWindowRegionCapturer targetCapturer
             ? targetCapturer.Capture(target, region)
             : _capturer.Capture(region);
@@ -176,6 +188,7 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
 
         protocolWidth = frame.PixelWidth;
         protocolHeight = frame.PixelHeight;
+        protocolScaleY = frame.ScaleY;
         failureReason = string.Empty;
         return true;
     }
@@ -209,7 +222,8 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
     private static (Dictionary<int, int> Data, int? RowY) DecodeBestCountBarsRow(
         ReadOnlySpan<int> pixels,
         int width,
-        int height)
+        int height,
+        int? stateRowY)
     {
         var bestData = new Dictionary<int, int>();
         int? bestRowY = null;
@@ -224,7 +238,11 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
 
             var candidate = PixelProtocolDecoder.DecodeCountBars(
                 pixels.Slice(y * width, width));
-            if (bestRowY is null || candidate.Count > bestData.Count)
+            if (bestRowY is null
+                || candidate.Count > bestData.Count
+                || candidate.Count == bestData.Count
+                    && stateRowY is not null
+                    && Math.Abs(y - stateRowY.Value) < Math.Abs(bestRowY.Value - stateRowY.Value))
             {
                 bestData = candidate;
                 bestRowY = y;
@@ -233,6 +251,9 @@ public sealed class RegionPixelScanner : IRuntimeScreenScanner, IDisposable
 
         return (bestData, bestRowY);
     }
+
+    private static int PhysicalOffset(int logicalOffset, double scaleY) =>
+        (int)Math.Round(logicalOffset * scaleY, MidpointRounding.AwayFromZero);
 
     private static bool TryReadPhysicalProtocolPixels(
         CapturedRegion frame,

@@ -69,7 +69,7 @@
     },
     "Apps/Shigure.MacApp/SingleInstanceLease.cs": {
       "category": "macos-platform",
-      "sha256": "55de11e37465d5630badb4b20c54453ab007f0dce5bfa8d98816c8cb9214b0f7"
+      "sha256": "af56a2742e90000fe7b827a88c8742b2b861a7210123461a9bbf107dd79b25cf"
     },
     "Apps/Shigure.MacUI/App.axaml": {
       "category": "macos-platform",
@@ -101,11 +101,11 @@
     },
     "Apps/Shigure.MacUI/MainWindow.axaml.cs": {
       "category": "macos-platform",
-      "sha256": "07b0a15fc1d5673e728fb8d5cb61213266097070e7e86b44a54e6c9a9aed23ae"
+      "sha256": "c9d4e6af3ce7574d4991a863fa90eaf53240ba62df7091e3aaa5d2bf67adb7bc"
     },
     "Apps/Shigure.MacUI/ModuleEditorView.cs": {
       "category": "macos-platform",
-      "sha256": "57269f7feee2cad8de6c4c9063a4e8cde44127b7ae7449c07a7271b587cd1048"
+      "sha256": "98afbe39bf89c7765c637a2c12dc2610a48d389f52a8242d4ea37f2100445fb4"
     },
     "Apps/Shigure.MacUI/ModuleMarketplaceWindow.cs": {
       "category": "macos-platform",
@@ -145,7 +145,7 @@
     },
     "Core/RuntimeResourceWorkspaceService.cs": {
       "category": "shared-contract",
-      "sha256": "5c753ff9d4c702d8bcf0bb0cd15cf95953368707a306cd8ccd75c423c859499f"
+      "sha256": "16443587a6dc6825db3a992c0a7ace98508965c3e77be5e0c543decc72742edb"
     },
     "Core/Shigure.Core.csproj": {
       "category": "shared-contract",
@@ -157,7 +157,7 @@
     },
     "Modules/IKeymapResolver.cs": {
       "category": "shared-contract",
-      "sha256": "07f6c3497cf2c52c93971db2bcadcece23389f0c7b9abedfbddccda18f647e5b"
+      "sha256": "e7fd7d6fd4ee84bb182737f0bd4e3182607d5dafd29987b80d65677624c4a2ab"
     },
     "Modules/ClassNames.cs": {
       "category": "shared-contract",
@@ -181,11 +181,11 @@
     },
     "Modules/ModuleStore.cs": {
       "category": "shared-contract",
-      "sha256": "b75f60364854e1ce54f7943a5f506356cf04012463a6ed30684e196921c43084"
+      "sha256": "87509024d9b47b5da6559f554bab00f63e2f7502ba0416bf068561d9be9f5f9b"
     },
     "Modules/ModuleUnit.cs": {
       "category": "shared-contract",
-      "sha256": "146f0dd1665899daa797e2eadf4a5be5702365ed98362b65fc23631de3db8b8e"
+      "sha256": "ff1e3b3185b50a9ff0f8f9646b1c78b687463c9e53de6a441c1317662a79d1b2"
     },
     "Modules/ReservedUnit.cs": {
       "category": "shared-contract",
@@ -205,7 +205,7 @@
     },
     "Platforms/Shigure.Platform.Abstractions/KeyOutput.cs": {
       "category": "shared-contract",
-      "sha256": "bd8db9d175d19f147d47f13ec6ad533ab95917cb93b73b60ae79bc903524fbe8"
+      "sha256": "515b87cfe90f00f822a75dc893c1756049d9a97cb6e7298f77db19ec9c1e6f23"
     },
     "Platforms/Shigure.Platform.Abstractions/TargetProcessConfig.cs": {
       "category": "shared-contract",
@@ -221,7 +221,7 @@
     },
     "Runtime/GameState.cs": {
       "category": "shared-contract",
-      "sha256": "050d5c8c094b5aca7225b0469538d6e7416a14fafa9efcad784ecb243eab6f38"
+      "sha256": "2f162adc52f6db45e70a8f8a7774f83439b9d88c61d56883f6a2d905714418db"
     },
     "Runtime/IRuntimeStateBuilder.cs": {
       "category": "shared-contract",
@@ -229,11 +229,11 @@
     },
     "Runtime/PixelProtocolDecoder.cs": {
       "category": "shared-contract",
-      "sha256": "e51f7e32d4019372aee5a780bfcc29db8fc2aa2ade6cfbb268c3d181d385986a"
+      "sha256": "19aba14aac5c8df5dfccef8a9dfb9ef189416fa26d84c4dee9580fa0393bac0a"
     },
     "Runtime/RegionPixelScanner.cs": {
       "category": "shared-contract",
-      "sha256": "309e35a75f948ebacc2e3f70d695cb5ac3bd85b8f296dde83872463f2b0dc377"
+      "sha256": "e936c14570e81ae29ec206ce89876b9676d71bde79ea7224a9b4ca73c4ecaec9"
     },
     "Runtime/RenderSnapshot.cs": {
       "category": "shared-contract",
@@ -241,7 +241,7 @@
     },
     "Runtime/RuntimeDependencies.cs": {
       "category": "shared-contract",
-      "sha256": "98064ef6c57e4a9194d562c12b95a497a7ac11ac2046d8742ead653335e08654"
+      "sha256": "5f55718473d4c4c91b2f800f1b77c8bce4af177ca996b98d5ea55eb4d1437af9"
     },
     "Runtime/ScreenScanResult.cs": {
       "category": "shared-contract",
@@ -249,7 +249,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "ebd27a2754cc3250c2a9590226724dc9be244a31a43c5b2d1dd251ee5058dd22"
+      "sha256": "e6fc37f12fc7cceedf1b9d7e2383c41bec094dcd95f2cd4d5c8713fa1ac5d808"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -259,9 +259,13 @@
       "category": "shared-contract",
       "sha256": "9bc3222e7da81a05c912e7bbe44ae099aacb4ff303602b24196e2ea5e1de8f09"
     },
+    "Presentation/HealAbsorbLogTracker.cs": {
+      "category": "shared-contract",
+      "sha256": "528f268a8067277132f5a7d5ba3ddb85558e63252e0ec8152d94c5cc7b883835"
+    },
     "Presentation/RuntimeSessionController.cs": {
       "category": "shared-contract",
-      "sha256": "7fdbb4610de70220a31427c459a776b835ea71dad4de973833b84448d33d34a0"
+      "sha256": "6f2ecf602ac2c44386c482da5a23b01620c61f2d6df94ec64fe58c441d3a857a"
     },
     "Presentation/Shigure.Presentation.csproj": {
       "category": "shared-contract",
@@ -273,7 +277,7 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "31bed288b286f98bf8add26cdcb8f803fd954a77d15cfb46ffc82c9bd84c63ef"
+      "sha256": "ebd757d273a19607a9dde4f8e33db436b28c24bbb3de3b63a4cede355ec80dcd"
     },
     "Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj": {
       "category": "shared-contract",
@@ -297,11 +301,11 @@
     },
     "Input/KeymapService.cs": {
       "category": "configuration-schema",
-      "sha256": "0f2a4239befe47f2b46f9f2a2598c7e97d4c6b475de5ead456e3159d3f195e15"
+      "sha256": "d80c24da760e54fda07463acf62c4d24d62bb2544114d9f06dc8f9efc56b96db"
     },
     "Runtime/StateBuilder.cs": {
       "category": "configuration-schema",
-      "sha256": "0343ee28eee3fafdbea42e5d811e36702806f392c7a05a8047902bccbf794fde"
+      "sha256": "bc4e28e40019cae1a6245f2352afdfba5aa415a787087f4151b9ea1630d60fd7"
     },
     "wow_process.txt": {
       "category": "configuration-schema",
@@ -397,7 +401,7 @@
     },
     "keymap/paladin.json": {
       "category": "configuration-schema",
-      "sha256": "bbeda0e435238620a14ae56e59919526fc0a435a972348310e715f8810cb94dd"
+      "sha256": "159e423c82519cf78191aaaff405eb48874ce757b9aeff8dc20c990b63284c84"
     },
     "keymap/priest.json": {
       "category": "configuration-schema",
@@ -453,7 +457,7 @@
     },
     "Fuyutsui/class/Paladin.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "117b870a8f2b2ea0538626c4d04ce313f2bd69db96da6ca4e40a9508a089e2c0"
+      "sha256": "c3239aab7eb15cdc8bf4afde1e71ff839378a9fa19e894cd42231bce1d6eec75"
     },
     "Fuyutsui/class/Priest.lua": {
       "category": "fuyutsui-authority",
@@ -481,11 +485,11 @@
     },
     "Fuyutsui/core/block.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "9923ae0b19f4b3f443624080a69fd940d9766379606918e72bc7e5ce7f794fc8"
+      "sha256": "0988a9f53f465f2801098434cdfccd947b86d2b7a96665c85323bfb02ee7c2d4"
     },
     "Fuyutsui/core/classmacros.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "8b4737ec62d68bfbd52d6eec3a5edb11c0b03218856e6634bab8afa514dc5034"
+      "sha256": "f8255da442dbd12b546a1c8cee295555f69595ea335883ea9ab6954d987309a4"
     },
     "Fuyutsui/core/commands.lua": {
       "category": "fuyutsui-authority",
@@ -517,7 +521,7 @@
     },
     "Fuyutsui/core/macro.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "d165ca0a837b75ba0c5f3a1ed17939b8c6782d3fb7f49d10decff5b24f4249ee"
+      "sha256": "eb318e810f597884b9eb0a241e13e4c1d3f797e01cfa36e7a7896fbe94e2a56d"
     },
     "Fuyutsui/core/player.lua": {
       "category": "fuyutsui-authority",
@@ -537,7 +541,7 @@
     },
     "Fuyutsui/core/target.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "f14f2b13b7e7d9b505932194b8af4760e67e10f3e856db2dbeaf09d419631f81"
+      "sha256": "ed959cb46215e4530cac7e7950f1b01faa1afe435ea6bae7a1c42b5e6a1b95db"
     },
     "Fuyutsui/embeds.xml": {
       "category": "fuyutsui-authority",
@@ -553,7 +557,7 @@
     },
     "Fuyutsui/main.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "0e558edcc8b12038a065bcb7f274a4f442d8ca5f48d8099c42d89e4f0b3d11bf"
+      "sha256": "c59559ddc92f36e2a4457a3b678109fac5fa3abc018387ac6b91b3d1ec203579"
     },
     "Infrastructure/ClassBlocksStore.cs": {
       "category": "fuyutsui-generation",
@@ -561,7 +565,7 @@
     },
     "Infrastructure/ClassMacrosStore.cs": {
       "category": "fuyutsui-generation",
-      "sha256": "ee8f21953a73c3b2a7f105efebf0dd7df6fcb38eda01b180496a8e4ffe1a4562"
+      "sha256": "57b9e4e1248a2089cb4c6489ce415f5c756a5f1c444702dff31925c5e16d3140"
     },
     "Infrastructure/FuyutsuiAddonSyncService.cs": {
       "category": "fuyutsui-generation",
@@ -573,7 +577,7 @@
     },
     "Infrastructure/FuyutsuiKeymapConverter.cs": {
       "category": "fuyutsui-generation",
-      "sha256": "52196cebccf0d21e00371c2cd2a8f3c393d99039142d7c4998fa9023cd3c71a1"
+      "sha256": "f2090b1c30a9b5cb261bce3496e7359cd9c9bf77a46a89f35a140e63b1082d7b"
     },
     "Infrastructure/LuaLiteParser.cs": {
       "category": "fuyutsui-generation",
@@ -581,7 +585,7 @@
     },
     "Infrastructure/ModuleDependencyService.cs": {
       "category": "fuyutsui-generation",
-      "sha256": "594683b5b777c475ba3d9d20d7e990cc05c4bcf713a6b902ee42c176b09a0c6a"
+      "sha256": "b73ccd96392c5cdc9d31a7df854964d199b8988ccded7a4f98e29adde7f40ac1"
     },
     "Infrastructure/WowAddonLocator.cs": {
       "category": "fuyutsui-generation",
@@ -593,7 +597,7 @@
     },
     "Platforms/Shigure.Platform.Mac/MacKeySender.cs": {
       "category": "macos-platform",
-      "sha256": "3372f157e02a4a904d8d7bf514ac65d73d7b0c453452be23076cbc2245fd3f19"
+      "sha256": "82c4b54b54521b8779ca805af0fd743798d11af9b25ba4a54daf57c8ccdbda6e"
     },
     "Platforms/Shigure.Platform.Mac/MacPermissionService.cs": {
       "category": "macos-platform",
@@ -613,7 +617,7 @@
     },
     "Platforms/Shigure.Platform.Mac/MacTriggerInput.cs": {
       "category": "macos-platform",
-      "sha256": "40ca27fa0a8bef82d43da8ce00006781a4d2bbb04a9ca1a8a8c8a7c668129803"
+      "sha256": "d33ea224249023b886d4c15ae304d76218e0b339cf963e5d8108778ac7183b9e"
     },
     "Platforms/Shigure.Platform.Mac/MacUserDataPaths.cs": {
       "category": "macos-platform",

@@ -141,6 +141,7 @@ public sealed class ModuleGroupAuraSnapshot
 
 public sealed class ModuleMacrosSnapshot
 {
+    public string? RoutingMode { get; set; }
     public bool UsesSpecDynamicSpells { get; set; }
     public List<string> DynamicCommon { get; set; } = new();
     public List<string> DynamicForSpec { get; set; } = new();
@@ -149,6 +150,7 @@ public sealed class ModuleMacrosSnapshot
 
     public ModuleMacrosSnapshot Clone() => new()
     {
+        RoutingMode = RoutingMode,
         UsesSpecDynamicSpells = UsesSpecDynamicSpells,
         DynamicCommon = new List<string>(DynamicCommon ?? []),
         DynamicForSpec = new List<string>(DynamicForSpec ?? []),

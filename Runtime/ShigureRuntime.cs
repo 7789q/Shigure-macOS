@@ -13,6 +13,7 @@ public sealed class ShigureRuntime : IDisposable
     private readonly IRuntimeLogic _logic;
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentQueue<RuntimeCommand> _pendingCommands = new();
+    private readonly EmergencyActionGuard _emergencyActionGuard = new();
 
     private GameState? _state;
     private string? _className;
@@ -71,6 +72,7 @@ public sealed class ShigureRuntime : IDisposable
         {
             _lastRuleSentAt.Clear();
             _logicPausedUntil = DateTimeOffset.MinValue;
+            _emergencyActionGuard.Reset();
         }
 
         _currentStep = enabled ? "手动开启" : "手动关闭";
@@ -251,6 +253,7 @@ public sealed class ShigureRuntime : IDisposable
 
         if (scan.RowData is null)
         {
+            _emergencyActionGuard.Reset();
             _state = null;
             _classId = null;
             _specId = null;
@@ -302,6 +305,20 @@ public sealed class ShigureRuntime : IDisposable
         _unitInfo = decision.UnitInfo;
         _moduleName = decision.ModuleName;
 
+        var emergencyCheck = _emergencyActionGuard.Observe(decision, _state);
+        if (!emergencyCheck.Allowed)
+        {
+            var guardedInfo = _unitInfo.ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value,
+                StringComparer.Ordinal);
+            guardedInfo["安全确认"] = emergencyCheck.Reason ?? "未通过";
+            guardedInfo["确认帧"] = $"{emergencyCheck.ConsecutiveFrames}/2";
+            _unitInfo = guardedInfo;
+            _currentStep = $"{decision.Step}（已拦截）";
+            return;
+        }
+
         if (_clickPending)
         {
             if (_clickPending
@@ -331,7 +348,7 @@ public sealed class ShigureRuntime : IDisposable
 
     private void SendAndPauseLogic(LogicDecision decision, TargetIdentity? targetIdentity)
     {
-        var sendResult = _keySender.Send(decision.Hotkey!, targetIdentity);
+        var sendResult = _keySender.SendSequence(decision.ResolveHotkeySequence(), targetIdentity);
         if (!sendResult.Succeeded)
         {
             var info = _unitInfo.ToDictionary(
@@ -351,6 +368,7 @@ public sealed class ShigureRuntime : IDisposable
             StringComparer.Ordinal);
         sentInfo["发送结果"] = "已投递到 WoW 进程";
         _unitInfo = sentInfo;
+        _emergencyActionGuard.Reset();
         RecordSent(decision, sentAt);
         if (decision.LogicDelayMs > 0)
         {
@@ -493,6 +511,93 @@ public sealed class ShigureRuntime : IDisposable
         public static RuntimeCommand ToggleEnabled()
             => new(RuntimeCommandKind.ToggleEnabled, false);
     }
+}
+
+internal sealed class EmergencyActionGuard
+{
+    private const string LayOnHands = "圣疗术";
+    private const int CriticalHealthThreshold = 30;
+    private const int RequiredConsecutiveFrames = 2;
+    private string? _pendingKey;
+    private int _consecutiveFrames;
+
+    public EmergencyActionCheck Observe(LogicDecision decision, GameState state)
+    {
+        if (!decision.UnitInfo.TryGetValue("动作技能", out var actionSpell)
+            || !string.Equals(actionSpell?.ToString(), LayOnHands, StringComparison.Ordinal))
+        {
+            Reset();
+            return EmergencyActionCheck.Allow;
+        }
+
+        var unit = ReadInt(decision.UnitInfo, "动作单位槽位");
+        var playerHealth = state.GetInt("生命值");
+        var targetHealth = unit switch
+        {
+            0 => playerHealth,
+            > 0 when state.Group.TryGetValue(unit.ToString(), out var member)
+                && member.TryGetValue("生命值", out var health) => ConvertToInt(health),
+            _ => 0
+        };
+
+        if (targetHealth is <= 0 or > CriticalHealthThreshold)
+        {
+            Reset();
+            return new EmergencyActionCheck(
+                false,
+                $"目标生命值 {targetHealth}% 不在 1–{CriticalHealthThreshold}%",
+                0);
+        }
+
+        if (unit == 1 && playerHealth > CriticalHealthThreshold)
+        {
+            Reset();
+            return new EmergencyActionCheck(
+                false,
+                $"单位 1 显示 {targetHealth}%，但独立自身生命值为 {playerHealth}%",
+                0);
+        }
+
+        var key = $"{decision.RateLimitKey}|{unit}";
+        if (string.Equals(_pendingKey, key, StringComparison.Ordinal))
+        {
+            _consecutiveFrames++;
+        }
+        else
+        {
+            _pendingKey = key;
+            _consecutiveFrames = 1;
+        }
+
+        return _consecutiveFrames >= RequiredConsecutiveFrames
+            ? new EmergencyActionCheck(true, null, _consecutiveFrames)
+            : new EmergencyActionCheck(
+                false,
+                $"等待同一目标连续 {RequiredConsecutiveFrames} 帧确认",
+                _consecutiveFrames);
+    }
+
+    public void Reset()
+    {
+        _pendingKey = null;
+        _consecutiveFrames = 0;
+    }
+
+    private static int ReadInt(IReadOnlyDictionary<string, object?> values, string key) =>
+        values.TryGetValue(key, out var value) ? ConvertToInt(value) : 0;
+
+    private static int ConvertToInt(object? value) => value switch
+    {
+        int number => number,
+        long number => (int)number,
+        string text when int.TryParse(text, out var number) => number,
+        _ => 0
+    };
+}
+
+internal sealed record EmergencyActionCheck(bool Allowed, string? Reason, int ConsecutiveFrames)
+{
+    public static EmergencyActionCheck Allow { get; } = new(true, null, 0);
 }
 
 internal static class RuntimeScanCadence

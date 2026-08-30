@@ -10,6 +10,7 @@ namespace Shigure;
 public static class ClassMacrosStore
 {
     public const string AssignmentName = "Fuyutsui.ClassMacros";
+    public const string SelectorTargetRoutingMode = "selector-target-v1";
 
     private static readonly string[] ClassFileOrder =
     [
@@ -30,6 +31,7 @@ public static class ClassMacrosStore
     public sealed class ClassMacros
     {
         public int KeyOffset { get; set; }
+        public string? RoutingMode { get; set; }
 
         /// <summary>
         /// false 表示旧式纯数组；true 表示 common + [specIndex] 分组格式。
@@ -113,7 +115,10 @@ public static class ClassMacrosStore
 
     private static ClassMacros ParseClass(TableValue classTable)
     {
-        var macros = new ClassMacros();
+        var macros = new ClassMacros
+        {
+            RoutingMode = NormalizeRoutingMode(classTable.GetString("routingMode"))
+        };
         if (classTable.GetNumber("keyOffset") is { } keyOffset)
         {
             if (keyOffset < 0 || keyOffset > int.MaxValue || keyOffset != Math.Truncate(keyOffset))
@@ -263,6 +268,13 @@ public static class ClassMacrosStore
     {
         sb.Append("    ").Append(classFile).AppendLine(" = {");
 
+        if (!string.IsNullOrWhiteSpace(macros.RoutingMode))
+        {
+            sb.Append("        routingMode = \"")
+                .Append(Escape(NormalizeRoutingMode(macros.RoutingMode)!))
+                .AppendLine("\",");
+        }
+
         if (macros.KeyOffset > 0)
         {
             sb.Append("        keyOffset = ").Append(macros.KeyOffset).AppendLine(",");
@@ -368,5 +380,11 @@ public static class ClassMacrosStore
         }
 
         return sb.ToString();
+    }
+
+    public static string? NormalizeRoutingMode(string? value)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 }

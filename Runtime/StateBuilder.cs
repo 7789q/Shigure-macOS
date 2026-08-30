@@ -21,6 +21,7 @@ public sealed class StateBuilder : IRuntimeStateBuilder
         var stateConfig = _config.BuildStateConfig(classId, specId);
         var result = new Dictionary<string, object?>();
         healAbsorbData ??= new Dictionary<int, int>();
+        HealAbsorbDiagnosticSnapshot? healAbsorbDiagnostic = null;
 
         foreach (var (key, node) in stateConfig)
         {
@@ -44,11 +45,14 @@ public sealed class StateBuilder : IRuntimeStateBuilder
 
         if (JsonHelpers.Get(stateConfig, "group") is JsonObject groupConfig)
         {
-            var group = BuildGroup(groupConfig, rowData, barData, healAbsorbData);
+            var (group, positiveAbsorbs) = BuildGroup(groupConfig, rowData, barData, healAbsorbData);
             result["group"] = group;
+            healAbsorbDiagnostic = new HealAbsorbDiagnosticSnapshot(
+                healAbsorbData.Count,
+                positiveAbsorbs);
         }
 
-        return new GameState(result);
+        return new GameState(result, healAbsorbDiagnostic);
     }
 
     private static Dictionary<string, object?> BuildFieldMap(
@@ -70,7 +74,9 @@ public sealed class StateBuilder : IRuntimeStateBuilder
         return values;
     }
 
-    private static Dictionary<string, IReadOnlyDictionary<string, object?>> BuildGroup(
+    private static (
+        Dictionary<string, IReadOnlyDictionary<string, object?>> Group,
+        IReadOnlyList<HealAbsorbUnitDiagnostic> PositiveAbsorbs) BuildGroup(
         JsonObject groupConfig,
         IReadOnlyDictionary<int, int> rowData,
         IReadOnlyDictionary<int, int> barData,
@@ -79,6 +85,7 @@ public sealed class StateBuilder : IRuntimeStateBuilder
         var start = JsonHelpers.GetInt(JsonHelpers.Get(groupConfig, "start")) ?? 26;
         var numParams = JsonHelpers.GetInt(JsonHelpers.Get(groupConfig, "num")) ?? 5;
         var group = new Dictionary<string, IReadOnlyDictionary<string, object?>>();
+        var positiveAbsorbs = new List<HealAbsorbUnitDiagnostic>();
 
         for (var i = 1; i <= 30; i++)
         {
@@ -108,19 +115,25 @@ public sealed class StateBuilder : IRuntimeStateBuilder
                 sub[fieldName] = ConvertRawValue(raw, JsonHelpers.GetString(JsonHelpers.Get(field, "type")));
             }
 
-            // 治疗吸收来自网格扫描：白块右侧像素的 B=单位编号，G-1=吸收值。
-            // 插件像素里的生命值含吸收盾，这里折算为真实生命：生命值 -= 治疗吸收。
+            // 治疗吸收是独立治疗信号，不折算或覆盖单位的真实生命值。
             var absorb = healAbsorbData.TryGetValue(i, out var absorbValue) ? absorbValue : 0;
             sub["治疗吸收"] = absorb;
-            if (absorb != 0 && sub.TryGetValue("生命值", out var healthObj) && healthObj is int health)
+            if (sub.TryGetValue("生命值", out var healthObj) && healthObj is int rawHealth)
             {
-                sub["生命值"] = Math.Max(0, health - absorb);
+                if (absorb > 0)
+                {
+                    positiveAbsorbs.Add(new HealAbsorbUnitDiagnostic(
+                        i,
+                        rawHealth,
+                        absorb,
+                        rawHealth));
+                }
             }
 
             group[i.ToString()] = sub;
         }
 
-        return group;
+        return (group, positiveAbsorbs);
     }
 
     private static int? ResolveRaw(JsonObject field, IReadOnlyDictionary<int, int> rowData, IReadOnlyDictionary<int, int> barData)

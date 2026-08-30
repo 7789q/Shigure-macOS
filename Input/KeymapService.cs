@@ -7,8 +7,8 @@ public sealed class KeymapService : IKeymapResolver
 {
     private readonly string _baseDirectory;
     private readonly ConfigService _config;
-    private readonly Dictionary<(int Unit, string Spell, string MacroCondition), string> _hotkeys = new();
-    private readonly Dictionary<(int Unit, string Spell), string> _fallbackHotkeys = new();
+    private readonly Dictionary<(int Unit, string Spell, string MacroCondition), KeyInputBinding> _bindings = new();
+    private readonly Dictionary<(int Unit, string Spell), KeyInputBinding> _fallbackBindings = new();
     private int? _currentClassId;
     private int? _currentSpecId;
 
@@ -25,15 +25,15 @@ public sealed class KeymapService : IKeymapResolver
 
     public void SelectForClass(int? classId, int? specId)
     {
-        if (_currentClassId == classId && _currentSpecId == specId && _hotkeys.Count > 0)
+        if (_currentClassId == classId && _currentSpecId == specId && _bindings.Count > 0)
         {
             return;
         }
 
         _currentClassId = classId;
         _currentSpecId = specId;
-        _hotkeys.Clear();
-        _fallbackHotkeys.Clear();
+        _bindings.Clear();
+        _fallbackBindings.Clear();
 
         var path = KeymapCatalog.ResolveKeymapFilePath(_baseDirectory, _config.GetKeymapName(classId));
         if (!File.Exists(path))
@@ -80,31 +80,54 @@ public sealed class KeymapService : IKeymapResolver
 
             if (!string.IsNullOrWhiteSpace(spell) && !string.IsNullOrWhiteSpace(hotkey))
             {
-                _hotkeys[(unit, spell, macroCondition)] = hotkey;
+                var hotkeys = ReadHotkeySequence(entry, hotkey);
+                var binding = new KeyInputBinding(hotkey, hotkeys);
+                _bindings[(unit, spell, macroCondition)] = binding;
                 // 兼容未保存“宏条件”的旧模块：保留旧版按单位+技能查询时的最后一项行为。
-                _fallbackHotkeys[(unit, spell)] = hotkey;
+                _fallbackBindings[(unit, spell)] = binding;
             }
         }
     }
 
     public string? GetHotkey(int? unit, string spell, string? macroCondition = null)
+        => GetBinding(unit, spell, macroCondition)?.DisplayText;
+
+    public KeyInputBinding? GetBinding(int? unit, string spell, string? macroCondition = null)
     {
         var normalizedUnit = unit.GetValueOrDefault();
         // null 表示旧模块根本没有该字段，严格沿用升级前“单位+技能”的最后一项匹配。
         if (macroCondition is null)
         {
-            return _fallbackHotkeys.TryGetValue((normalizedUnit, spell), out var legacyHotkey)
-                ? legacyHotkey
+            return _fallbackBindings.TryGetValue((normalizedUnit, spell), out var legacyBinding)
+                ? legacyBinding
                 : null;
         }
 
         var normalizedCondition = MacroConditionText.Normalize(macroCondition);
-        if (_hotkeys.TryGetValue((normalizedUnit, spell, normalizedCondition), out var exactHotkey))
+        if (_bindings.TryGetValue((normalizedUnit, spell, normalizedCondition), out var exactBinding))
         {
-            return exactHotkey;
+            return exactBinding;
         }
 
         return null;
+    }
+
+    private static IReadOnlyList<string> ReadHotkeySequence(JsonObject entry, string fallbackHotkey)
+    {
+        if (JsonHelpers.Get(entry, "按键序列") is JsonArray sequence)
+        {
+            var hotkeys = sequence
+                .Select(JsonHelpers.GetString)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!.Trim())
+                .ToList();
+            if (hotkeys.Count > 0)
+            {
+                return hotkeys;
+            }
+        }
+
+        return [fallbackHotkey.Trim()];
     }
 
     public IReadOnlyDictionary<int, string> GetCurrentFailedSpells()

@@ -12,7 +12,8 @@ Fuyutsui.MacroBodies = {
 -- 全职业宏表：按 UnitClassBase 键索引
 -- 由 LoadPlayerMacros 按当前职业与专精选取
 -- dynamicSpells 支持：纯数组（旧），或 { common = {...}, [specIndex] = {...} }
--- 创建顺序：dynamicSpells（每组 30 键）→ staticSpells → specialSpells
+-- 创建顺序：legacy 为 dynamicSpells（每组 30 键）→ staticSpells → specialSpells；
+-- selector-target-v1 为技能选择键 → 30 个单位键 → staticSpells → specialSpells。
 Fuyutsui.ClassMacros = {
     WARRIOR = {
         dynamicSpells = {},
@@ -60,9 +61,12 @@ Fuyutsui.ClassMacros = {
     },
 
     PALADIN = {
+        routingMode = "selector-target-v1",
         dynamicSpells = {
-            common = { "清毒术", "荣耀圣令" },
-            [1] = { "神圣震击", "圣光闪现", "圣光术", "圣疗术", "圣洁鸣钟" },
+            common = { "荣耀圣令" },
+            [1] = { "清洁术", "神圣震击", "圣光闪现", "圣光术", "圣疗术", "圣洁鸣钟", "美德道标" },
+            [2] = { "清毒术" },
+            [3] = { "清毒术" },
         },
         staticSpells = {
             "[@target]代祷",

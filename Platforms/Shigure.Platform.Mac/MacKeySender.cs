@@ -6,6 +6,7 @@ namespace Shigure.Platform.MacOS;
 
 public sealed class MacKeySender : ITargetKeyOutput
 {
+    private static readonly TimeSpan RoutedHotkeyGap = TimeSpan.FromMilliseconds(50);
     private const ulong FlagShift = 0x20000;
     private const ulong FlagControl = 0x40000;
     private const ulong FlagOption = 0x80000;
@@ -40,17 +41,31 @@ public sealed class MacKeySender : ITargetKeyOutput
     }
 
     public KeySendResult Send(string hotkey, TargetIdentity? expectedTarget)
+        => SendSequence([hotkey], expectedTarget);
+
+    public KeySendResult SendSequence(IReadOnlyList<string> hotkeys, TargetIdentity? expectedTarget)
     {
-        var binding = HotkeyParser.Parse(hotkey);
-        if (binding is null)
+        if (hotkeys.Count == 0)
         {
-            return Fail(KeySendFailureKind.InvalidHotkey, $"无法解析按键“{hotkey}”");
+            return Fail(KeySendFailureKind.InvalidHotkey, "按键序列为空");
         }
 
-        var mainKeyCode = MacVirtualKeyMap.Resolve(binding.MainKey);
-        if (mainKeyCode is null)
+        var bindings = new List<(HotkeyBinding Binding, ushort KeyCode)>();
+        foreach (var hotkey in hotkeys)
         {
-            return Fail(KeySendFailureKind.UnknownKey, $"无法识别主键“{binding.MainKey}”");
+            var binding = HotkeyParser.Parse(hotkey);
+            if (binding is null)
+            {
+                return Fail(KeySendFailureKind.InvalidHotkey, $"无法解析按键“{hotkey}”");
+            }
+
+            var mainKeyCode = MacVirtualKeyMap.Resolve(binding.MainKey);
+            if (mainKeyCode is null)
+            {
+                return Fail(KeySendFailureKind.UnknownKey, $"无法识别主键“{binding.MainKey}”");
+            }
+
+            bindings.Add((binding, mainKeyCode.Value));
         }
 
         var target = _targetLocator is IMacFreshTargetWindowLocator freshLocator
@@ -87,33 +102,42 @@ public sealed class MacKeySender : ITargetKeyOutput
         var eventRefs = new List<nint>();
         try
         {
-            var flags = binding.Modifiers.Aggregate(
-                0UL,
-                (current, modifier) => current | ResolveModifierFlag(modifier));
-            MacKeyEventSpec[] sequence =
-            [
-                new(mainKeyCode.Value, true, flags),
-                new(mainKeyCode.Value, false, flags)
-            ];
-
-            foreach (var item in sequence)
+            foreach (var (binding, keyCode) in bindings)
             {
-                var eventRef = _eventApi.CreateKeyboardEvent(source, item.KeyCode, item.KeyDown);
-                if (eventRef == 0)
-                {
-                    return Fail(KeySendFailureKind.NativeFailure, "无法创建完整的 macOS 键盘事件序列");
-                }
+                var flags = binding.Modifiers.Aggregate(
+                    0UL,
+                    (current, modifier) => current | ResolveModifierFlag(modifier));
+                MacKeyEventSpec[] sequence =
+                [
+                    new(keyCode, true, flags),
+                    new(keyCode, false, flags)
+                ];
 
-                eventRefs.Add(eventRef);
-                if (item.Flags != 0)
+                foreach (var item in sequence)
                 {
-                    _eventApi.SetFlags(eventRef, item.Flags);
+                    var eventRef = _eventApi.CreateKeyboardEvent(source, item.KeyCode, item.KeyDown);
+                    if (eventRef == 0)
+                    {
+                        return Fail(KeySendFailureKind.NativeFailure, "无法创建完整的 macOS 键盘事件序列");
+                    }
+
+                    eventRefs.Add(eventRef);
+                    if (item.Flags != 0)
+                    {
+                        _eventApi.SetFlags(eventRef, item.Flags);
+                    }
                 }
             }
 
-            foreach (var eventRef in eventRefs)
+            for (var hotkeyIndex = 0; hotkeyIndex < bindings.Count; hotkeyIndex++)
             {
-                _eventApi.Post(eventRef);
+                var eventIndex = hotkeyIndex * 2;
+                _eventApi.Post(eventRefs[eventIndex]);
+                _eventApi.Post(eventRefs[eventIndex + 1]);
+                if (hotkeyIndex + 1 < bindings.Count)
+                {
+                    _eventApi.Wait(RoutedHotkeyGap);
+                }
             }
 
             return KeySendResult.Success;
@@ -153,6 +177,8 @@ internal interface IMacKeyEventApi
 
     void Post(nint eventRef);
 
+    void Wait(TimeSpan delay);
+
     void Release(nint value);
 }
 
@@ -168,6 +194,8 @@ internal sealed class MacKeyEventApi : IMacKeyEventApi
 
     public void Post(nint eventRef) =>
         MacKeyOutputInterop.CGEventPost(MacKeyOutputInterop.EventTapHid, eventRef);
+
+    public void Wait(TimeSpan delay) => Thread.Sleep(delay);
 
     public void Release(nint value) => MacKeyOutputInterop.CFRelease(value);
 }

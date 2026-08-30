@@ -173,11 +173,28 @@ internal interface IMacTriggerPulseSource : IDisposable
 
 internal sealed class TriggerPulseLatch
 {
-    private readonly ConcurrentDictionary<TriggerInputBinding, byte> _pending = new();
+    private readonly ConcurrentDictionary<TriggerInputBinding, long> _pending = new();
 
-    public void Record(TriggerInputBinding input) => _pending[input] = 0;
+    public void Record(TriggerInputBinding input) =>
+        _pending.AddOrUpdate(input, 1, static (_, count) => count == long.MaxValue ? count : count + 1);
 
-    public bool Consume(TriggerInputBinding input) => _pending.TryRemove(input, out _);
+    public bool Consume(TriggerInputBinding input)
+    {
+        while (_pending.TryGetValue(input, out var count))
+        {
+            if (count <= 1)
+            {
+                return _pending.TryRemove(new KeyValuePair<TriggerInputBinding, long>(input, count));
+            }
+
+            if (_pending.TryUpdate(input, count - 1, count))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 internal sealed class WheelPulseCounter

@@ -111,32 +111,65 @@ public static class PixelProtocolDecoder
 
     public static void DecodeHealAbsorbRow(
         ReadOnlySpan<int> row,
+        int expectedRow,
         IDictionary<int, int> destination)
     {
+        if (expectedRow is < 0 or >= 6)
+        {
+            return;
+        }
+
         var x = 0;
         while (x < row.Length)
         {
             var color = row[x];
-            if (!IsWhite(color))
+            if (!IsHealAbsorbAnchor(color, expectedRow, out var unit))
             {
                 x++;
                 continue;
             }
 
-            var prevWhite = x > 0 && IsWhite(row[x - 1]);
-            if (prevWhite)
+            var anchorStart = x;
+            while (x < row.Length && row[x] == color)
             {
                 x++;
-                continue;
             }
+            var unitWidth = x - anchorStart;
 
-            var (green, blue, nextX) = ConsumeHealAbsorbPixel(row, x + 1);
-            if (blue is >= 1 and <= HealAbsorbMaxUnits)
+            var whiteStart = x;
+            while (x < row.Length && IsWhite(row[x]))
             {
-                destination[blue] = Math.Max(0, green - 1);
+                x++;
             }
+            var whitePixels = x - whiteStart;
 
-            x = nextX;
+            while (x < row.Length)
+            {
+                color = row[x];
+                if (IsGrayEndMarker(color))
+                {
+                    destination[unit] = 100;
+                    x++;
+                    break;
+                }
+
+                if (Red(color) == expectedRow
+                    && Blue(color) == unit
+                    && Green(color) is >= 1 and <= 100)
+                {
+                    destination[unit] = Math.Min(100, whitePixels / unitWidth);
+                    x++;
+                    break;
+                }
+
+                // A new anchor means the preceding slot was malformed; let the outer loop decode it.
+                if (IsHealAbsorbAnchor(color, expectedRow, out _))
+                {
+                    break;
+                }
+
+                x++;
+            }
         }
     }
 
@@ -183,24 +216,12 @@ public static class PixelProtocolDecoder
         return (0, row.Length);
     }
 
-    private static (int Green, int Blue, int NextX) ConsumeHealAbsorbPixel(
-        ReadOnlySpan<int> row,
-        int fromX)
+    private static bool IsHealAbsorbAnchor(int color, int expectedRow, out int unit)
     {
-        var sx = fromX;
-        while (sx < row.Length)
-        {
-            var color = row[sx];
-            if (IsWhite(color))
-            {
-                sx++;
-                continue;
-            }
-
-            return (Green(color), Blue(color), sx + 1);
-        }
-
-        return (0, 0, row.Length);
+        unit = Green(color);
+        return Red(color) == expectedRow
+            && Blue(color) == 0
+            && unit is >= 1 and <= HealAbsorbMaxUnits;
     }
 
     private static int Red(int color) => (color >> 16) & 0xFF;

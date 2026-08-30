@@ -41,13 +41,21 @@ public static partial class FuyutsuiKeymapConverter
 
     public static int MacroSlotCapacity => Modifiers.Length * Keys.Length;
 
-    public static int CalculateRequiredSlots(int dynamicCount, int staticCount, int specialCount, int keyOffset = 0)
+    public static int CalculateRequiredSlots(
+        int dynamicCount,
+        int staticCount,
+        int specialCount,
+        int keyOffset = 0,
+        string? routingMode = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(dynamicCount);
         ArgumentOutOfRangeException.ThrowIfNegative(staticCount);
         ArgumentOutOfRangeException.ThrowIfNegative(specialCount);
         ArgumentOutOfRangeException.ThrowIfNegative(keyOffset);
-        return checked(keyOffset + dynamicCount * DynamicMacroSlotCount + staticCount + specialCount);
+        var dynamicSlots = UsesSelectorTargetRouting(routingMode)
+            ? dynamicCount + (dynamicCount > 0 ? DynamicMacroSlotCount : 0)
+            : dynamicCount * DynamicMacroSlotCount;
+        return checked(keyOffset + dynamicSlots + staticCount + specialCount);
     }
 
     private static readonly Dictionary<string, int> ClassFileToId = new(StringComparer.OrdinalIgnoreCase)
@@ -115,7 +123,8 @@ public static partial class FuyutsuiKeymapConverter
             dynamicCount,
             macros.StaticSpells.Count,
             macros.SpecialSpells.Count,
-            macros.KeyOffset);
+            macros.KeyOffset,
+            macros.RoutingMode);
         if (required > MacroSlotCapacity)
         {
             issues.Add(new MacroCapacityIssue(classFile, specIndex, required, MacroSlotCapacity));
@@ -175,6 +184,7 @@ public static partial class FuyutsuiKeymapConverter
         var staticSpells = ReadArrayEntries(classTable.GetTable("staticSpells"));
         var specialSpells = ReadArrayEntries(classTable.GetTable("specialSpells"));
         var keyOffset = ReadKeyOffset(classTable, classFile);
+        var routingMode = ClassMacrosStore.NormalizeRoutingMode(classTable.GetString("routingMode"));
 
         if (!IsSpecializedDynamicFormat(dynamicTable))
         {
@@ -188,7 +198,8 @@ public static partial class FuyutsuiKeymapConverter
                     existingSpellNames,
                     null,
                     classFile,
-                    warnings),
+                    warnings,
+                    routingMode),
                 warnings);
         }
 
@@ -201,7 +212,8 @@ public static partial class FuyutsuiKeymapConverter
             existingSpellNames,
             null,
             $"{classFile}[兼容回退]",
-            warnings);
+            warnings,
+            routingMode);
         var specRoot = new JsonObject();
         var specs = ClassNames.GetSpecs(classId);
         var knownSpecIds = specs.Select(spec => spec.Id).ToHashSet();
@@ -222,7 +234,8 @@ public static partial class FuyutsuiKeymapConverter
                 existingSpellNames,
                 spec.Id,
                 $"{classFile}[专精 {spec.Id} {spec.Name}]",
-                warnings);
+                warnings,
+                routingMode);
         }
 
         root["专精"] = specRoot;
@@ -237,8 +250,22 @@ public static partial class FuyutsuiKeymapConverter
         ExistingSpellNames existingSpellNames,
         int? specId,
         string warningContext,
-        List<string> warnings)
+        List<string> warnings,
+        string? routingMode)
     {
+        if (UsesSelectorTargetRouting(routingMode))
+        {
+            return CompileSelectorTargetMap(
+                dynamicSpells,
+                staticSpells,
+                specialSpells,
+                keyOffset,
+                existingSpellNames,
+                specId,
+                warningContext,
+                warnings);
+        }
+
         var dynamicSlots = dynamicSpells.Count * DynamicMacroSlotCount;
         var requiredSlots = (long)keyOffset + dynamicSlots + staticSpells.Count + specialSpells.Count;
         if (requiredSlots > MacroKind.Length)
@@ -331,6 +358,126 @@ public static partial class FuyutsuiKeymapConverter
 
         return root;
     }
+
+    private static JsonObject CompileSelectorTargetMap(
+        IReadOnlyList<string> dynamicSpells,
+        IReadOnlyList<MacroEntry> staticSpells,
+        IReadOnlyList<MacroEntry> specialSpells,
+        int keyOffset,
+        ExistingSpellNames existingSpellNames,
+        int? specId,
+        string warningContext,
+        List<string> warnings)
+    {
+        var requiredSlots = CalculateRequiredSlots(
+            dynamicSpells.Count,
+            staticSpells.Count,
+            specialSpells.Count,
+            keyOffset,
+            ClassMacrosStore.SelectorTargetRoutingMode);
+        if (requiredSlots > MacroKind.Length)
+        {
+            warnings.Add(
+                $"{warningContext}: 两段路由容量溢出，需要 {requiredSlots} 个，最多 {MacroKind.Length} 个；" +
+                $"末尾 {requiredSlots - MacroKind.Length} 个槽位不会写入 keymap");
+        }
+
+        var root = new JsonObject
+        {
+            ["路由模式"] = ClassMacrosStore.SelectorTargetRoutingMode
+        };
+        for (var i = 1; i <= MacroKind.Length; i++)
+        {
+            root[i.ToString()] = CreateKeymapEntry(0, string.Empty, string.Empty, MacroKind[i - 1]);
+        }
+
+        var selectorStart = keyOffset + 1;
+        var targetStart = selectorStart + dynamicSpells.Count;
+        for (var spellIndex = 0; spellIndex < dynamicSpells.Count; spellIndex++)
+        {
+            var spell = dynamicSpells[spellIndex];
+            var selectorSlot = selectorStart + spellIndex;
+            if (selectorSlot > MacroKind.Length || string.IsNullOrWhiteSpace(spell))
+            {
+                continue;
+            }
+
+            var selectorHotkey = MacroKind[selectorSlot - 1];
+            for (var unit = 1; unit <= DynamicMacroSlotCount; unit++)
+            {
+                var targetSlot = targetStart + unit - 1;
+                if (targetSlot > MacroKind.Length)
+                {
+                    break;
+                }
+
+                var targetHotkey = MacroKind[targetSlot - 1];
+                root[$"route-{spellIndex + 1}-{unit}"] = new JsonObject
+                {
+                    ["unit"] = unit,
+                    ["宏条件"] = string.Empty,
+                    ["技能"] = spell,
+                    ["热键"] = $"{selectorHotkey} > {targetHotkey}",
+                    ["按键序列"] = new JsonArray(selectorHotkey, targetHotkey)
+                };
+            }
+        }
+
+        var staticStart = targetStart + (dynamicSpells.Count > 0 ? DynamicMacroSlotCount : 0);
+        var entries = staticSpells
+            .Select(entry => (Entry: entry, IsStatic: true))
+            .Concat(specialSpells.Select(entry => (Entry: entry, IsStatic: false)))
+            .ToList();
+        for (var entryIndex = 0; entryIndex < entries.Count; entryIndex++)
+        {
+            var slot = staticStart + entryIndex;
+            if (slot > MacroKind.Length)
+            {
+                break;
+            }
+
+            var (entry, isStatic) = entries[entryIndex];
+            if (entry.Body.Length == 0)
+            {
+                continue;
+            }
+
+            var parsed = isStatic
+                ? ParseStaticMacro(entry.Body, entry.Comment)
+                : ParseSpecialMacro(entry.Body, entry.Comment);
+            var spell = parsed.Spell;
+            if (IsWeakSpellName(spell)
+                && TryGetExistingSpellName(existingSpellNames, specId, slot, out var preserved)
+                && !string.IsNullOrWhiteSpace(preserved)
+                && !IsWeakSpellName(preserved))
+            {
+                warnings.Add($"{warningContext}[{slot}]: 保留原技能名「{preserved}」（宏推导为「{spell}」）");
+                spell = preserved;
+            }
+
+            root[slot.ToString()] = CreateKeymapEntry(
+                parsed.Unit,
+                parsed.Condition,
+                spell,
+                MacroKind[slot - 1]);
+        }
+
+        return root;
+    }
+
+    private static JsonObject CreateKeymapEntry(int unit, string macroCondition, string spell, string hotkey) => new()
+    {
+        ["unit"] = unit,
+        ["宏条件"] = macroCondition,
+        ["技能"] = spell,
+        ["热键"] = hotkey
+    };
+
+    private static bool UsesSelectorTargetRouting(string? routingMode) =>
+        string.Equals(
+            ClassMacrosStore.NormalizeRoutingMode(routingMode),
+            ClassMacrosStore.SelectorTargetRoutingMode,
+            StringComparison.OrdinalIgnoreCase);
 
     private static int ReadKeyOffset(TableValue classTable, string classFile)
     {

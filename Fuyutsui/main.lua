@@ -239,7 +239,7 @@ function Fuyutsui:LoadPlayerMacros()
         staticSpells = m.staticSpells,
         specialSpells = m.specialSpells,
     }
-    local created = self:CreateMacro(dynamicSpells, m.staticSpells, m.specialSpells, m.keyOffset)
+    local created = self:CreateMacro(dynamicSpells, m.staticSpells, m.specialSpells, m.keyOffset, m.routingMode)
     self.macrosPending = not created
     return created
 end

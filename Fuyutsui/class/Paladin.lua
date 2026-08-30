@@ -98,7 +98,7 @@ Fuyutsui.ClassBlocks = {
             { spellId = 20473, name = "神圣震击", charge = true, maxCharge = 2 },
             { spellId = 4987, name = "清洁术" },
             { spellId = 275773, name = "审判" },
-            { spellId = 375576, name = "圣洁鸣钟" },
+            { spellId = 375576, name = "圣洁鸣钟", inSpellBook = true },
             { spellId = 114165, name = "神圣棱镜" },
             { spellId = 31821, name = "光环掌握" },
             { spellId = 200025, name = "美德道标" },

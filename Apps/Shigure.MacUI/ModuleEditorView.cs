@@ -786,6 +786,7 @@ public sealed class ModuleEditorView : UserControl
         _dependencySummary.Text =
             $"Schema {dependencies.SchemaVersion}\n"
             + $"职业/专精：{dependencies.ClassId}/{dependencies.SpecId}\n"
+            + $"宏路由：{macros?.RoutingMode ?? "legacy"}\n"
             + $"状态：{stateCount} · 光环：{auraCount} · 技能：{spec?.Spells?.Count ?? 0}\n"
             + $"宏：{macroCount} · spellsList：{dependencies.Config?.SpellsList?.Count ?? 0}\n\n"
             + "保存模块会重新捕获当前依赖；导入时只补充本地缺失项。";

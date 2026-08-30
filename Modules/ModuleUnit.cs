@@ -51,7 +51,10 @@ public enum UnitSelectorKind
     HighestHealingAbsorbWithAura,
 
     /// <summary>某光环值等于指定值、治疗吸收高于阈值且治疗吸收最高的单位。</summary>
-    HighestHealingAbsorbWithAuraCount
+    HighestHealingAbsorbWithAuraCount,
+
+    /// <summary>总治疗缺口高于阈值且缺口最高的存活单位。</summary>
+    HighestHealingDeficit
 }
 
 /// <summary>最低生命值选择器使用的职责筛选方式。</summary>
@@ -131,7 +134,10 @@ public enum CountKind
     UnitsWithoutAuraAboveHealingAbsorb,
 
     /// <summary>拥有某光环且治疗吸收大于阈值的人数。</summary>
-    UnitsWithAuraAboveHealingAbsorb
+    UnitsWithAuraAboveHealingAbsorb,
+
+    /// <summary>总治疗缺口大于阈值的存活单位数。</summary>
+    UnitsAboveHealingDeficit
 }
 
 /// <summary>
