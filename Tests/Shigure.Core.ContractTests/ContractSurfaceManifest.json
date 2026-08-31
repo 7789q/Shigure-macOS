@@ -101,7 +101,7 @@
     },
     "Apps/Shigure.MacUI/MainWindow.axaml.cs": {
       "category": "macos-platform",
-      "sha256": "c9d4e6af3ce7574d4991a863fa90eaf53240ba62df7091e3aaa5d2bf67adb7bc"
+      "sha256": "05eaed51cdf8129663b637e05bab3b7557dcf87160afccbfa7d6469a238da5f2"
     },
     "Apps/Shigure.MacUI/ModuleEditorView.cs": {
       "category": "macos-platform",
@@ -249,7 +249,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "e6fc37f12fc7cceedf1b9d7e2383c41bec094dcd95f2cd4d5c8713fa1ac5d808"
+      "sha256": "e9a33a2cc04ad4906c6f7f6eb40c3caf5e23740f9a3fb4a8807c5810685cbd87"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -277,7 +277,7 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "ebd757d273a19607a9dde4f8e33db436b28c24bbb3de3b63a4cede355ec80dcd"
+      "sha256": "62f0d460a3eafcc7a01bae81dbcf777dd0b273720cb0d83667f6f104af8b572a"
     },
     "Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj": {
       "category": "shared-contract",
@@ -489,7 +489,7 @@
     },
     "Fuyutsui/core/classmacros.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "f8255da442dbd12b546a1c8cee295555f69595ea335883ea9ab6954d987309a4"
+      "sha256": "57fa5044e461581b51f263fbdcc6a4f1e5ba1ec057d4902d494afb728b68aba5"
     },
     "Fuyutsui/core/commands.lua": {
       "category": "fuyutsui-authority",
@@ -501,7 +501,7 @@
     },
     "Fuyutsui/core/core.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "16c1a70121b69b2ce7cf81f5e93935262f5b0c0fa0651c46df387033013b79e2"
+      "sha256": "b8d2121aeb96d1f5c0937ef3f621eb1ba0fa6a354c55cf8f740d59d376200759"
     },
     "Fuyutsui/core/curves.lua": {
       "category": "fuyutsui-authority",
@@ -509,7 +509,7 @@
     },
     "Fuyutsui/core/events.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "98b1b360260e6dfd67372bdd4f3aeab71c053cf15b0bd98018937b58bcd53293"
+      "sha256": "8c0577d97d2332b5ea9af8b0a16893e2ef653e912928e82bd66cf6c89c8a4f43"
     },
     "Fuyutsui/core/group.lua": {
       "category": "fuyutsui-authority",
@@ -521,7 +521,7 @@
     },
     "Fuyutsui/core/macro.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "eb318e810f597884b9eb0a241e13e4c1d3f797e01cfa36e7a7896fbe94e2a56d"
+      "sha256": "ea0f6266413a9d81c6a7dd42254610e4be898cbfd24c159dc0f6e7780d70083b"
     },
     "Fuyutsui/core/player.lua": {
       "category": "fuyutsui-authority",

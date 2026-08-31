@@ -72,7 +72,7 @@ Fuyutsui.ClassMacros = {
             "[@target]代祷",
             "圣盾术",
             "盲目之光",
-            "审判",
+            "[@tanktarget]审判",
             "制裁之锤",
             "光环掌握",
             "圣洁鸣钟",

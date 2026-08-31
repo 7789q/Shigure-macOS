@@ -79,6 +79,7 @@ public sealed partial class MainWindow : Window
     private string? _selectedModuleId;
     private MacOverlayLayout _overlayLayout;
     private bool? _lastObservedLogicEnabled;
+    private string? _activeScanFailureReason;
     private RenderSnapshot? _pendingRuntimeSnapshot;
     private bool _runtimeSnapshotDispatchPending;
 
@@ -150,7 +151,14 @@ public sealed partial class MainWindow : Window
         _logicToastTimer.Tick += (_, _) =>
         {
             _logicToastTimer.Stop();
-            _logicToast?.Hide();
+            if (string.IsNullOrWhiteSpace(_activeScanFailureReason))
+            {
+                _logicToast?.Hide();
+            }
+            else
+            {
+                ShowScanFailureToast();
+            }
         };
         _moduleMarketplace = new ModuleMarketplaceClient();
         RefreshModuleNames();
@@ -1769,6 +1777,22 @@ public sealed partial class MainWindow : Window
             ShowLogicToast(snapshot.Enabled);
         }
         _lastObservedLogicEnabled = snapshot.Enabled;
+        var previousScanFailure = _activeScanFailureReason;
+        _activeScanFailureReason = snapshot.ScanFailureReason;
+        if (!string.Equals(previousScanFailure, _activeScanFailureReason, StringComparison.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(_activeScanFailureReason))
+            {
+                if (!string.IsNullOrWhiteSpace(previousScanFailure))
+                {
+                    ShowRuntimeToast("色块识别已恢复", "#6EE7B7", autoHide: true);
+                }
+            }
+            else
+            {
+                ShowScanFailureToast();
+            }
+        }
         ApplyMonitor(RuntimeMonitorProjection.Create(snapshot));
         EnableButton.Content = snapshot.Enabled ? "关闭逻辑" : "开启逻辑";
         SetGlobalStatus(string.IsNullOrWhiteSpace(snapshot.ScanFailureReason)
@@ -1806,6 +1830,9 @@ public sealed partial class MainWindow : Window
         if (!status.IsRunning)
         {
             EnableButton.Content = "开启逻辑";
+            _activeScanFailureReason = null;
+            _logicToastTimer.Stop();
+            _logicToast?.Hide();
         }
 
         if (_overlayStatus is not null && !status.IsRunning)
@@ -2177,6 +2204,15 @@ public sealed partial class MainWindow : Window
     }
 
     private void ShowLogicToast(bool enabled)
+        => ShowRuntimeToast(
+            enabled ? "逻辑已开启" : "逻辑已关闭",
+            enabled ? "#6EE7B7" : "#FCA5A5",
+            autoHide: true);
+
+    private void ShowScanFailureToast()
+        => ShowRuntimeToast("色块识别异常\n请等待游戏界面加载", "#FCA5A5", autoHide: false);
+
+    private void ShowRuntimeToast(string text, string color, bool autoHide)
     {
         if (_logicToast is null)
         {
@@ -2186,7 +2222,8 @@ public sealed partial class MainWindow : Window
                 FontWeight = FontWeight.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = TextAlignment.Center
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap
             };
             _logicToast = new Window
             {
@@ -2207,8 +2244,12 @@ public sealed partial class MainWindow : Window
             _logicToast.Opened += (_, _) => MacWindowInteraction.MakeClickThrough(_logicToast);
         }
 
-        _logicToastText!.Text = enabled ? "逻辑已开启" : "逻辑已关闭";
-        _logicToastText.Foreground = new SolidColorBrush(Color.Parse(enabled ? "#6EE7B7" : "#FCA5A5"));
+        var isMultiline = text.Contains('\n');
+        _logicToast!.Width = isMultiline ? 520 : 420;
+        _logicToast.Height = isMultiline ? 120 : 90;
+        _logicToastText!.FontSize = isMultiline ? 30 : 36;
+        _logicToastText.Text = text;
+        _logicToastText.Foreground = new SolidColorBrush(Color.Parse(color));
         _logicToastTimer.Stop();
         _logicToast.Show();
         MacWindowInteraction.MakeClickThrough(_logicToast);
@@ -2224,7 +2265,10 @@ public sealed partial class MainWindow : Window
                 screen.Bounds.Y + (screen.Bounds.Height - height) / 2);
         }
 
-        _logicToastTimer.Start();
+        if (autoHide)
+        {
+            _logicToastTimer.Start();
+        }
     }
 
     private static string? MapTriggerKey(Key key)

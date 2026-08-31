@@ -14,6 +14,7 @@ public sealed class ShigureRuntime : IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentQueue<RuntimeCommand> _pendingCommands = new();
     private readonly EmergencyActionGuard _emergencyActionGuard = new();
+    private readonly HealAbsorbStabilizer _healAbsorbStabilizer = new();
 
     private GameState? _state;
     private string? _className;
@@ -254,6 +255,7 @@ public sealed class ShigureRuntime : IDisposable
         if (scan.RowData is null)
         {
             _emergencyActionGuard.Reset();
+            _healAbsorbStabilizer.Reset();
             _state = null;
             _classId = null;
             _specId = null;
@@ -269,17 +271,26 @@ public sealed class ShigureRuntime : IDisposable
             return;
         }
 
-        _state = _stateBuilder.Build(scan.RowData, scan.BarData, scan.HealAbsorbData);
+        var healAbsorb = _healAbsorbStabilizer.Observe(scan.HealAbsorbData);
+        _state = _stateBuilder.Build(scan.RowData, scan.BarData, healAbsorb.Values);
         _classId = _state.GetInt("职业");
         _specId = _state.GetInt("专精");
         (_className, _specName) = ClassNames.GetClassAndSpecName(_classId, _specId);
         if (!_state.GetBool("有效性"))
         {
+            _healAbsorbStabilizer.Reset();
             _moduleName = null;
             _currentStep =
                 $"等待游戏状态（状态字段 {scan.RowData.Count}，CountBars {scan.BarData.Count}，" +
                 $"治疗吸收 {scan.HealAbsorbData.Count}，职业 {_classId?.ToString() ?? "-"}，" +
                 $"专精 {_specId?.ToString() ?? "-"}，有效性 false）";
+            _unitInfo = new Dictionary<string, object?>();
+            return;
+        }
+
+        if (healAbsorb.HasPendingPositive)
+        {
+            _currentStep = "等待治疗吸收连续帧确认";
             _unitInfo = new Dictionary<string, object?>();
             return;
         }
@@ -594,6 +605,55 @@ internal sealed class EmergencyActionGuard
         _ => 0
     };
 }
+
+internal sealed class HealAbsorbStabilizer
+{
+    private const int RequiredPositiveFrames = 2;
+    private readonly Dictionary<int, int> _positiveStreaks = new();
+
+    public HealAbsorbStabilizationResult Observe(IReadOnlyDictionary<int, int> rawValues)
+    {
+        var values = new Dictionary<int, int>(rawValues.Count);
+        var presentUnits = new HashSet<int>();
+        var hasPendingPositive = false;
+
+        foreach (var (unit, rawValue) in rawValues)
+        {
+            presentUnits.Add(unit);
+            var value = Math.Max(0, rawValue);
+            if (value == 0)
+            {
+                _positiveStreaks.Remove(unit);
+                values[unit] = 0;
+                continue;
+            }
+
+            var streak = _positiveStreaks.GetValueOrDefault(unit) + 1;
+            _positiveStreaks[unit] = streak;
+            if (streak < RequiredPositiveFrames)
+            {
+                values[unit] = 0;
+                hasPendingPositive = true;
+                continue;
+            }
+
+            values[unit] = value;
+        }
+
+        foreach (var unit in _positiveStreaks.Keys.Where(unit => !presentUnits.Contains(unit)).ToList())
+        {
+            _positiveStreaks.Remove(unit);
+        }
+
+        return new HealAbsorbStabilizationResult(values, hasPendingPositive);
+    }
+
+    public void Reset() => _positiveStreaks.Clear();
+}
+
+internal sealed record HealAbsorbStabilizationResult(
+    IReadOnlyDictionary<int, int> Values,
+    bool HasPendingPositive);
 
 internal sealed record EmergencyActionCheck(bool Allowed, string? Reason, int ConsecutiveFrames)
 {

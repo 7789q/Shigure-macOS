@@ -54,6 +54,36 @@ local function createMacro(name, key, macro)
     end
 end
 
+local function findTankUnit()
+    if IsInRaid() then
+        for raidIdx = 1, GetNumGroupMembers() do
+            local unit = "raid" .. raidIdx
+            if UnitGroupRolesAssigned(unit) == "TANK" then
+                return unit
+            end
+        end
+    elseif IsInGroup() then
+        if UnitGroupRolesAssigned("player") == "TANK" then
+            return "player"
+        end
+        for partyIdx = 1, GetNumSubgroupMembers() do
+            local unit = "party" .. partyIdx
+            if UnitGroupRolesAssigned(unit) == "TANK" then
+                return unit
+            end
+        end
+    end
+    return nil
+end
+
+local function buildTankTargetMacro(spell)
+    local tankUnit = findTankUnit()
+    if not tankUnit then
+        return format("/cast [@none,harm,nodead]%s", spell)
+    end
+    return format("/cast [@%starget,harm,nodead]%s", tankUnit, spell)
+end
+
 -- 解析法术名/宏体：优先查 MacroBodies；以 / 开头则原样使用；否则加 /cast
 local function resolveMacroBody(spell)
     if not spell or spell == "" then
@@ -69,6 +99,10 @@ local function resolveMacroBody(spell)
     end
     if spell:sub(1, 1) == "/" then
         return spell
+    end
+    local tankTargetSpell = spell:match("^%[@tanktarget%](.+)$")
+    if tankTargetSpell then
+        return buildTankTargetMacro(tankTargetSpell)
     end
     return "/cast " .. spell
 end

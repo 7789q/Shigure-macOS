@@ -334,8 +334,13 @@ function Fuyutsui:GROUP_ROSTER_UPDATE()
         self:UpdateGroup()
         self:UpdateGroupCount()
         self:UpdateGroupType()
+        self:LoadPlayerMacros()
         rosterTimer = nil
     end)
+end
+
+function Fuyutsui:PLAYER_ROLES_ASSIGNED()
+    self:GROUP_ROSTER_UPDATE()
 end
 
 function Fuyutsui:UNIT_DIED(_, unitGUID)

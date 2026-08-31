@@ -24,6 +24,7 @@ var tests = new (string Name, Action Run)[]
     ("top row requires start marker", TopRowRequiresStartMarker),
     ("count bars markers", CountBarsMarkers),
     ("heal absorb units", HealAbsorbUnits),
+    ("heal absorb stabilization contract", HealAbsorbStabilizationContract),
     ("unit selector without any aura contract", UnitSelectorWithoutAnyAuraContract),
     ("unit selector excludes unavailable role contract", UnitSelectorExcludesUnavailableRoleContract),
     ("healing deficit selector contract", HealingDeficitSelectorContract),
@@ -190,6 +191,29 @@ static void HealAbsorbUnits()
     var wrongRow = new Dictionary<int, int>();
     PixelProtocolDecoder.DecodeHealAbsorbRow(CollectionsMarshal.AsSpan(row), 1, wrongRow);
     Equal(0, wrongRow.Count, "heal absorb row requires a matching row anchor");
+}
+
+static void HealAbsorbStabilizationContract()
+{
+    var stabilizer = new HealAbsorbStabilizer();
+
+    var first = stabilizer.Observe(new Dictionary<int, int> { [1] = 1, [2] = 0 });
+    Equal(true, first.HasPendingPositive, "first positive absorb frame waits for confirmation");
+    Equal(0, first.Values[1], "unconfirmed one-percent absorb cannot trigger healing");
+
+    var second = stabilizer.Observe(new Dictionary<int, int> { [1] = 2, [2] = 0 });
+    Equal(false, second.HasPendingPositive, "second positive absorb frame is confirmed");
+    Equal(2, second.Values[1], "confirmed absorb preserves the latest precise value");
+
+    var cleared = stabilizer.Observe(new Dictionary<int, int> { [1] = 0, [2] = 0 });
+    Equal(0, cleared.Values[1], "zero absorb clears immediately");
+
+    var newSpike = stabilizer.Observe(new Dictionary<int, int> { [1] = 3 });
+    Equal(true, newSpike.HasPendingPositive, "a new positive spike must be reconfirmed after zero");
+    stabilizer.Reset();
+    var afterReset = stabilizer.Observe(new Dictionary<int, int> { [1] = 100 });
+    Equal(true, afterReset.HasPendingPositive, "reset discards prior positive history");
+    Equal(0, afterReset.Values[1], "even a full absorb requires two frames without losing its magnitude");
 }
 
 static void AddHealAbsorbSlot(
@@ -2685,6 +2709,7 @@ static void FuyutsuiProtocolContract()
     var stateBlocks = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "stateblocks.lua"));
     var target = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "target.lua"));
     var macro = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "macro.lua"));
+    var events = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "events.lua"));
 
     Equal(true, curves.Contains("CreateColorCurve(25.5, 255)", StringComparison.Ordinal),
         "cast protocol encodes one second as ten units");
@@ -2717,6 +2742,12 @@ static void FuyutsuiProtocolContract()
         "selector-target routing changes direct target macros through a secure handler");
     Equal(false, macro.Contains("target:SetAttribute(\"type\", \"click\")", StringComparison.Ordinal),
         "selector-target routing avoids blocked scripted click delegation");
+    Equal(true, macro.Contains("UnitGroupRolesAssigned(unit) == \"TANK\"", StringComparison.Ordinal)
+        && macro.Contains("[@%starget,harm,nodead]", StringComparison.Ordinal),
+        "tank-target macros resolve the assigned tank without changing the player target");
+    Equal(true, events.Contains("function Fuyutsui:PLAYER_ROLES_ASSIGNED()", StringComparison.Ordinal)
+        && events.Contains("self:LoadPlayerMacros()", StringComparison.Ordinal),
+        "tank-target macros refresh after group role assignments change");
 }
 
 static void ClassBlocksEditorPersistenceContract()
@@ -2780,6 +2811,11 @@ static void ClassMacrosEditorPersistenceContract()
             ClassMacrosStore.SelectorTargetRoutingMode,
             document.Classes["PALADIN"].RoutingMode,
             "macro editor loads selector-target routing mode");
+        Equal(true, document.Classes["PALADIN"].StaticSpells.Any(entry => entry.Text == "[@tanktarget]审判"),
+            "paladin judgment uses the generated tank-target macro");
+        var tankTargetJudgment = FuyutsuiKeymapConverter.ParseStaticMacro("[@tanktarget]审判");
+        Equal(ReservedUnit.None, tankTargetJudgment.Unit, "tank-target judgment keeps the untargeted keymap binding");
+        Equal("审判", tankTargetJudgment.Spell, "tank-target judgment preserves the module spell name");
         var warrior = document.Classes[ClassMacrosStore.ToClassFileKey(1)];
         warrior.UsesSpecDynamicSpells = true;
         warrior.DynamicBySpec[1] = ["契约动态法术"];
@@ -4078,6 +4114,12 @@ static void MacUiTechnicalSampleContract()
     Equal(true, sourceText.Contains("_uiState.SendMode = _sendMode", StringComparison.Ordinal), "Mac UI persists send mode changes");
     Equal(true, sourceText.Contains("Interval = TimeSpan.FromSeconds(1)", StringComparison.Ordinal), "Mac logic status toast lasts one second");
     Equal(true, sourceText.Contains("ShowLogicToast(snapshot.Enabled)", StringComparison.Ordinal), "Mac UI shows logic status on actual state changes");
+    Equal(true, mainWindowText.Contains("ShowScanFailureToast()", StringComparison.Ordinal),
+        "Mac UI shows scan failures in the centered status toast");
+    Equal(true, mainWindowText.Contains("色块识别已恢复", StringComparison.Ordinal),
+        "Mac UI reports scan recovery on screen");
+    Equal(true, mainWindowText.Contains("_activeScanFailureReason = null", StringComparison.Ordinal),
+        "Mac UI clears persistent scan warnings when runtime stops");
     Equal(true, sourceText.Contains("ShowActivated = false", StringComparison.Ordinal), "Mac logic status toast does not steal focus");
     Equal(true, windowInteractionText.Contains("setIgnoresMouseEvents:", StringComparison.Ordinal), "Mac logic status toast uses native click-through");
     Equal(true, sourceText.Contains("MacUiStateStore", StringComparison.Ordinal), "Mac UI composes the versioned state store");
