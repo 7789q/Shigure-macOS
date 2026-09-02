@@ -697,7 +697,12 @@ public sealed class ConfigEditorView : UserControl
                 error = $"队伍光环第 {index + 1} 行包含无效数字。";
                 return false;
             }
-            var entry = new ClassBlocksStore.GroupAuraEntry { Offset = offset, Name = row.Name.Trim(), SpellId = spellId };
+            var entry = new ClassBlocksStore.GroupAuraEntry
+            {
+                Offset = offset,
+                Name = row.Name.Trim(),
+                SpellId = spellId
+            };
             entry.SpellIds.AddRange(spellIds);
             group.Auras.Add(entry);
         }

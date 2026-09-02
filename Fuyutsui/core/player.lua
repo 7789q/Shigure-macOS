@@ -58,9 +58,19 @@ function Fuyutsui:UpdatePlayerSpecInfo()
 end
 
 function Fuyutsui:UpdatePlayerValid()
-    local valid = not state.isDead and not state.mounted and not state.isChatOpen and not state.drinkStatus and
-        not state.mountCasting
-    state.valid = valid and 1 / 255 or 0
+    local reason = 1
+    if state.isDead then
+        reason = 2
+    elseif state.mounted then
+        reason = 3
+    elseif state.isChatOpen then
+        reason = 4
+    elseif state.drinkStatus then
+        reason = 5
+    elseif state.mountCasting then
+        reason = 6
+    end
+    state.valid = reason / 255
     self:UpdateStateBlock("状态", "有效性")
 end
 
@@ -71,7 +81,7 @@ end
 function Fuyutsui:UpdatePlayerCombatTime()
     if state.combat then
         local combatTime = GetTime() - state.combatStartTime
-        state.combatTime = math.min(1, combatTime / 255)
+        state.combatTime = math.max(1 / 255, math.min(1, combatTime / 255))
     else
         state.combatTime = 0
     end
@@ -268,6 +278,27 @@ function Fuyutsui:UpdatePlayerCasting(spellId)
     state.castingSpell = castingSpell / 255 or 0
     self:UpdateStateBlock("状态", "施法目标")
     self:UpdateStateBlock("状态", "施法技能")
+end
+
+function Fuyutsui:PublishPlayerAction(spellId, status)
+    if issecretvalue(spellId) then
+        state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
+        state.playerActionSpell = 0
+        state.playerActionStatus = status
+        self:UpdateStateBlock("状态", "玩家动作技能")
+        self:UpdateStateBlock("状态", "玩家动作状态")
+        self:UpdateStateBlock("状态", "玩家动作序号")
+        return
+    end
+    if type(spellId) ~= "number" then return end
+    local spell = spellsList[spellId]
+    if not spell or type(spell.index) ~= "number" then return end
+    state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
+    state.playerActionSpell = spell.index
+    state.playerActionStatus = status
+    self:UpdateStateBlock("状态", "玩家动作技能")
+    self:UpdateStateBlock("状态", "玩家动作状态")
+    self:UpdateStateBlock("状态", "玩家动作序号")
 end
 
 function Fuyutsui:UpdatePlayerConfig()

@@ -7,8 +7,10 @@ namespace Shigure.MacUI;
 internal static class MacWindowInteraction
 {
     private const string ObjectiveCLibrary = "/usr/lib/libobjc.A.dylib";
+    private const nuint CanJoinAllSpaces = 1;
+    private const nuint FullScreenAuxiliary = 1 << 8;
 
-    public static void MakeClickThrough(Window window)
+    public static void ConfigureStatusOverlay(Window window)
     {
         if (!OperatingSystem.IsMacOS())
         {
@@ -26,6 +28,10 @@ internal static class MacWindowInteraction
             handle.Handle,
             sel_registerName("setIgnoresMouseEvents:"),
             true);
+        SetCollectionBehavior(
+            handle.Handle,
+            sel_registerName("setCollectionBehavior:"),
+            CanJoinAllSpaces | FullScreenAuxiliary);
     }
 
     [DllImport(ObjectiveCLibrary)]
@@ -36,4 +42,10 @@ internal static class MacWindowInteraction
         nint receiver,
         nint selector,
         [MarshalAs(UnmanagedType.I1)] bool ignoresMouseEvents);
+
+    [DllImport(ObjectiveCLibrary, EntryPoint = "objc_msgSend")]
+    private static extern void SetCollectionBehavior(
+        nint receiver,
+        nint selector,
+        nuint behavior);
 }

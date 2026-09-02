@@ -29,7 +29,8 @@ public sealed class MacApplicationRuntimeFactory : IShigureRuntimeFactory
             currentOptions => new LogicRegistry(
                 new KeymapService(_baseDirectory, config),
                 _moduleStore,
-                currentOptions.ModuleId),
+                currentOptions.ModuleId,
+                timeProvider: _timeProvider),
             _timeProvider);
 
         return platformFactory.Create(options);

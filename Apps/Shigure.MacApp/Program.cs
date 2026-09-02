@@ -115,7 +115,7 @@ internal static class Program
             var baseDirectory = workspace.WorkspaceDirectory;
             WriteEvent(
                 "runtime-resources",
-                $"运行资源就绪：新增 {workspace.CreatedFiles.Count}，更新 {workspace.UpdatedFiles.Count}，保留冲突 {workspace.ConflictingFiles.Count}，迁移 {workspace.MigratedFiles.Count}。");
+                $"运行资源就绪：新增 {workspace.CreatedFiles.Count}，更新 {workspace.UpdatedFiles.Count}，保留冲突 {workspace.ConflictingFiles.Count}，迁移 {workspace.MigratedFiles.Count}，重新生成 {workspace.RegeneratedFiles.Count}。");
             if (workspace.ProtocolConflictingFiles.Count > 0)
             {
                 WriteEvent(

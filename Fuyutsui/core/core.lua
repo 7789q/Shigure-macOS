@@ -87,6 +87,9 @@ function Fuyutsui:OnEnable()
     self:GetCharacterSpecInfo()
     self:UpdateSpellKnown()
     self:UpdatePlayerBlocks()
+    if self.InitializeAOEWarning then
+        self:InitializeAOEWarning()
+    end
     self:ReadKeybindings()
     self:HookChatFrameEditBox()
 
@@ -107,6 +110,8 @@ function Fuyutsui:OnEnable()
     self:RegisterEvent("UNIT_SPELLCAST_START")
     self:RegisterEvent("UNIT_SPELLCAST_STOP")
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+    self:RegisterEvent("UNIT_SPELLCAST_FAILED")
+    self:RegisterEvent("UNIT_SPELLCAST_FAILED_QUIET")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
@@ -187,6 +192,7 @@ Fuyutsui.defaults = {
         dpsMode = 0,
         delay = 0,
         potion = 0,
+        aoeWarningDebug = false,
         quickButtonCX = 180,
         quickButtonCY = -100,
         quickButtonShow = true,

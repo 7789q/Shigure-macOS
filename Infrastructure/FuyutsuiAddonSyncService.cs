@@ -9,6 +9,7 @@ namespace Shigure;
 public sealed class FuyutsuiAddonSyncService
 {
     private const string AddonDirectoryName = "Fuyutsui";
+    private const string DiGuaBridgeDirectoryName = "FuyutsuiDiGuaBridge";
     private readonly string _sourceRoot;
     private readonly ITargetWindowLocator _targetLocator;
     private readonly Action<string, string, bool> _copyFile;
@@ -53,7 +54,29 @@ public sealed class FuyutsuiAddonSyncService
             SynchronizeCore(sourcePath, relativePath, targetRoot, copied, skipped, failures);
         }
 
-        return new FuyutsuiAddonSyncResult(_sourceRoot, targetRoot, copied, skipped, failures, null);
+        var sourceParent = Directory.GetParent(_sourceRoot)?.FullName;
+        var bridgeSourceRoot = sourceParent is null
+            ? null
+            : Path.Combine(sourceParent, DiGuaBridgeDirectoryName);
+        if (bridgeSourceRoot is not null && Directory.Exists(bridgeSourceRoot))
+        {
+            var addOnsDirectory = Directory.GetParent(targetRoot)?.FullName
+                ?? throw new InvalidOperationException("无法解析游戏 AddOns 目录。");
+            foreach (var sourcePath in Directory.EnumerateFiles(bridgeSourceRoot, "*", SearchOption.AllDirectories))
+            {
+                var relativePath = Path.GetRelativePath(bridgeSourceRoot, sourcePath);
+                var reportedPath = Path.Combine(DiGuaBridgeDirectoryName, relativePath);
+                SynchronizeCore(sourcePath, reportedPath, addOnsDirectory, copied, skipped, failures);
+            }
+        }
+
+        return new FuyutsuiAddonSyncResult(
+            _sourceRoot,
+            targetRoot,
+            copied,
+            skipped,
+            failures,
+            null);
     }
 
     public FuyutsuiAddonSyncResult SynchronizeFile(string sourcePath)

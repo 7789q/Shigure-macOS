@@ -26,3 +26,11 @@ dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --r
 ```
 
 修改打包脚本时追加 `bash -n Packaging/macOS/*.sh`，修改 workflow 时解析 YAML。真实 Developer ID、公证、更新和游戏输入输出必须单独验收，不能由本地构建推导。
+本地打包还必须保持 TCC 签名合同：外层/UI 标识符为 `com.arasaka.shigure.mac`，运行时子进程 `Shigure.MacApp` 标识符为 `Shigure`，三者 designated requirement 固定到同一证书根且不得绑定 `cdhash`；变更后必须检查实际 `.app` 的嵌套签名。
+
+## 奶骑美德回归门禁
+
+- 修改吸奶盾、美德、DiGua 桥接、AOE 阶段或相关同步/打包逻辑前，必须先阅读 `Documentation/holy-paladin-virtue-implementation.md`。
+- 现役吸奶盾入口是兼容桥复刻 DiGua 的实时姓名板条件并调用 `ObserveAOEDiGuaBar(132334, 11.7, "准备吸奶盾", unit)`；不得改回钩取兼容桥自身 `addonTable.CustomEncounterBar` 的无效方案。
+- 必须保持 `11.7 秒倒计时 -> 再等待 2 秒 -> 类型 2/阶段 3 -> 模块规则 3 -> WoW 动作确认` 的链路。普通 AOE 仍走真实读条，不得与吸奶盾一并改成倒计时提交。
+- 修改该链路时不得顺带调整其他技能优先级；必须运行生产 Lua 回放和契约测试，并以实战日志中的美德最终确认作为游戏内验收依据。

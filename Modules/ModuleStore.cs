@@ -22,6 +22,7 @@ public sealed class ModuleDefinition
     public ModuleMatch Match { get; set; } = new();
     public List<ModuleUnit> Units { get; set; } = new();
     public List<ModuleCountField> Counts { get; set; } = new();
+    public List<ModuleDerivedState> DerivedStates { get; set; } = new();
     public List<ModuleValueAdjustment> ValueAdjustments { get; set; } = new();
     public List<ModuleRule> Rules { get; set; } = new();
     public ModuleDependencySnapshot? Dependencies { get; set; }
@@ -44,6 +45,7 @@ public sealed class ModuleDefinition
             Match = Match.Clone(),
             Units = Units.Select(unit => unit.Clone()).ToList(),
             Counts = Counts.Select(count => count.Clone()).ToList(),
+            DerivedStates = DerivedStates.Select(state => state.Clone()).ToList(),
             ValueAdjustments = ValueAdjustments.Select(adjustment => adjustment.Clone()).ToList(),
             Rules = Rules.Select(rule => rule.Clone()).ToList(),
             Dependencies = Dependencies?.Clone()
@@ -494,9 +496,11 @@ public sealed class ModuleStore
         module.Match.PartyType = ModuleMatch.NormalizePartyTypeValue(module.Match.PartyType);
         module.Units ??= new List<ModuleUnit>();
         module.Counts ??= new List<ModuleCountField>();
+        module.DerivedStates ??= new List<ModuleDerivedState>();
         module.ValueAdjustments ??= new List<ModuleValueAdjustment>();
         module.Units.RemoveAll(unit => string.IsNullOrWhiteSpace(unit.Name));
         module.Counts.RemoveAll(count => string.IsNullOrWhiteSpace(count.Name));
+        module.DerivedStates.RemoveAll(state => string.IsNullOrWhiteSpace(state.Name));
         module.ValueAdjustments.RemoveAll(adjustment => string.IsNullOrWhiteSpace(adjustment.Field));
         foreach (var unit in module.Units)
         {
@@ -509,6 +513,13 @@ public sealed class ModuleStore
         {
             count.Name = count.Name.Trim();
             count.HealthThresholdField = string.IsNullOrWhiteSpace(count.HealthThresholdField) ? null : count.HealthThresholdField.Trim();
+        }
+
+        foreach (var state in module.DerivedStates)
+        {
+            state.Name = state.Name.Trim();
+            state.Condition = ClassStateCatalog.NormalizeLegacyStateReferences(state.Condition).Trim();
+            state.HoldMs = Math.Max(0, state.HoldMs);
         }
 
         foreach (var adjustment in module.ValueAdjustments)
@@ -651,13 +662,25 @@ public sealed record ModuleLoadFailure(string FilePath, string ErrorType, string
 
 public static class ModuleLogic
 {
-    public static LogicDecision Run(ModuleDefinition module, GameState state, IKeymapResolver keymap)
+    private static readonly HashSet<string> HolyPowerSpenders = new(StringComparer.Ordinal)
+    {
+        "荣耀圣令",
+        "黎明之光",
+        "正义盾击"
+    };
+
+    public static LogicDecision Run(
+        ModuleDefinition module,
+        GameState state,
+        IKeymapResolver keymap,
+        IReadOnlySet<LogicActionKey>? suppressedActions = null)
     {
         var info = CreateInfo(module, state);
         var unitSlots = ResolveDynamicFields(module, state);
         var failedSpells = keymap.GetCurrentFailedSpells();
         var oneKeySpells = keymap.GetCurrentOneKeySpells();
         var missingBindings = new List<string>();
+        var suppressed = new List<string>();
 
         for (var ruleIndex = 0; ruleIndex < module.Rules.Count; ruleIndex++)
         {
@@ -686,6 +709,10 @@ public static class ModuleLogic
                 if (missingBindings.Count > 0)
                 {
                     info["缺失按键"] = string.Join("；", missingBindings);
+                }
+                if (suppressed.Count > 0)
+                {
+                    info["已跳过确认失败动作"] = string.Join("；", suppressed);
                 }
                 info["命中条件"] = string.IsNullOrWhiteSpace(rule.DescribeCondition()) ? "始终" : rule.DescribeCondition();
                 info["动作技能"] = ModuleSpecialActions.PauseSpell;
@@ -730,6 +757,13 @@ public static class ModuleLogic
                 resolvedUnit = 0;
             }
 
+            if (!string.IsNullOrWhiteSpace(actionSpell)
+                && suppressedActions?.Contains(new LogicActionKey(actionSpell, resolvedUnit.GetValueOrDefault())) == true)
+            {
+                suppressed.Add($"{actionSpell} / 单位 {resolvedUnit.GetValueOrDefault()}");
+                continue;
+            }
+
             var resolvedMacroCondition = rule.MacroCondition;
             var binding = string.IsNullOrWhiteSpace(rule.Hotkey)
                 ? string.IsNullOrWhiteSpace(actionSpell) ? null : keymap.GetBinding(resolvedUnit, actionSpell, resolvedMacroCondition)
@@ -758,6 +792,10 @@ public static class ModuleLogic
             {
                 info["已跳过缺失按键"] = string.Join("；", missingBindings);
             }
+            if (suppressed.Count > 0)
+            {
+                info["已跳过确认失败动作"] = string.Join("；", suppressed);
+            }
 
             var step = BuildStep(module, rule, hotkey, actionSpell);
             info["命中条件"] = string.IsNullOrWhiteSpace(rule.Condition) ? "始终" : rule.Condition;
@@ -776,8 +814,70 @@ public static class ModuleLogic
             {
                 info["目标生命值"] = actionUnit.TryGetValue("生命值", out var health) ? health : 0;
                 info["目标治疗吸收"] = actionUnit.TryGetValue("治疗吸收", out var absorb) ? absorb : 0;
+                if (resolvedUnit == UnitSelector.ResolvePlayerSlot(state))
+                {
+                    info["目标自律"] = state.GetInt("自律");
+                }
+                if (actionUnit.TryGetValue("驱散", out var dispelType))
+                {
+                    info["目标驱散类型"] = dispelType;
+                }
             }
             AddRuleLogInfo(info, rule, ruleIndex, rateLimitKey, hotkey);
+            var observesCooldown = !string.IsNullOrWhiteSpace(actionSpell)
+                && state.Spells.ContainsKey(actionSpell)
+                && ModuleConditionEvaluator.ChecksSpellReady(rule, actionSpell);
+            var cooldownConfirmationSpell = string.IsNullOrWhiteSpace(actionSpell) ? null : actionSpell;
+            var confirmationStateField = !observesCooldown
+                ? null
+                : $"spells.{actionSpell}层数";
+            var confirmationInitialValue = confirmationStateField is not null
+                && ModuleConditionEvaluator.ReferencesField(rule, confirmationStateField)
+                && ModuleConditionEvaluator.TryResolveInt(state, confirmationStateField, out var initialValue)
+                    ? initialValue
+                    : (int?)null;
+            if (confirmationInitialValue is null)
+            {
+                confirmationStateField = null;
+            }
+            var confirmationStateChange = ConfirmationStateChangeKind.Decreased;
+            if (!observesCooldown
+                && string.Equals(actionSpell, "圣光术", StringComparison.Ordinal)
+                && rule.Condition.Contains("auras.圣光灌注层数 > 0", StringComparison.Ordinal)
+                && ModuleConditionEvaluator.TryResolveInt(state, "auras.圣光灌注层数", out var infusionStacks)
+                && infusionStacks > 0)
+            {
+                cooldownConfirmationSpell = actionSpell;
+                confirmationStateField = "auras.圣光灌注层数";
+                confirmationInitialValue = infusionStacks;
+            }
+            if (!observesCooldown
+                && !string.IsNullOrWhiteSpace(actionSpell)
+                && HolyPowerSpenders.Contains(actionSpell))
+            {
+                var divinePurpose = state.GetInt("auras.神圣意志");
+                if (divinePurpose > 0)
+                {
+                    cooldownConfirmationSpell = actionSpell;
+                    confirmationStateField = "auras.神圣意志";
+                    confirmationInitialValue = divinePurpose;
+                    confirmationStateChange = ConfirmationStateChangeKind.Cleared;
+                }
+                else
+                {
+                    var holyPower = state.GetInt("神圣能量");
+                    if (holyPower >= 3)
+                    {
+                        cooldownConfirmationSpell = actionSpell;
+                        confirmationStateField = "神圣能量";
+                        confirmationInitialValue = holyPower;
+                    }
+                }
+            }
+            var playerActionCode = oneKeySpells
+                .Where(entry => string.Equals(entry.Value, actionSpell, StringComparison.Ordinal))
+                .Select(entry => (int?)entry.Key)
+                .FirstOrDefault();
             return new LogicDecision(
                 hotkey,
                 step,
@@ -786,13 +886,22 @@ public static class ModuleLogic
                 rule.DelayMs.GetValueOrDefault(),
                 rateLimitKey,
                 rule.LogicDelayMs.GetValueOrDefault(),
-                binding?.Hotkeys);
+                binding?.Hotkeys,
+                cooldownConfirmationSpell,
+                confirmationStateField,
+                confirmationInitialValue,
+                confirmationStateChange,
+                playerActionCode);
         }
 
         info["命中条件"] = "-";
         if (missingBindings.Count > 0)
         {
             info["缺失按键"] = string.Join("；", missingBindings);
+        }
+        if (suppressed.Count > 0)
+        {
+            info["已跳过确认失败动作"] = string.Join("；", suppressed);
         }
         return new LogicDecision(null, $"{module.Name}: 无匹配规则", info, module.Name);
     }
@@ -809,6 +918,10 @@ public static class ModuleLogic
         info["逻辑延迟"] = rule.LogicDelayMs is > 0 ? $"{rule.LogicDelayMs.Value} ms" : "-";
         info["规则编号"] = ruleIndex + 1;
         info["限流键"] = rateLimitKey;
+        if (!string.IsNullOrWhiteSpace(rule.Comment))
+        {
+            info["优先级说明"] = rule.Comment.Trim();
+        }
     }
 
     // 把模块定义的动态单位/数量各解析一次, 写入当前帧 state.Values 供条件求值与目标解析使用。
@@ -1084,7 +1197,7 @@ public static class ModuleLogic
 
     private static Dictionary<string, object?> CreateInfo(ModuleDefinition module, GameState state)
     {
-        return new Dictionary<string, object?>
+        var info = new Dictionary<string, object?>
         {
             ["模块"] = module.Name,
             ["职业"] = module.Match.ClassId?.ToString() ?? "*",
@@ -1093,7 +1206,37 @@ public static class ModuleLogic
             ["英雄天赋"] = state.GetInt("英雄天赋"),
             ["规则数"] = module.Rules.Count
         };
+
+        var dispellableUnits = state.Group
+            .Where(entry => entry.Value.TryGetValue("职责", out var role)
+                && TryToInt(role, out var roleValue)
+                && roleValue != 0
+                && entry.Value.TryGetValue("驱散", out var dispel)
+                && TryToInt(dispel, out var dispelValue)
+                && dispelValue > 0)
+            .Select(entry =>
+            {
+                TryToInt(entry.Value["驱散"], out var dispelType);
+                return $"{entry.Key}:{DispelTypeLabel(dispelType)}";
+            })
+            .ToArray();
+        if (dispellableUnits.Length > 0)
+        {
+            info["可驱散目标"] = string.Join("；", dispellableUnits);
+        }
+
+        return info;
     }
+
+    private static string DispelTypeLabel(int value) => value switch
+    {
+        1 => "魔法",
+        2 => "诅咒",
+        3 => "疾病",
+        4 => "中毒",
+        11 => "流血",
+        _ => value.ToString(CultureInfo.InvariantCulture)
+    };
 
     private static bool TryToInt(object? value, out int number)
     {
@@ -1154,6 +1297,42 @@ public static class ModuleConditionEvaluator
     private static readonly Regex ComparisonRegex = new(
         @"^\s*(?<field>.+?)\s*(?<op>==|!=|>=|<=|>|<)\s*(?<value>.+?)\s*$",
         RegexOptions.Compiled);
+
+    public static bool ChecksSpellReady(ModuleRule rule, string spell)
+    {
+        var expectedField = $"spells.{spell.Trim()}";
+        return EnumerateExpressions(rule).Any(expression =>
+            Regex.Split(expression, @"\s*(?:&&|\|\|)\s*").Any(term =>
+            {
+                var match = ComparisonRegex.Match(term);
+                return match.Success
+                    && string.Equals(match.Groups["field"].Value.Trim(), expectedField, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(match.Groups["op"].Value, "==", StringComparison.Ordinal)
+                    && int.TryParse(match.Groups["value"].Value.Trim(), NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var value)
+                    && value == 0;
+            }));
+    }
+
+    public static bool ReferencesField(ModuleRule rule, string field)
+    {
+        return EnumerateExpressions(rule).Any(expression =>
+            Regex.Split(expression, @"\s*(?:&&|\|\|)\s*").Any(term =>
+            {
+                var match = ComparisonRegex.Match(term);
+                return match.Success
+                    && string.Equals(match.Groups["field"].Value.Trim(), field, StringComparison.OrdinalIgnoreCase);
+            }));
+    }
+
+    private static IEnumerable<string> EnumerateExpressions(ModuleRule rule)
+    {
+        yield return rule.Condition;
+        foreach (var subCondition in rule.SubConditions ?? [])
+        {
+            yield return subCondition;
+        }
+    }
 
     public static bool TryEvaluate(
         string? expression,
@@ -1345,6 +1524,13 @@ public static class ModuleConditionEvaluator
             }
 
             return null;
+        }
+
+        if (state.Values.TryGetValue("$derived", out var derivedObj)
+            && derivedObj is IReadOnlyDictionary<string, int> derived
+            && derived.TryGetValue(key, out var derivedValue))
+        {
+            return derivedValue;
         }
 
         // 数量字段(整名匹配): 如 低血量人数。

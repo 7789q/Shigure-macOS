@@ -6,6 +6,13 @@ local bindingOwner = CreateFrame("Frame")
 local routeRouter
 local routeTargets = {}
 local SELECTOR_TARGET_ROUTING = "selector-target-v1"
+
+local function publishMacroStatus(status, count)
+    Fuyutsui.state.macroBindingStatus = status
+    Fuyutsui.state.macroBindingCount = count or 0
+    Fuyutsui:UpdateStateBlock("状态", "宏绑定状态")
+    Fuyutsui:UpdateStateBlock("状态", "宏绑定数量")
+end
 local modifiers = {
     "CTRL", "ALT", "SHIFT",
     "ALT-CTRL", "ALT-SHIFT", "CTRL-SHIFT",
@@ -40,6 +47,8 @@ local function createAction(name, macro)
     if not btn then
         btn = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
         btn:SetAttribute("type", "macro")
+        -- WoW may dispatch SetOverrideBindingClick on either keyboard edge.
+        -- Keep both edges registered because the desktop client posts down/up.
         btn:RegisterForClicks("AnyUp", "AnyDown")
         macroList[name] = btn
     end
@@ -79,9 +88,12 @@ end
 local function buildTankTargetMacro(spell)
     local tankUnit = findTankUnit()
     if not tankUnit then
-        return format("/cast [@none,harm,nodead]%s", spell)
+        return format("/cast [@targettarget,harm,nodead][harm,nodead]%s", spell)
     end
-    return format("/cast [@%starget,harm,nodead]%s", tankUnit, spell)
+    return format(
+        "/cast [@%starget,harm,nodead][@targettarget,harm,nodead][harm,nodead]%s",
+        tankUnit,
+        spell)
 end
 
 -- 解析法术名/宏体：优先查 MacroBodies；以 / 开头则原样使用；否则加 /cast
@@ -194,6 +206,7 @@ end
 
 function Fuyutsui:CreateMacro(dynamicData, staticData, specialData, keyOffset, routingMode)
     if InCombatLockdown() then
+        publishMacroStatus(2, 0)
         return false
     end
 
@@ -202,6 +215,7 @@ function Fuyutsui:CreateMacro(dynamicData, staticData, specialData, keyOffset, r
     specialData = specialData or {}
 
     if not self:ClearMacros() then
+        publishMacroStatus(3, 0)
         return false
     end
 
@@ -239,5 +253,16 @@ function Fuyutsui:CreateMacro(dynamicData, staticData, specialData, keyOffset, r
         nextSlot(resolveMacroBody(spell))
     end
 
+    local dynamicSlots = routingMode == SELECTOR_TARGET_ROUTING
+        and (#dynamicData > 0 and (#dynamicData + 30) or 0)
+        or (#dynamicData * 30)
+    local staticSlots = 0
+    for _, spell in ipairs(staticData) do
+        if spell and spell ~= "" then staticSlots = staticSlots + 1 end
+    end
+    for _, spell in ipairs(specialData) do
+        if spell and spell ~= "" then staticSlots = staticSlots + 1 end
+    end
+    publishMacroStatus(1, dynamicSlots + staticSlots)
     return true
 end

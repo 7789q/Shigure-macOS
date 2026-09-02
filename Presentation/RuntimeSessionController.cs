@@ -28,6 +28,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
     private readonly TimeProvider _timeProvider;
     private readonly Func<IDisposable?>? _runtimeLeaseFactory;
     private readonly HealAbsorbLogTracker _healAbsorbLogTracker = new();
+    private readonly AoeWarningLogTracker _aoeWarningLogTracker = new();
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly object _stateSync = new();
     private RuntimeSessionStatus _status = new(
@@ -46,6 +47,8 @@ public sealed class RuntimeSessionController : IAsyncDisposable
     private string? _lastLoggedClass;
     private string? _lastLoggedModule;
     private bool? _lastLoggedEnabled;
+    private int? _lastLoggedMacroBindingStatus;
+    private int? _lastLoggedMacroBindingCount;
 
     public RuntimeSessionController(
         RuntimeSessionCoordinator coordinator,
@@ -384,6 +387,19 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             AddLog($"识别职业：{classSpec}");
         }
 
+        if (snapshot.ClassId == 2 && snapshot.SpecId == 1 && snapshot.State is not null)
+        {
+            var macroStatus = snapshot.State.GetInt("宏绑定状态");
+            var macroCount = snapshot.State.GetInt("宏绑定数量");
+            if (macroStatus != _lastLoggedMacroBindingStatus
+                || macroCount != _lastLoggedMacroBindingCount)
+            {
+                _lastLoggedMacroBindingStatus = macroStatus;
+                _lastLoggedMacroBindingCount = macroCount;
+                AddLog($"WoW宏绑定：{DescribeMacroBindingStatus(macroStatus)}，数量 {macroCount}");
+            }
+        }
+
         if (_lastLoggedEnabled != snapshot.Enabled)
         {
             _lastLoggedEnabled = snapshot.Enabled;
@@ -403,6 +419,27 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         if (healAbsorbLog is not null)
         {
             AddLog(healAbsorbLog);
+        }
+
+        var aoeDiagnosticsReady = string.IsNullOrWhiteSpace(snapshot.ScanFailureReason)
+            && snapshot.State is not null
+            && snapshot.State.GetInt("有效性") == 1
+            && (snapshot.ClassId != 2 || snapshot.SpecId != 1 || snapshot.State.GetBool("DiGua桥接就绪"));
+        if (!aoeDiagnosticsReady)
+        {
+            _aoeWarningLogTracker.ResetDiagnosticBaseline();
+        }
+        foreach (var diagnosticLog in aoeDiagnosticsReady
+                     ? _aoeWarningLogTracker.ObserveDiagnostics(snapshot.State)
+                     : [])
+        {
+            AddLog(diagnosticLog);
+        }
+
+        var aoeWarningLog = _aoeWarningLogTracker.Observe(snapshot.State);
+        if (aoeWarningLog is not null)
+        {
+            AddLog(aoeWarningLog);
         }
 
         if (string.IsNullOrWhiteSpace(snapshot.CurrentStep))
@@ -427,6 +464,9 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             ("动作单位", "目标"),
             ("目标生命值", "目标生命"),
             ("目标治疗吸收", "目标吸收"),
+            ("目标自律", "目标自律"),
+            ("目标驱散类型", "目标驱散"),
+            ("可驱散目标", "可驱散目标"),
             ("自身生命值", "自身生命"),
             ("安全确认", "安全确认"),
             ("确认帧", "确认帧"),
@@ -434,8 +474,23 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             ("动作延迟", "动作延迟"),
             ("逻辑延迟", "逻辑延迟"),
             ("规则编号", "规则编号"),
+            ("优先级说明", "优先级说明"),
             ("限流键", "限流键"),
+            ("冷却确认", "冷却确认"),
+            ("确认来源", "确认来源"),
+            ("确认状态字段", "确认状态字段"),
+            ("确认初始值", "确认初始值"),
+            ("确认当前值", "确认当前值"),
+            ("技能冷却", "技能冷却"),
+            ("玩家动作序号", "动作序号"),
+            ("玩家动作技能", "动作技能码"),
+            ("玩家动作状态", "动作状态码"),
+            ("玩家动作状态说明", "动作状态说明"),
+            ("期待动作技能码", "期待动作技能码"),
+            ("公共冷却剩余", "公共冷却剩余"),
+            ("发送序列", "发送序列"),
             ("发送结果", "发送结果"),
+            ("发送结果说明", "发送结果说明"),
             ("发送失败", "发送失败")
         };
         var details = new List<string>();
@@ -458,8 +513,19 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         _lastLoggedClass = null;
         _lastLoggedModule = null;
         _lastLoggedEnabled = null;
+        _lastLoggedMacroBindingStatus = null;
+        _lastLoggedMacroBindingCount = null;
         _healAbsorbLogTracker.Reset();
+        _aoeWarningLogTracker.Reset();
     }
+
+    private static string DescribeMacroBindingStatus(int status) => status switch
+    {
+        1 => "已就绪",
+        2 => "战斗锁定，等待脱战重建",
+        3 => "创建失败",
+        _ => "未初始化"
+    };
 
     private void EnsureRuntimeLease()
     {

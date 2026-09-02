@@ -1,0 +1,135 @@
+{
+  "Id": "shigure-holy-paladin-virtue-12-1",
+  "Name": "烈日奶骑大秘境-美德爆发 12.1",
+  "Author": "Shigure",
+  "RecommendedTalent": "CEEAzbn3egSOtoSwvPw1U1vTLAAAALAwMAAD2GzMzMjZmZBmZYZsZmFjmYYMzMMmtMAMAsB2YZmZmlZbmZ2aAAAAWAGsZgZMDzAAYmhZMGNA",
+  "Version": "1.2.1.10",
+  "UnitMappingVersion": 3,
+  "Enabled": true,
+  "Match": {
+    "ClassId": 2,
+    "SpecId": 1
+  },
+  "Units": [
+    {
+      "Name": "治疗目标",
+      "HealthName": "治疗目标血量",
+      "Kind": "HighestHealingDeficit",
+      "HealthThreshold": 0
+    },
+    {
+      "Name": "驱散目标",
+      "Kind": "UnitWithDispelType",
+      "DispelType": 1
+    }
+  ],
+  "Counts": [
+    {
+      "Name": "D10AtLeast",
+      "Kind": "UnitsAtOrAboveHealingDeficit",
+      "HealthThreshold": 10
+    },
+    {
+      "Name": "DTotal",
+      "Kind": "TotalHealingDeficit"
+    },
+    {
+      "Name": "H51",
+      "Kind": "UnitsBelowHealth",
+      "HealthThreshold": 51
+    }
+  ],
+  "DerivedStates": [
+    {
+      "Enabled": true,
+      "Name": "群疗爆发保持",
+      "Condition": "D10AtLeast >= 4 && DTotal >= 60 || H51 >= 3",
+      "HoldMs": 6000
+    }
+  ],
+  "Rules": [
+    {
+      "Enabled": true,
+      "Condition": "引导 > 0",
+      "Spell": "暂停",
+      "Comment": "引导期间不发送新的动作"
+    },
+    {
+      "Enabled": true,
+      "Condition": "AOE事件阶段 == 2 && spells.美德道标 == 0 && auras.美德道标 == 0",
+      "Unit": 1,
+      "Spell": "美德道标",
+      "Comment": "可信 AOE 读条的最后一秒预铺美德"
+    },
+    {
+      "Enabled": true,
+      "Condition": "群疗爆发保持 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0",
+      "Unit": 1,
+      "Spell": "美德道标",
+      "Comment": "真实群体缺口开启美德"
+    },
+    {
+      "Enabled": true,
+      "Condition": "群疗爆发保持 > 0 && auras.美德道标 > 0",
+      "SubConditions": [
+        "神圣能量 >= 3",
+        "auras.神圣意志 > 0"
+      ],
+      "UnitName": "治疗目标",
+      "Spell": "荣耀圣令",
+      "Comment": "美德后先消耗已有圣能"
+    },
+    {
+      "Enabled": true,
+      "Condition": "群疗爆发保持 > 0 && auras.美德道标 > 0 && spells.圣洁鸣钟 == 0",
+      "Unit": 0,
+      "Spell": "圣洁鸣钟",
+      "Comment": "美德窗口内使用圣洁鸣钟"
+    },
+    {
+      "Enabled": true,
+      "Condition": "AOE事件阶段 == 3 && DTotal == 0 || AOE事件阶段 == 5 && DTotal == 0",
+      "Spell": "暂停",
+      "Comment": "等待吸收或保留最后一个公共冷却"
+    },
+    {
+      "Enabled": true,
+      "Condition": "spells.清洁术 == 0",
+      "UnitName": "驱散目标",
+      "Spell": "清洁术",
+      "DelayMs": 1000,
+      "Comment": "驱散可处理的队伍减益"
+    },
+    {
+      "Enabled": true,
+      "Condition": "治疗目标",
+      "SubConditions": [
+        "神圣能量 >= 3",
+        "auras.神圣意志 > 0"
+      ],
+      "UnitName": "治疗目标",
+      "Spell": "荣耀圣令",
+      "Comment": "统一单抬并处理治疗吸收"
+    },
+    {
+      "Enabled": true,
+      "Condition": "治疗目标 && 战斗时间 > 0 && spells.审判 == 0",
+      "Unit": 0,
+      "Spell": "审判",
+      "Comment": "无高优先级治疗时使用审判填充"
+    },
+    {
+      "Enabled": true,
+      "Condition": "治疗目标 && 移动 == false",
+      "UnitName": "治疗目标",
+      "Spell": "圣光术",
+      "Comment": "未移动时用圣光术兜底"
+    },
+    {
+      "Enabled": true,
+      "Condition": "",
+      "Spell": "暂停",
+      "Comment": "没有有效动作时保持静默"
+    }
+  ]
+}

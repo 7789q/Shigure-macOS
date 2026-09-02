@@ -254,7 +254,6 @@ end
 function Fuyutsui:AddNameplate(unit)
     local minRange, maxRange = self:GetUnitRange(unit)
     nameplate[unit] = {
-        name = GetUnitName(unit, true),
         GUID = UnitGUID(unit),
         canAttack = UnitCanAttack("player", unit),
         canAssist = UnitCanAssist("player", unit),

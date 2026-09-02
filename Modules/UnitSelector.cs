@@ -12,6 +12,12 @@ public static class UnitSelector
 {
     private const int DefaultThreshold = 100;
 
+    public static int ResolvePlayerSlot(GameState state)
+    {
+        var groupType = state.GetInt("队伍类型");
+        return groupType == 46 ? 1 : groupType is >= 1 and <= 30 ? groupType : 1;
+    }
+
     /// <summary>解析动态单位为 group 槽位("1".."30"), 无匹配返回 null。</summary>
     public static string? Resolve(ModuleUnit unit, GameState state)
     {
@@ -70,6 +76,7 @@ public static class UnitSelector
             UnitSelectorKind.UnitWithDispelType => unit.DispelType is null
                 ? null
                 : UnitWithDispelType(group, unit.DispelType.Value),
+            UnitSelectorKind.UnitWithAnyDispelType => UnitWithAnyDispelType(group),
             UnitSelectorKind.HighestHealingAbsorb => HighestHealingAbsorb(group, threshold, _ => true),
             UnitSelectorKind.HighestHealingAbsorbWithAnyAura => unit.AuraNames is { Count: > 0 } names
                 ? HighestHealingAbsorb(group, threshold, data => HasAnyAura(data, names))
@@ -137,6 +144,11 @@ public static class UnitSelector
             CountKind.UnitsAboveHealingDeficit => CountUnits(
                 group,
                 data => TryHealingDeficit(data, out var deficit) && deficit > threshold),
+            CountKind.UnitsAtOrAboveHealingDeficit => CountUnits(
+                group,
+                data => TryHealingLoad(data, out var load) && load >= threshold),
+            CountKind.TotalHealingDeficit => SumHealingLoad(group),
+            CountKind.TotalHealthDeficit => SumHealthDeficit(group),
             _ => 0
         };
     }
@@ -265,6 +277,27 @@ public static class UnitSelector
         return null;
     }
 
+    /// <summary>取拥有任意已解码可驱散类型的首个单位。</summary>
+    private static string? UnitWithAnyDispelType(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group)
+    {
+        for (var i = 1; i <= 30; i++)
+        {
+            var key = i.ToString();
+            if (!group.TryGetValue(key, out var data) || !RoleNotZero(data))
+            {
+                continue;
+            }
+
+            if (TryInt(GetField(data, "驱散"), out var val) && val > 0)
+            {
+                return key;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// 在可用且满足 predicate 的单位里，取治疗吸收 &gt; 阈值的最高单位；
     /// 没有符合阈值的单位时返回 null。
@@ -370,36 +403,119 @@ public static class UnitSelector
         return true;
     }
 
+    private static bool TryHealingLoad(
+        IReadOnlyDictionary<string, object?> data,
+        out int load)
+    {
+        if (!TryHealingDeficit(data, out var deficit))
+        {
+            load = 0;
+            return false;
+        }
+
+        load = Math.Min(100, deficit);
+        return true;
+    }
+
+    private static int SumHealingLoad(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group)
+    {
+        var total = 0;
+        for (var i = 1; i <= 30; i++)
+        {
+            if (group.TryGetValue(i.ToString(), out var data)
+                && RoleNotZero(data)
+                && TryHealingLoad(data, out var load))
+            {
+                total += load;
+            }
+        }
+
+        return total;
+    }
+
+    private static int SumHealthDeficit(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group)
+    {
+        var total = 0;
+        for (var i = 1; i <= 30; i++)
+        {
+            if (group.TryGetValue(i.ToString(), out var data)
+                && RoleNotZero(data)
+                && TryInt(GetField(data, "生命值"), out var health)
+                && health > 0)
+            {
+                total += Math.Max(0, 100 - health);
+            }
+        }
+
+        return total;
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> ReconcilePlayerHealth(
         GameState state)
     {
         var playerHealth = state.GetInt("生命值");
-        var groupType = state.GetInt("队伍类型");
-        var playerSlot = groupType == 46 ? 1 : groupType is >= 1 and <= 30 ? groupType : 1;
+        var playerForbearance = state.GetInt("自律");
+        var playerSlot = ResolvePlayerSlot(state);
         var key = playerSlot.ToString();
-        if (playerHealth <= 0
-            || !state.Group.TryGetValue(key, out var playerData)
-            || !TryInt(GetField(playerData, "生命值"), out var groupHealth))
+
+        Dictionary<string, IReadOnlyDictionary<string, object?>>? reconciled = null;
+        foreach (var (slot, data) in state.Group)
         {
-            return state.Group;
+            if (slot == key || !data.ContainsKey("自律"))
+            {
+                continue;
+            }
+
+            reconciled ??= state.Group.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            var sanitized = data.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            sanitized.Remove("自律");
+            reconciled[slot] = sanitized;
         }
 
-        var reconciledHealth = groupHealth <= 0 ? playerHealth : Math.Min(groupHealth, playerHealth);
-        var playerRoleAvailable = !TryInt(GetField(playerData, "职责"), out var playerRole) || playerRole != 0;
-        if (reconciledHealth == groupHealth && playerRoleAvailable)
+        if (!state.Group.TryGetValue(key, out var playerData))
         {
-            return state.Group;
+            return reconciled ?? state.Group;
         }
 
-        var group = state.Group.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        var correctedPlayer = playerData.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        correctedPlayer["生命值"] = reconciledHealth;
-        if (!playerRoleAvailable)
+        var correctedPlayer = (Dictionary<string, object?>?)null;
+        if (playerHealth > 0
+            && TryInt(GetField(playerData, "生命值"), out var groupHealth))
         {
-            correctedPlayer["职责"] = 5;
+            var correctedHealth = groupHealth <= 0 ? playerHealth : Math.Min(groupHealth, playerHealth);
+            var playerRoleAvailable = !TryInt(GetField(playerData, "职责"), out var playerRole) || playerRole != 0;
+            if (correctedHealth != groupHealth || !playerRoleAvailable)
+            {
+                correctedPlayer = playerData.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+                correctedPlayer["生命值"] = correctedHealth;
+                if (!playerRoleAvailable)
+                {
+                    correctedPlayer["职责"] = 5;
+                }
+            }
         }
-        group[key] = correctedPlayer;
-        return group;
+
+        if (playerData.ContainsKey("自律") || playerForbearance > 0)
+        {
+            correctedPlayer ??= playerData.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            if (playerForbearance > 0)
+            {
+                correctedPlayer["自律"] = playerForbearance;
+            }
+            else
+            {
+                correctedPlayer.Remove("自律");
+            }
+        }
+
+        if (correctedPlayer is not null)
+        {
+            reconciled ??= state.Group.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            reconciled[key] = correctedPlayer;
+        }
+
+        return reconciled ?? state.Group;
     }
 
     private static int ResolveThreshold(
@@ -427,7 +543,10 @@ public static class UnitSelector
         => kind is CountKind.UnitsAboveHealingAbsorb
             or CountKind.UnitsWithoutAuraAboveHealingAbsorb
             or CountKind.UnitsWithAuraAboveHealingAbsorb
-            or CountKind.UnitsAboveHealingDeficit;
+            or CountKind.UnitsAboveHealingDeficit
+            or CountKind.UnitsAtOrAboveHealingDeficit
+            or CountKind.TotalHealingDeficit
+            or CountKind.TotalHealthDeficit;
 
     private static bool AuraEquals(IReadOnlyDictionary<string, object?> data, string auraName, int target)
     {

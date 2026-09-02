@@ -22,7 +22,9 @@
     <string>$(ShigureBundleVersion)</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Shigure 需要读取游戏窗口画面，用于识别状态并执行技能触发。</string>
 </dict>
 </plist>

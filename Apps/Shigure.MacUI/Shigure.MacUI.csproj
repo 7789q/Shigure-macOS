@@ -23,10 +23,12 @@
 
   <ItemGroup>
     <AvaloniaResource Include="..\..\Assets\arasaka-icon.ico" Link="Assets\arasaka-icon.ico" />
+    <None Include="..\..\BundledModules\*.json" Link="bundled-modules\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\config\*.json" Link="config\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\keymap\*.json" Link="keymap\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\wow_process.txt" Link="wow_process.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\Fuyutsui\**\*" Link="Fuyutsui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\FuyutsuiDiGuaBridge\**\*" Link="FuyutsuiDiGuaBridge\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

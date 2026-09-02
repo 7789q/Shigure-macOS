@@ -5,23 +5,26 @@ public interface IClassLogic
     LogicDecision Run(GameState state, string? specName);
 }
 
-public sealed class LogicRegistry : IRuntimeLogic
+public sealed class LogicRegistry : IRuntimeLogic, IActionSuppressionAwareRuntimeLogic
 {
     private readonly Dictionary<int, IClassLogic> _logicByClass;
     private readonly IClassLogic _defaultLogic;
     private readonly IKeymapResolver _keymap;
     private readonly ModuleStore _moduleStore;
     private readonly string? _selectedModuleId;
+    private readonly ModuleDerivedStateTracker _derivedStateTracker;
 
     public LogicRegistry(
         IKeymapResolver keymap,
         ModuleStore moduleStore,
         string? selectedModuleId,
-        IEnumerable<KeyValuePair<int, IClassLogic>>? classLogics = null)
+        IEnumerable<KeyValuePair<int, IClassLogic>>? classLogics = null,
+        TimeProvider? timeProvider = null)
     {
         _keymap = keymap;
         _moduleStore = moduleStore;
         _selectedModuleId = string.IsNullOrWhiteSpace(selectedModuleId) ? null : selectedModuleId.Trim();
+        _derivedStateTracker = new ModuleDerivedStateTracker(timeProvider ?? TimeProvider.System);
         _defaultLogic = new DefaultClassLogic(keymap);
         _logicByClass = classLogics?.ToDictionary(pair => pair.Key, pair => pair.Value) ?? new();
     }
@@ -31,17 +34,28 @@ public sealed class LogicRegistry : IRuntimeLogic
         int? specId,
         string? specName,
         GameState state,
-        bool runLogic)
+        bool runLogic) => Evaluate(classId, specId, specName, state, runLogic, EmptySuppressedActions);
+
+    public LogicEvaluation Evaluate(
+        int? classId,
+        int? specId,
+        string? specName,
+        GameState state,
+        bool runLogic,
+        IReadOnlySet<LogicActionKey> suppressedActions)
     {
         _keymap.SelectForClass(classId, specId);
         var module = FindModule(classId, specId, state);
         if (module is not null)
         {
             ModuleLogic.ResolveDynamicFields(module, state);
+            _derivedStateTracker.Apply(module, state, runLogic);
             return new LogicEvaluation(
                 module.Name,
-                runLogic ? ModuleLogic.Run(module, state, _keymap) : null);
+                runLogic ? ModuleLogic.Run(module, state, _keymap, suppressedActions) : null);
         }
+
+        _derivedStateTracker.Reset();
 
         if (!runLogic)
         {
@@ -55,6 +69,8 @@ public sealed class LogicRegistry : IRuntimeLogic
 
         return new LogicEvaluation(null, _defaultLogic.Run(state, specName));
     }
+
+    private static readonly IReadOnlySet<LogicActionKey> EmptySuppressedActions = new HashSet<LogicActionKey>();
 
     private ModuleDefinition? FindModule(int? classId, int? specId, GameState state)
     {

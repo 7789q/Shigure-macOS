@@ -11,7 +11,42 @@ public sealed class RuntimeResourceWorkspaceService
 
     private const long MaximumManifestBytes = 4 * 1024 * 1024;
     private static readonly string[] ManagedDirectories = ["Fuyutsui", "config", "keymap"];
+    private static readonly string[] OptionalManagedDirectories = ["FuyutsuiDiGuaBridge"];
     private static readonly string[] ManagedFiles = ["wow_process.txt"];
+    private static readonly string[] HolyPaladinRuntimeStates =
+    [
+        "公共冷却剩余",
+        "DiGua桥接就绪",
+        "宏绑定状态",
+        "宏绑定数量",
+        "玩家动作序号",
+        "玩家动作技能",
+        "玩家动作状态",
+        "AOE桥接请求数",
+        "AOE桥接成功数",
+        "AOE带技能预警数",
+        "AOE敌方读条数",
+        "AOE读条未采纳数",
+        "AOE读条匹配数",
+        "AOE读条未匹配数",
+        "AOE读条成功数",
+        "AOE读条失败数",
+        "AOE预警技能低位",
+        "AOE预警技能中位",
+        "AOE预警技能高位",
+        "AOE读条技能低位",
+        "AOE读条技能中位",
+        "AOE读条技能高位"
+    ];
+    private static readonly (long SpellId, int Index, string Name)[] HolyPaladinActionSpells =
+    [
+        (275773, 10, "审判"),
+        (20473, 34, "神圣震击"),
+        (4987, 35, "清洁术"),
+        (85673, 36, "荣耀圣令"),
+        (156322, 36, "荣耀圣令"),
+        (85222, 37, "黎明之光")
+    ];
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -93,6 +128,9 @@ public sealed class RuntimeResourceWorkspaceService
         }
 
         var migrated = MigrateLegacyCastStates(workspaceRoot);
+        var regenerated = RegenerateDerivedResources(workspaceRoot);
+        var generatedPaths = regenerated.GeneratedFiles.ToHashSet(StringComparer.Ordinal);
+        conflicts.RemoveAll(generatedPaths.Contains);
 
         var manifest = new RuntimeResourceManifest
         {
@@ -111,7 +149,8 @@ public sealed class RuntimeResourceWorkspaceService
             updated,
             skipped,
             conflicts,
-            migrated);
+            migrated,
+            regenerated.ChangedFiles);
     }
 
     private static IReadOnlyList<string> MigrateLegacyCastStates(string workspaceRoot)
@@ -137,6 +176,38 @@ public sealed class RuntimeResourceWorkspaceService
                 }
             }
 
+            if (string.Equals(Path.GetFileName(classPath), "Paladin.lua", StringComparison.OrdinalIgnoreCase)
+                && document.Specs.TryGetValue(1, out var holySpec))
+            {
+                var states = holySpec.NestedStates
+                    ? holySpec.CategorizedStates[ClassStateCatalog.CategoryState]
+                    : holySpec.FlatStates;
+                foreach (var stateName in HolyPaladinRuntimeStates)
+                {
+                    if (!states.Contains(stateName, StringComparer.Ordinal))
+                    {
+                        states.Add(stateName);
+                        changed = true;
+                    }
+                }
+
+                foreach (var actionSpell in HolyPaladinActionSpells)
+                {
+                    if (document.SpellsList.Any(entry => entry.SpellId == actionSpell.SpellId))
+                    {
+                        continue;
+                    }
+
+                    document.SpellsList.Add(new ClassBlocksStore.SpellsListEntry
+                    {
+                        SpellId = actionSpell.SpellId,
+                        Index = actionSpell.Index,
+                        Name = actionSpell.Name
+                    });
+                    changed = true;
+                }
+            }
+
             if (!changed)
             {
                 continue;
@@ -146,16 +217,64 @@ public sealed class RuntimeResourceWorkspaceService
             migrated.Add(NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, classPath)));
         }
 
-        if (migrated.Count == 0)
+
+        var classMacrosPath = Path.Combine(workspaceRoot, "Fuyutsui", "core", "classmacros.lua");
+        if (File.Exists(classMacrosPath))
         {
-            return migrated;
+            var macros = ClassMacrosStore.Load(classMacrosPath);
+            if (macros.Classes.TryGetValue("PALADIN", out var paladinMacros))
+            {
+                var shield = paladinMacros.StaticSpells.FirstOrDefault(entry =>
+                    string.Equals(entry.Text, "正义盾击", StringComparison.Ordinal));
+                if (shield is not null)
+                {
+                    shield.Text = "[@tanktarget]正义盾击";
+                    ClassMacrosStore.Save(macros);
+                    migrated.Add(NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, classMacrosPath)));
+                }
+            }
         }
 
-        var configDirectory = Path.Combine(workspaceRoot, "config");
-        var config = FuyutsuiConfigConverter.UpdateFromClassDirectory(classDirectory, configDirectory);
-        migrated.AddRange(config.UpdatedFiles.Select(path =>
-            NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, path))));
         return migrated.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static DerivedResourceGenerationResult RegenerateDerivedResources(string workspaceRoot)
+    {
+        var beforeHashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var directoryName in new[] { "config", "keymap" })
+        {
+            var directory = Path.Combine(workspaceRoot, directoryName);
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            foreach (var path in Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                beforeHashes[NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, path))] = ComputeSha256(path);
+            }
+        }
+
+        var config = FuyutsuiConfigConverter.UpdateFromClassDirectory(
+            Path.Combine(workspaceRoot, "Fuyutsui", "class"),
+            Path.Combine(workspaceRoot, "config"));
+        var keymap = FuyutsuiKeymapConverter.UpdateFromClassMacros(
+            Path.Combine(workspaceRoot, "Fuyutsui", "core", "classmacros.lua"),
+            Path.Combine(workspaceRoot, "keymap"));
+        var generatedFiles = config.UpdatedFiles
+            .Concat(keymap.UpdatedFiles)
+            .Select(path => NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, path)))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var changedFiles = generatedFiles
+            .Where(relativePath => !beforeHashes.TryGetValue(relativePath, out var beforeHash)
+                || !string.Equals(
+                    beforeHash,
+                    ComputeSha256(Path.Combine(workspaceRoot, relativePath)),
+                    StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        return new DerivedResourceGenerationResult(generatedFiles, changedFiles);
     }
 
     private static IReadOnlyList<ManagedSourceFile> EnumerateManagedFiles(string sourceRoot)
@@ -170,6 +289,15 @@ public sealed class RuntimeResourceWorkspaceService
             }
 
             EnumerateDirectory(sourceRoot, directoryPath, files);
+        }
+
+        foreach (var directoryName in OptionalManagedDirectories)
+        {
+            var directoryPath = Path.Combine(sourceRoot, directoryName);
+            if (Directory.Exists(directoryPath))
+            {
+                EnumerateDirectory(sourceRoot, directoryPath, files);
+            }
         }
 
         foreach (var fileName in ManagedFiles)
@@ -286,7 +414,7 @@ public sealed class RuntimeResourceWorkspaceService
             return true;
         }
 
-        return ManagedDirectories.Any(directory =>
+        return ManagedDirectories.Concat(OptionalManagedDirectories).Any(directory =>
             relativePath.StartsWith(directory + "/", StringComparison.Ordinal));
     }
 
@@ -408,6 +536,10 @@ public sealed class RuntimeResourceWorkspaceService
 
     private sealed record ManagedSourceFile(string RelativePath, string SourcePath);
 
+    private sealed record DerivedResourceGenerationResult(
+        IReadOnlyList<string> GeneratedFiles,
+        IReadOnlyList<string> ChangedFiles);
+
     private sealed class RuntimeResourceManifest
     {
         public int FormatVersion { get; init; }
@@ -423,7 +555,8 @@ public sealed record RuntimeResourceWorkspaceResult(
     IReadOnlyList<string> UpdatedFiles,
     IReadOnlyList<string> SkippedFiles,
     IReadOnlyList<string> ConflictingFiles,
-    IReadOnlyList<string> MigratedFiles)
+    IReadOnlyList<string> MigratedFiles,
+    IReadOnlyList<string> RegeneratedFiles)
 {
     private static readonly HashSet<string> NonProtocolCoreFiles = new(StringComparer.Ordinal)
     {

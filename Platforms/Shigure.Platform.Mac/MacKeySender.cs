@@ -83,7 +83,7 @@ public sealed class MacKeySender : ITargetKeyOutput
             return Fail(KeySendFailureKind.TargetChanged, "目标窗口已切换，等待重新扫描后再发送按键");
         }
 
-        if (_frontmostApplication.GetProcessId() != target.Identity.ProcessId)
+        if (!MacFrontmostApplication.IsTarget(target, _frontmostApplication.GetProcessId()))
         {
             return Fail(KeySendFailureKind.TargetChanged, "目标窗口不在前台，已停止发送按键");
         }
@@ -234,10 +234,10 @@ internal interface IMacFrontmostApplicationProvider
     int? GetProcessId();
 }
 
-[SupportedOSPlatform("macos")]
-internal sealed class MacFrontmostApplicationProvider : IMacFrontmostApplicationProvider
+public static class MacFrontmostApplication
 {
-    public int? GetProcessId()
+    [SupportedOSPlatform("macos")]
+    public static int? GetProcessId()
     {
         var workspaceClass = MacApplicationInterop.objc_getClass("NSWorkspace");
         if (workspaceClass == 0)
@@ -261,6 +261,21 @@ internal sealed class MacFrontmostApplicationProvider : IMacFrontmostApplication
             MacApplicationInterop.sel_registerName("processIdentifier"));
         return processId > 0 ? processId : null;
     }
+
+    public static bool IsTarget(TargetWindow? target) =>
+        OperatingSystem.IsMacOS() && IsTarget(target, GetProcessId());
+
+    internal static bool IsTarget(TargetWindow? target, int? frontmostProcessId) =>
+        target is not null
+        && target.Identity.IsValid
+        && target.Identity.Platform == TargetPlatforms.MacOS
+        && target.Identity.ProcessId == frontmostProcessId;
+}
+
+[SupportedOSPlatform("macos")]
+internal sealed class MacFrontmostApplicationProvider : IMacFrontmostApplicationProvider
+{
+    public int? GetProcessId() => MacFrontmostApplication.GetProcessId();
 }
 
 [SupportedOSPlatform("macos")]

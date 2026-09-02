@@ -20,7 +20,7 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 - 长时间运行日志使用虚拟化逐行显示，保留最近 2000 行及完整复制能力。
 - 独立的 macOS 数据目录、窗口状态、诊断、签名、公证和 Sparkle 更新流程。
 
-## Fuyutsui 1.2.1.11 同步内容
+## Fuyutsui 1.2.1.15 同步内容
 
 - 同步新版像素协议：施法状态拆分为正计时与倒计时，时间编码调整为 `1 秒 = 10`，并增加鼠标指向、首领 1-5 等单位状态。
 - 自动迁移工作副本中的旧 `施法` 字段并重新生成职业配置；协议核心文件存在本地冲突时会阻止同步和运行，避免新旧协议混用。
@@ -29,8 +29,11 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 - 治疗吸收使用独立像素条传输，不覆盖真实生命值；Retina 缩放下按物理像素对齐解码。
 - 键盘与鼠标侧键同时使用实时按下状态和短按脉冲，减少点击落在扫描间隔之间而漏触发的情况。
 - 保留 Mac 专属行为：快捷控件固定忽略 WoW UI 缩放，全局鼠标中键继续切换无限爆发。
+- 奶骑增加 DiGua 桥接握手、玩家动作确认和真实 GCD 剩余字段；桥接由既有 Fuyutsui 本体加载，运行时只在握手成功后发键，并以 WoW 施法事件确认动作。
+- 奶骑模块事实来源为 `BundledModules/holy-paladin-virtue-12.1.json`（当前 `1.2.1.21`、36 条规则）。重伤链按荣耀圣令、灌注圣光闪现、神性之手/复仇之怒强化圣光术、神圣震击、审判、裸读圣光术顺序检查；规则 26 在两层神圣震击可用且轻伤目标至少 93% 时使用裸读圣光闪现。带灌注审判按 `+2` 圣能预测，避免抢占灌注治疗和圣能溢出；健康队伍先审判，审判不可用或圣能已满才考虑无美德黎明之光。
+- 吸奶盾美德采用 DiGua 实时姓名板信号，按 `11.7 秒倒计时 + 2 秒后置延迟` 进入执行窗口；实现约束与回归验收见[美德道标与吸奶盾现役实现](Documentation/holy-paladin-virtue-implementation.md)。
 
-升级后应确认 Shigure 日志显示“游戏插件已同步”，再在 WoW 中执行 `/reload`。如果启动 Shigure 时 WoW 尚未运行，同步会被跳过；启动游戏后需要重新打开 Shigure 完成同步。旧模块中依赖原施法时间尺度的阈值仍需人工复核。
+升级后应确认 Shigure 日志显示“游戏插件已同步”，并按应用提示执行一次 `/reload`。桥接已经内置于 Fuyutsui，不依赖 WoW 在启动时发现新的插件目录；如果启动 Shigure 时 WoW 尚未运行，启动运行时前会再次同步。旧模块中依赖原施法时间尺度的阈值仍需人工复核。
 
 ## 环境要求
 
@@ -47,7 +50,8 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 ```bash
 Packaging/macOS/ensure-local-signing-identity.sh
 Packaging/macOS/build-app.sh artifacts/macos/Shigure.app
-open artifacts/macos/Shigure.app
+ditto artifacts/macos/Shigure.app /Applications/Shigure.app
+open -n /Applications/Shigure.app
 ```
 
 构建脚本默认生成当前 Mac 架构的 self-contained 应用。交叉构建时设置：
@@ -56,6 +60,10 @@ open artifacts/macos/Shigure.app
 SHIGURE_RUNTIME_IDENTIFIER=osx-arm64 Packaging/macOS/build-app.sh artifacts/macos/Shigure-arm64.app
 SHIGURE_RUNTIME_IDENTIFIER=osx-x64 Packaging/macOS/build-app.sh artifacts/macos/Shigure-x64.app
 ```
+
+首次运行签名身份脚本后，证书指纹会固定在 `~/Library/Application Support/Shigure/local-signing-identity.sha1`。后续打包若发现证书丢失、替换或存在多个同名身份会直接停止，且正式打包入口拒绝 ad-hoc 签名，避免静默更换 TCC 主体。日常使用应始终替换并启动 `/Applications/Shigure.app`，不要从不同名称的临时候选包运行。
+
+本地 TCC 主体由签名证书根和 designated requirement 共同决定：外层应用与 `Shigure.MacUI` 使用 `com.arasaka.shigure.mac`，运行时子进程 `Shigure.MacApp` 必须保持 `Identifier=Shigure`。`build-app.sh` 会为三者固定证书根、拒绝 `cdhash` 绑定并在打包末尾验证嵌套签名；不要把运行时标识改成 Bundle ID，也不要用临时或 ad-hoc 签名替代固定身份。
 
 本地签名身份不是 Apple Developer ID，不能替代正式分发签名和公证。`Packaging/macOS/` 中的发行脚本不会保存 Apple 密码、私钥或公证凭据；这些信息必须由钥匙串和显式环境变量提供。
 
@@ -67,17 +75,26 @@ dotnet build Shigure.slnx --configuration Release --no-restore
 dotnet run --project Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj --configuration Release --no-build
 dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --runtime osx-arm64
 dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --runtime osx-x64
+bash -n Packaging/macOS/*.sh
+```
+
+生成应用后，应确认签名主体和嵌套运行时仍符合上述合同：
+
+```bash
+codesign --verify --deep --strict artifacts/macos/Shigure.app
+codesign --display --requirements - artifacts/macos/Shigure.app
+codesign --display --verbose=4 artifacts/macos/Shigure.app/Contents/MacOS/Shigure.MacApp
 ```
 
 ## 数据位置
 
-版本内置的 `Fuyutsui/config/keymap/wow_process.txt` 只作为只读基线。首次运行会将工作副本初始化到：
+版本内置的 `Fuyutsui/FuyutsuiDiGuaBridge/config/keymap/wow_process.txt` 只作为只读基线。首次运行会将工作副本初始化到：
 
 ```text
 ~/Library/Application Support/Shigure/runtime
 ```
 
-模块、日志和界面状态位于同一 `Application Support/Shigure` 数据根。仓库中的 `module/`、`cache/`、日志、屏幕导出、签名材料和构建产物均被忽略，不应提交。
+模块、日志和界面状态位于同一 `Application Support/Shigure` 数据根。启动时 APP 从包内 `BundledModules/` 补装模块；已知官方旧哈希会先备份再升级，未知同 ID/同名模块保留。仓库中的 `module/`、`cache/`、日志、屏幕导出、签名材料和构建产物均被忽略，不应提交。
 
 ## 目录结构
 
@@ -88,7 +105,7 @@ Platforms/                    平台抽象与 macOS 原生实现
 Presentation/                 UI 无关的会话与展示投影
 App/ Infrastructure/         Core 编译使用的共享源文件
 Input/ Modules/ Runtime/      Keymap、模块规则和运行时共享源文件
-Fuyutsui/ config/ keymap/     插件权威源及生成数据
+Fuyutsui/ FuyutsuiDiGuaBridge/ config/ keymap/  插件权威源、DiGua 兼容桥及生成数据
 Packaging/macOS/              构建、签名、公证和发布脚本
 Tests/                        macOS 与共享核心契约测试
 Tools/Shigure.MacDiagnostics/ 低副作用诊断入口

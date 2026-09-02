@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="BundledModuleInstaller.cs" />
     <Compile Include="LegacyModuleMigrationService.cs" />
     <Compile Include="MacUiStateStore.cs" />
     <Compile Include="ProjectConfigUpdateService.cs" />
@@ -38,6 +39,7 @@
     <Compile Include="..\Modules\IKeymapResolver.cs" Link="Modules\IKeymapResolver.cs" />
     <Compile Include="..\Modules\LogicRegistry.cs" Link="Modules\LogicRegistry.cs" />
     <Compile Include="..\Modules\ModuleDependencies.cs" Link="Modules\ModuleDependencies.cs" />
+    <Compile Include="..\Modules\ModuleDerivedStateTracker.cs" Link="Modules\ModuleDerivedStateTracker.cs" />
     <Compile Include="..\Modules\ModuleMatch.cs" Link="Modules\ModuleMatch.cs" />
     <Compile Include="..\Modules\ModuleMatchSelector.cs" Link="Modules\ModuleMatchSelector.cs" />
     <Compile Include="..\Modules\ModuleMarketplaceClient.cs" Link="Modules\ModuleMarketplaceClient.cs" />

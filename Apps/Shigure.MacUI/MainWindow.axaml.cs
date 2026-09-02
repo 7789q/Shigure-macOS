@@ -14,6 +14,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Shigure.Platform;
+using Shigure.Platform.MacOS;
 using Shigure.Presentation;
 
 namespace Shigure.MacUI;
@@ -25,6 +26,7 @@ public sealed partial class MainWindow : Window
     private readonly IReadOnlyList<NavigationItem> _navigation;
     private readonly RuntimeSessionController _runtime;
     private readonly IPlatformPermissionService? _permissions;
+    private readonly ITargetWindowLocator? _statusTargetLocator;
     private readonly string _baseDirectory;
     private readonly ObservableCollection<RuntimeDisplayRow> _stateRows = [];
     private readonly ObservableCollection<RuntimeDisplayRow> _auraRows = [];
@@ -38,6 +40,7 @@ public sealed partial class MainWindow : Window
     private readonly ModuleDependencyService? _moduleDependencies;
     private readonly ModuleMarketplaceClient _moduleMarketplace;
     private readonly ProjectConfigUpdateService? _configUpdates;
+    private readonly FuyutsuiAddonSyncService? _addonSync;
     private readonly string? _runtimeBlockedReason;
     private readonly MacUiStateStore? _uiStateStore;
     private readonly MacUiState _uiState;
@@ -45,8 +48,10 @@ public sealed partial class MainWindow : Window
     private readonly SemaphoreSlim _moduleImportGate = new(1, 1);
     private readonly SemaphoreSlim _permissionRequestGate = new(1, 1);
     private readonly object _runtimeSnapshotSync = new();
+    private readonly RuntimeUiUpdateGuard _runtimeUiUpdateGuard;
     private readonly DispatcherTimer _mainBoundsCaptureTimer;
     private readonly DispatcherTimer _logicToastTimer;
+    private Action? _refreshPermissionStatuses;
     private ConfigEditorView? _configEditor;
     private MacroEditorView? _macroEditor;
     private ModuleEditorView? _moduleEditor;
@@ -82,6 +87,7 @@ public sealed partial class MainWindow : Window
     private string? _activeScanFailureReason;
     private RenderSnapshot? _pendingRuntimeSnapshot;
     private bool _runtimeSnapshotDispatchPending;
+    private bool _addonReloadRequired;
 
     public MainWindow()
         : this(MacUiComposition.Create())
@@ -94,20 +100,32 @@ public sealed partial class MainWindow : Window
             services.Runtime,
             services.RuntimeBaseDirectory,
             services.ConfigUpdates,
+            services.AddonSyncService,
             services.ModuleDependencies,
             services.UiStateStore,
             services.Permissions,
             services.RuntimeBlockedReason)
     {
+        _addonReloadRequired = services.AddonSync.CopiedFiles.Count > 0;
         AppendLocalLog(
             $"运行资源工作副本已就绪：新增 {services.Workspace.CreatedFiles.Count}，更新 {services.Workspace.UpdatedFiles.Count}，保留冲突 {services.Workspace.ConflictingFiles.Count}");
         if (services.Workspace.MigratedFiles.Count > 0)
         {
-            AppendLocalLog($"已迁移旧施法字段并重新生成配置：{services.Workspace.MigratedFiles.Count} 个文件");
+            AppendLocalLog($"已迁移旧施法字段：{services.Workspace.MigratedFiles.Count} 个文件");
+        }
+        if (services.Workspace.RegeneratedFiles.Count > 0)
+        {
+            AppendLocalLog($"已从 Fuyutsui 重新生成配置与键位：{services.Workspace.RegeneratedFiles.Count} 个文件");
         }
         AppendLocalLog(services.AddonSync.TargetFound
             ? $"游戏插件已同步：更新 {services.AddonSync.CopiedFiles.Count}，无需更新 {services.AddonSync.SkippedFiles.Count}，失败 {services.AddonSync.Failures.Count}"
             : $"游戏插件未同步：{services.AddonSync.SkippedReason}");
+        AppendLocalLog(
+            $"内置模块已同步：新增 {services.BundledModules.InstalledModules.Count}，升级 {services.BundledModules.UpdatedModules.Count}，保留 {services.BundledModules.PreservedModules.Count}，失败 {services.BundledModules.Failures.Count}");
+        foreach (var failure in services.BundledModules.Failures)
+        {
+            AppendLocalLog($"内置模块同步失败：{failure}");
+        }
         AppendModuleLoadFailures();
     }
 
@@ -116,6 +134,7 @@ public sealed partial class MainWindow : Window
         RuntimeSessionController runtime,
         string? baseDirectory = null,
         ProjectConfigUpdateService? configUpdates = null,
+        FuyutsuiAddonSyncService? addonSync = null,
         ModuleDependencyService? moduleDependencies = null,
         MacUiStateStore? uiStateStore = null,
         IPlatformPermissionService? permissions = null,
@@ -125,10 +144,19 @@ public sealed partial class MainWindow : Window
         _runtime = runtime;
         _permissions = permissions;
         _baseDirectory = Path.GetFullPath(baseDirectory ?? AppContext.BaseDirectory);
+        _statusTargetLocator = OperatingSystem.IsMacOS()
+            ? new MacTargetWindowLocator(_baseDirectory)
+            : null;
         _configUpdates = configUpdates;
+        _addonSync = addonSync;
         _runtimeBlockedReason = runtimeBlockedReason;
         _moduleDependencies = moduleDependencies;
         _uiStateStore = uiStateStore;
+        var userDataDirectory = UserDataLayout.ResolveUserDataDirectory(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+        _runtimeUiUpdateGuard = new RuntimeUiUpdateGuard(Path.Combine(
+            UserDataLayout.ResolveLogsDirectory(userDataDirectory),
+            "runtime-ui-errors.log"));
         var stateLoad = _uiStateStore?.Load() ?? new MacUiStateLoadResult(new MacUiState(), null);
         _uiState = stateLoad.State;
         _overlayLayout = _uiState.OverlayLayout;
@@ -191,6 +219,7 @@ public sealed partial class MainWindow : Window
             }
         };
         Opened += async (_, _) => await HandleOpenedAsync();
+        Activated += (_, _) => _refreshPermissionStatuses?.Invoke();
         AppendLog(new RuntimeLogEntry(DateTimeOffset.UtcNow, "界面已就绪"));
         if (stateLoad.Warning is not null)
         {
@@ -1093,7 +1122,11 @@ public sealed partial class MainWindow : Window
 
             try
             {
-                var snapshot = _permissions.Check();
+                // Recreate the native service so permission checks never reuse a startup snapshot.
+                var permissionService = OperatingSystem.IsMacOS()
+                    ? new MacPermissionService()
+                    : _permissions;
+                var snapshot = permissionService.Check();
                 screenCaptureStatus.Text = DescribePermission(snapshot.ScreenCapture);
                 accessibilityStatus.Text = DescribePermission(snapshot.Accessibility);
             }
@@ -1104,6 +1137,7 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        _refreshPermissionStatuses = Refresh;
         Refresh();
         Button? requestScreenCapture = null;
         Button? requestAccessibility = null;
@@ -1673,6 +1707,10 @@ public sealed partial class MainWindow : Window
             }
             else
             {
+                if (!await EnsureAddonSynchronizedBeforeRuntimeAsync())
+                {
+                    return;
+                }
                 await _runtime.StartAsync(BuildRuntimeOptions());
             }
         }
@@ -1680,6 +1718,52 @@ public sealed partial class MainWindow : Window
         {
             await ShowMessageAsync("运行时操作失败", exception.Message);
         }
+    }
+
+    private async Task<bool> EnsureAddonSynchronizedBeforeRuntimeAsync()
+    {
+        if (_addonSync is null)
+        {
+            return true;
+        }
+
+        var result = await Task.Run(_addonSync.SynchronizeAll);
+        if (!result.TargetFound)
+        {
+            var message = result.SkippedReason ?? "未找到目标游戏，无法同步插件。";
+            AppendLocalLog($"运行时启动已取消：{message}");
+            await ShowMessageAsync("请先启动 WoW", message);
+            return false;
+        }
+
+        if (!result.CompletedSuccessfully)
+        {
+            var message = $"游戏插件同步失败 {result.Failures.Count} 项，运行时未启动。";
+            AppendLocalLog(message);
+            await ShowMessageAsync("插件同步失败", message);
+            return false;
+        }
+
+        if (result.CopiedFiles.Count > 0)
+        {
+            _addonReloadRequired = true;
+        }
+        if (!_addonReloadRequired)
+        {
+            return true;
+        }
+
+        var reloadMessage =
+            "游戏插件文件已更新。请在 WoW 输入 /reload，完成后点击“已完成重载”再启动运行时。";
+        AppendLocalLog(reloadMessage);
+        if (!await ShowConfirmationAsync(reloadMessage, "已完成重载"))
+        {
+            return false;
+        }
+
+        _addonReloadRequired = false;
+        AppendLocalLog("已确认 WoW 完成 /reload，允许运行时启动");
+        return true;
     }
 
     private AppOptions BuildRuntimeOptions() => new(
@@ -1707,14 +1791,21 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void HandleRuntimeStatusChanged(RuntimeSessionStatus status) =>
-        PostToUi(() => ApplyRuntimeStatus(status));
+    private void HandleRuntimeStatusChanged(RuntimeSessionStatus status)
+    {
+        if (!_runtimeUiUpdateGuard.IsDisabled("runtime-status"))
+        {
+            PostToUi(() => _runtimeUiUpdateGuard.TryRun(
+                "runtime-status",
+                () => ApplyRuntimeStatus(status)));
+        }
+    }
 
     private void HandleRuntimeSnapshotUpdated(RenderSnapshot snapshot)
     {
         lock (_runtimeSnapshotSync)
         {
-            if (_shutdownPrepared)
+            if (_shutdownPrepared || _runtimeUiUpdateGuard.IsDisabled("runtime-snapshot"))
             {
                 return;
             }
@@ -1744,7 +1835,9 @@ public sealed partial class MainWindow : Window
         {
             if (snapshot is not null && !_shutdownPrepared)
             {
-                ApplyRuntimeSnapshot(snapshot);
+                _runtimeUiUpdateGuard.TryRun(
+                    "runtime-snapshot",
+                    () => ApplyRuntimeSnapshot(snapshot));
             }
         }
         finally
@@ -1771,6 +1864,7 @@ public sealed partial class MainWindow : Window
 
     private void ApplyRuntimeSnapshot(RenderSnapshot snapshot)
     {
+        HideRuntimeToastWhenTargetIsNotFrontmost();
         if (_lastObservedLogicEnabled is bool previousEnabled
             && previousEnabled != snapshot.Enabled)
         {
@@ -1779,7 +1873,11 @@ public sealed partial class MainWindow : Window
         _lastObservedLogicEnabled = snapshot.Enabled;
         var previousScanFailure = _activeScanFailureReason;
         _activeScanFailureReason = snapshot.ScanFailureReason;
-        if (!string.Equals(previousScanFailure, _activeScanFailureReason, StringComparison.Ordinal))
+        var scanFailureChanged = !string.Equals(
+            previousScanFailure,
+            _activeScanFailureReason,
+            StringComparison.Ordinal);
+        if (scanFailureChanged)
         {
             if (string.IsNullOrWhiteSpace(_activeScanFailureReason))
             {
@@ -1788,10 +1886,11 @@ public sealed partial class MainWindow : Window
                     ShowRuntimeToast("色块识别已恢复", "#6EE7B7", autoHide: true);
                 }
             }
-            else
-            {
-                ShowScanFailureToast();
-            }
+        }
+        if (!string.IsNullOrWhiteSpace(_activeScanFailureReason)
+            && (scanFailureChanged || _logicToast?.IsVisible != true))
+        {
+            ShowScanFailureToast();
         }
         ApplyMonitor(RuntimeMonitorProjection.Create(snapshot));
         EnableButton.Content = snapshot.Enabled ? "关闭逻辑" : "开启逻辑";
@@ -1804,8 +1903,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void HandleRuntimeLogAdded(RuntimeLogEntry entry) =>
-        PostToUi(() => AppendLog(entry));
+    private void HandleRuntimeLogAdded(RuntimeLogEntry entry)
+    {
+        if (!_runtimeUiUpdateGuard.IsDisabled("runtime-log"))
+        {
+            PostToUi(() => _runtimeUiUpdateGuard.TryRun(
+                "runtime-log",
+                () => AppendLog(entry)));
+        }
+    }
 
     private void ApplyRuntimeStatus(RuntimeSessionStatus status)
     {
@@ -1916,6 +2022,11 @@ public sealed partial class MainWindow : Window
         if (snapshot is null)
         {
             return "运行时已停止";
+        }
+
+        if (!string.IsNullOrWhiteSpace(snapshot.ScanFailureReason))
+        {
+            return snapshot.ScanFailureReason;
         }
 
         var classSpec = snapshot.ClassName is null
@@ -2210,10 +2321,21 @@ public sealed partial class MainWindow : Window
             autoHide: true);
 
     private void ShowScanFailureToast()
-        => ShowRuntimeToast("色块识别异常\n请等待游戏界面加载", "#FCA5A5", autoHide: false);
+    {
+        var text = string.IsNullOrWhiteSpace(_activeScanFailureReason)
+            ? "色块识别异常\n请等待游戏界面加载"
+            : _activeScanFailureReason.Replace("：", "\n", StringComparison.Ordinal);
+        ShowRuntimeToast(text, "#FCA5A5", autoHide: false);
+    }
 
     private void ShowRuntimeToast(string text, string color, bool autoHide)
     {
+        if (!IsTargetApplicationFrontmost())
+        {
+            HideRuntimeToastWhenTargetIsNotFrontmost();
+            return;
+        }
+
         if (_logicToast is null)
         {
             _logicToastText = new TextBlock
@@ -2241,7 +2363,7 @@ public sealed partial class MainWindow : Window
                 Content = _logicToastText
             };
             AutomationProperties.SetName(_logicToast, "逻辑开关状态提示");
-            _logicToast.Opened += (_, _) => MacWindowInteraction.MakeClickThrough(_logicToast);
+            _logicToast.Opened += (_, _) => MacWindowInteraction.ConfigureStatusOverlay(_logicToast);
         }
 
         var isMultiline = text.Contains('\n');
@@ -2251,8 +2373,11 @@ public sealed partial class MainWindow : Window
         _logicToastText.Text = text;
         _logicToastText.Foreground = new SolidColorBrush(Color.Parse(color));
         _logicToastTimer.Stop();
-        _logicToast.Show();
-        MacWindowInteraction.MakeClickThrough(_logicToast);
+        if (_logicToast.IsVisible != true)
+        {
+            _logicToast.Show();
+        }
+        MacWindowInteraction.ConfigureStatusOverlay(_logicToast);
 
         var screen = _logicToast.Screens.Primary;
         if (screen is not null)
@@ -2269,6 +2394,21 @@ public sealed partial class MainWindow : Window
         {
             _logicToastTimer.Start();
         }
+    }
+
+    private bool IsTargetApplicationFrontmost() =>
+        _statusTargetLocator is not null
+        && MacFrontmostApplication.IsTarget(_statusTargetLocator.FindFrontmostTarget());
+
+    private void HideRuntimeToastWhenTargetIsNotFrontmost()
+    {
+        if (IsTargetApplicationFrontmost())
+        {
+            return;
+        }
+
+        _logicToastTimer.Stop();
+        _logicToast?.Hide();
     }
 
     private static string? MapTriggerKey(Key key)

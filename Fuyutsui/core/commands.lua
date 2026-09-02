@@ -14,6 +14,7 @@ function Fuyutsui:NormalizeCharConfig()
     c.dpsMode = c.dpsMode or 0
     c.delay = c.delay or 0
     c.potion = c.potion or 0
+    c.aoeWarningDebug = c.aoeWarningDebug == true
 end
 
 --- 通用角色开关：规范化、同步像素、刷新快捷按钮
@@ -252,6 +253,10 @@ function Fuyutsui:SlashCommand(input, editbox)
         self:HideQuickToggleButton()
     elseif command == "show" then
         self:ShowQuickToggleButton()
+    elseif command == "aoedebug" then
+        if not c then return end
+        c.aoeWarningDebug = not c.aoeWarningDebug
+        print("|cff00ff00[Fuyutsui]|r AOE 调试日志已" .. (c.aoeWarningDebug and "开启" or "关闭"))
     elseif command:match("^delay") then
         if not c then return end
         local secStr = command:match("^delay%s+(.+)$")
@@ -306,6 +311,7 @@ function Fuyutsui:SlashCommand(input, editbox)
         print("|cffff0000关闭|r药水: /fu potion off")
         print("隐藏快捷控件: /fu hide")
         print("显示快捷控件: /fu show")
+        print("切换 AOE 调试日志: /fu aoedebug")
         print("临时 delay 标志（db.char.delay 置 1 持续 x 秒后归零）: /fu delay [秒]，省略秒数则为 1 秒")
         print("插入法术: /fu i 技能名称 [单位]")
         print("帮助: /fu help")

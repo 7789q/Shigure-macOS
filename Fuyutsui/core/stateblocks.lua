@@ -108,6 +108,11 @@ local function GetConfigPixel(self, key)
     return c and (c[key] / 255) or 0
 end
 
+local function GetBytePixel(value, divisor)
+    value = type(value) == "number" and math.max(0, math.floor(value)) or 0
+    return (math.floor(value / divisor) % 256) / 255
+end
+
 -- stateBlockGetters[分类][名称]
 local stateBlockGetters = {
     ["状态"] = {
@@ -133,6 +138,55 @@ local stateBlockGetters = {
         ["神圣军备"] = function() return state.holyArmaments or 0 end,
         ["收割者战刃"] = function() return state.reaverGlaive or 0 end,
         ["英勇打击"] = function() return state.heroicStrike or 0 end,
+        ["AOE事件类型"] = function() return (state.aoeEventType or 0) / 255 end,
+        ["AOE事件阶段"] = function() return (state.aoeEventStage or 0) / 255 end,
+        ["公共冷却时长"] = function(self)
+            local seconds = self.GetEstimatedGCDSeconds and self:GetEstimatedGCDSeconds() or 1.5
+            local centiseconds = math.min(255, math.max(0, math.floor(seconds * 100 + 0.5)))
+            return centiseconds / 255
+        end,
+        ["公共冷却剩余"] = function(self)
+            local seconds = self.GetGCDRemainingSeconds and self:GetGCDRemainingSeconds() or 0
+            local centiseconds = math.min(255, math.max(0, math.floor(seconds * 100 + 0.5)))
+            return centiseconds / 255
+        end,
+        ["DiGua桥接就绪"] = function() return state.diGuaBridgeReady and 1 or 0 end,
+        ["宏绑定状态"] = function() return (state.macroBindingStatus or 0) / 255 end,
+        ["宏绑定数量"] = function() return math.min(255, state.macroBindingCount or 0) / 255 end,
+        ["玩家动作序号"] = function() return (state.playerActionSerial or 0) / 255 end,
+        ["玩家动作技能"] = function() return (state.playerActionSpell or 0) / 255 end,
+        ["玩家动作状态"] = function() return (state.playerActionStatus or 0) / 255 end,
+        ["AOE桥接请求数"] = function() return (state.aoeBridgeRequests or 0) / 255 end,
+        ["AOE桥接成功数"] = function() return (state.aoeBridgeSuccesses or 0) / 255 end,
+        ["AOE带技能预警数"] = function() return (state.aoeCastAwareWarnings or 0) / 255 end,
+        ["AOE原始读条数"] = function() return (state.aoeRawCasts or 0) / 255 end,
+        ["AOE技能受保护数"] = function() return (state.aoeProtectedSpells or 0) / 255 end,
+        ["AOE敌对状态受保护数"] = function() return (state.aoeProtectedHostility or 0) / 255 end,
+        ["AOE受保护匹配数"] = function() return (state.aoeProtectedMatches or 0) / 255 end,
+        ["AOE敌方读条数"] = function() return (state.aoeEnemyCasts or 0) / 255 end,
+        ["AOE读条未采纳数"] = function() return (state.aoeCastsRejected or 0) / 255 end,
+        ["AOE读条匹配数"] = function() return (state.aoeCastsMatched or 0) / 255 end,
+        ["AOE读条未匹配数"] = function() return (state.aoeCastsUnmatched or 0) / 255 end,
+        ["AOE读条成功数"] = function() return (state.aoeCastsSucceeded or 0) / 255 end,
+        ["AOE读条失败数"] = function() return (state.aoeCastsFailed or 0) / 255 end,
+        ["AOE预警技能低位"] = function() return GetBytePixel(state.aoeExpectedSpellID, 1) end,
+        ["AOE预警技能中位"] = function() return GetBytePixel(state.aoeExpectedSpellID, 256) end,
+        ["AOE预警技能高位"] = function() return GetBytePixel(state.aoeExpectedSpellID, 65536) end,
+        ["AOE读条技能低位"] = function() return GetBytePixel(state.aoeObservedSpellID, 1) end,
+        ["AOE读条技能中位"] = function() return GetBytePixel(state.aoeObservedSpellID, 256) end,
+        ["AOE读条技能高位"] = function() return GetBytePixel(state.aoeObservedSpellID, 65536) end,
+        ["AOE受保护读条"] = function() return state.aoeProtectedCastActive and 1 or 0 end,
+        ["AOE读条剩余"] = function(self)
+            local unit = state.aoeProtectedCastUnit
+            if not unit then return 0 end
+            local reader = state.aoeProtectedCastIsChannel and UnitChannelDuration or UnitCastingDuration
+            if type(reader) ~= "function" then return 0 end
+            local duration = reader(unit)
+            if not duration then return 0 end
+            local color = duration:EvaluateRemainingDuration(self.castCurve)
+            local _, _, remaining = color:GetRGB()
+            return remaining
+        end,
         -- 兼容：旧职业表仍把能量/配置/物品写在 ["状态"] 下
         ["符文"] = function() return GetRunePixel() end,
         ["姿态"] = function() return state.shapeshiftFormID or 0 end,

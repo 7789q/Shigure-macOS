@@ -1,0 +1,327 @@
+{
+  "Id": "shigure-holy-paladin-virtue-12-1",
+  "Name": "烈日奶骑大秘境-美德爆发 12.1",
+  "Author": "Shigure",
+  "RecommendedTalent": "CEEAzbn3egSOtoSwvPw1U1vTLAAAALAwMAAD2GzMzMjZmZBmZYZsZmFjmYYMzMMmtMAMAsB2YZmZmlZbmZ2aAAAAWAGsZgZMDzAAYmhZMGNA",
+  "Version": "1.2.1.21",
+  "UnitMappingVersion": 3,
+  "Enabled": true,
+  "Match": { "ClassId": 2, "SpecId": 1 },
+  "Units": [
+    {
+      "Name": "危急目标",
+      "HealthName": "危急目标血量",
+      "Kind": "LowestHealthWithoutAnyAura",
+      "HealthThreshold": 31,
+      "AuraNames": [ "自律" ]
+    },
+    { "Name": "重伤目标", "HealthName": "重伤目标血量", "Kind": "LowestHealth", "HealthThreshold": 90 },
+    { "Name": "轻伤目标", "HealthName": "轻伤目标血量", "Kind": "LowestHealth", "HealthThreshold": 96 },
+    { "Name": "治疗目标", "HealthName": "治疗目标血量", "Kind": "HighestHealingDeficit", "HealthThreshold": 0 },
+    { "Name": "驱散目标", "Kind": "UnitWithAnyDispelType" }
+  ],
+  "Counts": [
+    { "Name": "D5AtLeast", "Kind": "UnitsAtOrAboveHealingDeficit", "HealthThreshold": 5 },
+    { "Name": "D10AtLeast", "Kind": "UnitsAtOrAboveHealingDeficit", "HealthThreshold": 10 },
+    { "Name": "DTotal", "Kind": "TotalHealingDeficit" },
+    { "Name": "HTotal", "Kind": "TotalHealthDeficit" },
+    { "Name": "H51", "Kind": "UnitsBelowHealth", "HealthThreshold": 51 },
+    { "Name": "H70", "Kind": "UnitsBelowHealth", "HealthThreshold": 70 },
+    { "Name": "H90", "Kind": "UnitsBelowHealth", "HealthThreshold": 90 },
+    { "Name": "H96", "Kind": "UnitsBelowHealth", "HealthThreshold": 96 },
+    { "Name": "AbsorbAny", "Kind": "UnitsAboveHealingAbsorb", "HealthThreshold": 0 }
+  ],
+  "DerivedStates": [
+    {
+      "Enabled": true,
+      "Name": "群疗爆发保持",
+      "Condition": "D10AtLeast >= 3 && DTotal >= 45 || H70 >= 2 && DTotal >= 50 || H51 >= 2",
+      "HoldMs": 6000
+    },
+    {
+      "Enabled": true,
+      "Name": "真实群伤",
+      "Condition": "H90 >= 3 && HTotal >= 45 || H70 >= 2 && HTotal >= 50 || H51 >= 2",
+      "HoldMs": 2000
+    }
+  ],
+  "Rules": [
+    {
+      "Enabled": true,
+      "Condition": "危急目标 && spells.圣疗术 == 0",
+      "UnitName": "危急目标",
+      "Spell": "圣疗术",
+      "Comment": "真实生命值不高于 30% 时最高优先级圣疗；运行时再做同目标双帧确认"
+    },
+    {
+      "Enabled": true,
+      "Condition": "AOE事件阶段 == 2 && spells.美德道标 == 0 && auras.美德道标 == 0",
+      "Unit": 1,
+      "Spell": "美德道标",
+      "Comment": "可信 AOE 读条的最后一秒预铺美德"
+    },
+    {
+      "Enabled": true,
+      "Condition": "AOE事件类型 == 2 && AOE事件阶段 == 3 && spells.美德道标 == 0 && auras.美德道标 == 0",
+      "Unit": 1,
+      "Spell": "美德道标",
+      "Comment": "吸奶盾倒计时结束进入等待生效时立即预铺美德"
+    },
+    {
+      "Enabled": true,
+      "Condition": "真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0",
+      "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 4" ],
+      "Unit": 1,
+      "Spell": "美德道标",
+      "Comment": "无 DiGua 执行预留时由实时真实群伤开启美德；阶段 1/5 保留给可信读条时机，阶段 4 允许伤害生效后的反应式兜底"
+    },
+    {
+      "Enabled": true,
+      "Condition": "真实群伤 > 0 && auras.美德道标 > 0",
+      "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
+      "Unit": 0,
+      "Spell": "黎明之光",
+      "Comment": "美德窗口内真实多人群伤时优先使用黎明之光"
+    },
+    {
+      "Enabled": true,
+      "Condition": "群疗爆发保持 > 0 && auras.美德道标 > 0",
+      "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
+      "UnitName": "治疗目标",
+      "Spell": "荣耀圣令",
+      "Comment": "美德窗口先消耗已有圣能，天赋下对应永恒之火"
+    },
+    {
+      "Enabled": true,
+      "Condition": "群疗爆发保持 > 0 && DTotal > 0 && auras.美德道标 > 0 && spells.圣洁鸣钟 == 0",
+      "Unit": 0,
+      "Spell": "圣洁鸣钟",
+      "Comment": "仅在美德窗口内使用圣洁鸣钟"
+    },
+    {
+      "Enabled": true,
+      "Condition": "群疗爆发保持 > 0 && D10AtLeast >= 3 && DTotal >= 45 && H51 == 0 && auras.美德道标 > 0 && spells.光环掌握 == 0",
+      "Unit": 0,
+      "Spell": "光环掌握",
+      "Comment": "美德爆发仍未解除时补光环掌握"
+    },
+    {
+      "Enabled": true,
+      "Condition": "H70 == 0 && spells.清洁术 == 0",
+      "UnitName": "驱散目标",
+      "Spell": "清洁术",
+      "Comment": "全员真实血量至少 70% 时，AOE 爆发链之后优先驱散"
+    },
+    {
+      "Enabled": true,
+      "Condition": "治疗目标",
+      "SubConditions": [
+        "重伤目标 && 神圣能量 >= 3",
+        "重伤目标 && auras.神圣意志 > 0",
+        "AbsorbAny > 0 && 神圣能量 >= 3",
+        "AbsorbAny > 0 && auras.神圣意志 > 0"
+      ],
+      "UnitName": "治疗目标",
+      "Spell": "荣耀圣令",
+      "Comment": "重伤或治疗吸收先用永恒之火"
+    },
+    {
+      "Enabled": true,
+      "Condition": "重伤目标 && auras.圣光灌注 > 0",
+      "UnitName": "重伤目标",
+      "Spell": "圣光闪现",
+      "DelayMs": 700,
+      "Comment": "重伤目标优先消耗灌注圣光闪现，不让审判抢占治疗增益"
+    },
+    {
+      "Enabled": true,
+      "Condition": "重伤目标 && auras.神性之手 > 0",
+      "UnitName": "重伤目标",
+      "Spell": "圣光术",
+      "DelayMs": 700,
+      "Comment": "灌注不可用时使用神性之手强化圣光术"
+    },
+    {
+      "Enabled": true,
+      "Condition": "重伤目标 && auras.复仇之怒 > 0",
+      "UnitName": "重伤目标",
+      "Spell": "圣光术",
+      "DelayMs": 700,
+      "Comment": "灌注不可用时在复仇之怒窗口使用强化圣光术"
+    },
+    {
+      "Enabled": true,
+      "Condition": "重伤目标 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "UnitName": "重伤目标",
+      "Spell": "神圣震击",
+      "Comment": "有充能时用神圣震击，优先于审判和裸读圣光术"
+    },
+    {
+      "Enabled": true,
+      "Condition": "AbsorbAny > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "UnitName": "治疗目标",
+      "Spell": "神圣震击",
+      "Comment": "没有圣能时用神圣震击处理最高治疗吸收"
+    },
+    {
+      "Enabled": true,
+      "Condition": "重伤目标 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5",
+      "Unit": 0,
+      "Spell": "审判",
+      "Comment": "重伤且即时治疗不可用、没有灌注时用审判补充圣能；预留圣能上限避免溢出"
+    },
+    {
+      "Enabled": true,
+      "Condition": "移动 == false",
+      "SubConditions": [ "重伤目标", "AbsorbAny > 0" ],
+      "UnitName": "治疗目标",
+      "Spell": "圣光术",
+      "DelayMs": 700,
+      "Comment": "重伤或治疗吸收无其他手段时裸读圣光术兜底"
+    },
+    {
+      "Enabled": true,
+      "Condition": "引导 > 0",
+      "Spell": "暂停",
+      "Comment": "AOE 执行窗口、群疗爆发和真实重伤均无动作后保护当前引导"
+    },
+    {
+      "Enabled": true,
+      "Condition": "AOE事件阶段 == 5 && H90 == 0 && AbsorbAny == 0",
+      "SubConditions": [ "目标类型 != 152", "目标生命值 >= 100" ],
+      "Spell": "暂停",
+      "Comment": "普通 AOE 最后安全 GCD 窗口仅允许紧急治疗、驱散和未满友方 NPC 穿透"
+    },
+    {
+      "Enabled": true,
+      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100",
+      "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
+      "Unit": 32,
+      "Spell": "荣耀圣令",
+      "Comment": "队伍安全时治疗友方 NPC"
+    },
+    {
+      "Enabled": true,
+      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.神性之手 > 0",
+      "Unit": 32,
+      "Spell": "圣光术",
+      "DelayMs": 700,
+      "Comment": "队伍安全时用神性之手圣光术治疗友方 NPC"
+    },
+    {
+      "Enabled": true,
+      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.圣光灌注 > 0",
+      "Unit": 32,
+      "Spell": "圣光闪现",
+      "DelayMs": 700,
+      "Comment": "队伍安全时用灌注闪现治疗友方 NPC"
+    },
+    {
+      "Enabled": true,
+      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "Unit": 32,
+      "Spell": "神圣震击",
+      "Comment": "队伍安全时用神圣震击治疗友方 NPC"
+    },
+    {
+      "Enabled": true,
+      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false",
+      "Unit": 32,
+      "Spell": "圣光术",
+      "DelayMs": 700,
+      "Comment": "友方 NPC 无其他手段时裸读圣光术"
+    },
+    {
+      "Enabled": true,
+      "Condition": "H90 == 0 && H96 > 0 && AbsorbAny == 0 && 神圣能量 == 5 && 战斗时间 > 0 && 目标类型 > 0 && 目标类型 <= 100 && 目标距离 <= 5",
+      "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 4" ],
+      "Unit": 0,
+      "Spell": "正义盾击",
+      "Comment": "只有轻伤时先避免圣能溢出"
+    },
+    {
+      "Enabled": true,
+      "Condition": "轻伤目标 && 轻伤目标血量 >= 93 && spells.神圣震击层数 >= 2 && spells.神圣震击 == 0",
+      "UnitName": "轻伤目标",
+      "Spell": "圣光闪现",
+      "DelayMs": 700,
+      "Comment": "93% 到 95% 微小缺口改用裸读圣光闪现，已有灌注时自然消耗灌注"
+    },
+    {
+      "Enabled": true,
+      "Condition": "轻伤目标 && 轻伤目标血量 < 93 && auras.圣光灌注 > 0",
+      "UnitName": "轻伤目标",
+      "Spell": "圣光闪现",
+      "DelayMs": 700,
+      "Comment": "90% 到 92% 时灌注闪现治疗量高于最后一层神圣震击"
+    },
+    {
+      "Enabled": true,
+      "Condition": "轻伤目标 && 轻伤目标血量 < 93 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "UnitName": "轻伤目标",
+      "Spell": "神圣震击",
+      "Comment": "90% 到 92% 无灌注时使用最后一层神圣震击"
+    },
+    {
+      "Enabled": true,
+      "Condition": "轻伤目标 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5",
+      "Unit": 0,
+      "Spell": "审判",
+      "Comment": "轻伤时震击不可用且没有灌注时用审判补充圣能，避免灌注审判抢治疗或溢出"
+    },
+    {
+      "Enabled": true,
+      "Condition": "轻伤目标 && 轻伤目标血量 < 93 && 移动 == false",
+      "UnitName": "轻伤目标",
+      "Spell": "圣光术",
+      "DelayMs": 700,
+      "Comment": "裸读圣光术仅作为 92% 及以下的最低优先级治疗"
+    },
+    {
+      "Enabled": true,
+      "Condition": "H96 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4)",
+      "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
+      "Unit": 0,
+      "Spell": "正义盾击",
+      "Comment": "全员至少 96% 且无治疗吸收时，圣能达到 3 点就优先用正义盾击；不依赖当前目标；普通 AOE 最后安全窗口除外"
+    },
+    {
+      "Enabled": true,
+      "Condition": "H96 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
+      "Unit": 0,
+      "Spell": "神圣震击",
+      "Comment": "全员至少 96% 且无治疗吸收时优先对坦克目标用神圣震击输出，普通 AOE 最后安全窗口除外"
+    },
+    {
+      "Enabled": true,
+      "Condition": "H96 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 || H96 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 > 0 && 神圣能量 <= 3",
+      "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
+      "Unit": 0,
+      "Spell": "审判",
+      "Comment": "全员至少 96% 且无治疗吸收时用审判填充；灌注审判按 +2 圣能预测，仅在不会溢出时释放"
+    },
+    {
+      "Enabled": true,
+      "Condition": "H90 == 0 && D5AtLeast >= 3 && AbsorbAny == 0 && auras.美德道标 == 0 && auras.神圣意志 == 0 && 神圣能量 >= 3 && 战斗时间 > 0",
+      "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 4" ],
+      "Unit": 0,
+      "Spell": "黎明之光",
+      "Comment": "非美德期间仅在至少三名队员各有约 5% 治疗缺口、无重伤且无治疗吸收时使用黎明之光"
+    },
+    {
+      "Enabled": true,
+      "Condition": "DTotal == 0 && 战斗时间 == 0 && AOE事件阶段 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false",
+      "Unit": 1,
+      "Spell": "圣光术",
+      "DelayMs": 700,
+      "Comment": "脱战且队伍安全时，在灌注结束前用圣光术将其转为圣能"
+    },
+    {
+      "Enabled": true,
+      "Condition": "",
+      "Spell": "暂停",
+      "Comment": "没有有效动作时保持静默"
+    }
+  ]
+}

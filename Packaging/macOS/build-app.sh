@@ -18,7 +18,7 @@ using_local_signing_identity=false
 
 if [[ -z "$codesign_identity" ]]; then
     if ! codesign_identity="$("$local_signing_identity_script" --find)"; then
-        echo "缺少持久签名身份。请先运行 Packaging/macOS/ensure-local-signing-identity.sh；如确需临时预览包，请显式设置 SHIGURE_CODESIGN_IDENTITY=-。" >&2
+        echo "缺少或无法确认统一的持久签名身份。请先运行 Packaging/macOS/ensure-local-signing-identity.sh。" >&2
         exit 7
     fi
 
@@ -27,12 +27,36 @@ if [[ -z "$codesign_identity" ]]; then
     echo "正在复用本机持久签名身份。" >&2
 fi
 
+if [[ "$codesign_identity" == "-" ]]; then
+    echo "不允许生成 ad-hoc 应用；它会改变 TCC 代码需求并使屏幕录制和辅助功能权限失效。" >&2
+    exit 7
+fi
+
+codesign_identity_lower="$(printf '%s' "$codesign_identity" | tr '[:upper:]' '[:lower:]')"
+
 sign_executable_code() {
     local include_entitlements="$1"
     local code_path="$2"
+    local requirement_arguments=()
+    local identifier_arguments=()
+
+    if [[ "$using_local_signing_identity" == true \
+        && ("$code_path" == "$app_path" || "$code_path" == "$macos_path/Shigure.MacApp") ]]; then
+        local code_identifier="$bundle_identifier"
+        if [[ "$code_path" == "$macos_path/Shigure.MacApp" ]]; then
+            code_identifier="Shigure"
+        fi
+        identifier_arguments=(--identifier "$code_identifier")
+        requirement_arguments=(--requirements="=designated => certificate root = H\"$codesign_identity_lower\" and identifier \"$code_identifier\"")
+    fi
 
     if [[ "$using_local_signing_identity" == true ]]; then
-        codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" "$code_path"
+        if [[ ${#requirement_arguments[@]} -gt 0 ]]; then
+            codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" \
+                "${identifier_arguments[@]}" "${requirement_arguments[@]}" "$code_path"
+        else
+            codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" "$code_path"
+        fi
     elif [[ "$include_entitlements" == true ]]; then
         codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" \
             --options runtime \
@@ -101,6 +125,7 @@ macos_path="$contents_path/MacOS"
 resources_path="$contents_path/Resources"
 frameworks_path="$contents_path/Frameworks"
 runtime_baseline_path="$resources_path/runtime-baseline"
+bundled_modules_path="$resources_path/bundled-modules"
 mkdir -p "$macos_path" "$resources_path"
 
 dotnet publish "$mac_ui_project" \
@@ -124,9 +149,11 @@ xcrun swiftc \
 
 mkdir -p "$runtime_baseline_path"
 mv "$macos_path/Fuyutsui" "$runtime_baseline_path/Fuyutsui"
+mv "$macos_path/FuyutsuiDiGuaBridge" "$runtime_baseline_path/FuyutsuiDiGuaBridge"
 mv "$macos_path/config" "$runtime_baseline_path/config"
 mv "$macos_path/keymap" "$runtime_baseline_path/keymap"
 mv "$macos_path/wow_process.txt" "$runtime_baseline_path/wow_process.txt"
+mv "$macos_path/bundled-modules" "$bundled_modules_path"
 
 iconset_path="$build_root/Shigure.iconset"
 mkdir -p "$iconset_path"
@@ -146,6 +173,7 @@ iconutil -c icns "$iconset_path" -o "$resources_path/Shigure.icns"
 cp "$script_directory/Info.plist" "$contents_path/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$marketing_version" "$contents_path/Info.plist"
 plutil -replace CFBundleVersion -string "$bundle_version" "$contents_path/Info.plist"
+bundle_identifier="$(plutil -extract CFBundleIdentifier raw "$contents_path/Info.plist")"
 
 if [[ -n "$sparkle_archive" || -n "$sparkle_feed_url" || -n "$sparkle_public_ed_key" ]]; then
     if [[ -z "$sparkle_archive" || ! -f "$sparkle_archive" ]]; then
@@ -201,63 +229,72 @@ fi
 
 chmod +x "$macos_path/Shigure.MacUI"
 xattr -cr "$app_path"
-if [[ "$codesign_identity" == "-" ]]; then
-    echo "警告: 正在生成 ad-hoc 开发预览包；重新构建会改变 TCC 代码需求并使已有权限失效。" >&2
-    codesign --force --deep --sign - --timestamp=none "$app_path"
-else
-    if [[ -d "$frameworks_path/Sparkle.framework" ]]; then
-        while IFS= read -r -d '' nested_code; do
-            file_description="$(file -b "$nested_code")"
-            if [[ "$file_description" != *"Mach-O"* ]]; then
-                continue
-            fi
-
-            if [[ "$file_description" == *"executable"* ]]; then
-                sign_executable_code false "$nested_code"
-            else
-                codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" "$nested_code"
-            fi
-        done < <(find "$frameworks_path/Sparkle.framework" -type f -print0)
-
-        while IFS= read -r -d '' xpc_bundle; do
-            sign_executable_code false "$xpc_bundle"
-        done < <(find "$frameworks_path/Sparkle.framework" -type d -name '*.xpc' -print0)
-
-        while IFS= read -r -d '' helper_app; do
-            sign_executable_code false "$helper_app"
-        done < <(find "$frameworks_path/Sparkle.framework" -type d -name '*.app' -print0)
-
-        codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" "$frameworks_path/Sparkle.framework"
-    fi
-
+if [[ -d "$frameworks_path/Sparkle.framework" ]]; then
     while IFS= read -r -d '' nested_code; do
         file_description="$(file -b "$nested_code")"
-        if [[ "$file_description" == *"Mach-O"* && "$file_description" == *"executable"* ]]; then
-            sign_executable_code true "$nested_code"
+        if [[ "$file_description" != *"Mach-O"* ]]; then
+            continue
+        fi
+
+        if [[ "$file_description" == *"executable"* ]]; then
+            sign_executable_code false "$nested_code"
         else
             codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" "$nested_code"
         fi
-    done < <(find "$macos_path" -type f ! -path "$macos_path/Shigure.MacUI" -print0)
+    done < <(find "$frameworks_path/Sparkle.framework" -type f -print0)
 
-    sign_executable_code true "$app_path"
+    while IFS= read -r -d '' xpc_bundle; do
+        sign_executable_code false "$xpc_bundle"
+    done < <(find "$frameworks_path/Sparkle.framework" -type d -name '*.xpc' -print0)
 
-    signature_details="$(codesign --display --verbose=4 "$app_path" 2>&1)"
-    if [[ "$using_local_signing_identity" == false ]]; then
-        if [[ "$signature_details" != *"runtime"* ]]; then
-            echo "Apple 持久签名未启用 Hardened Runtime。" >&2
-            exit 5
-        fi
+    while IFS= read -r -d '' helper_app; do
+        sign_executable_code false "$helper_app"
+    done < <(find "$frameworks_path/Sparkle.framework" -type d -name '*.app' -print0)
 
-        signed_entitlements="$(codesign --display --entitlements - "$app_path" 2>/dev/null)"
-        if [[ "$signed_entitlements" != *"com.apple.security.cs.allow-jit"* ]]; then
-            echo "Apple 持久签名缺少 .NET 运行所需的 allow-jit entitlement。" >&2
-            exit 5
-        fi
+    codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" "$frameworks_path/Sparkle.framework"
+fi
+
+while IFS= read -r -d '' nested_code; do
+    file_description="$(file -b "$nested_code")"
+    if [[ "$file_description" == *"Mach-O"* && "$file_description" == *"executable"* ]]; then
+        sign_executable_code true "$nested_code"
+    else
+        codesign --force --sign "$codesign_identity" "${codesign_timestamp_arguments[@]}" "$nested_code"
+    fi
+done < <(find "$macos_path" -type f ! -path "$macos_path/Shigure.MacUI" -print0)
+
+sign_executable_code true "$app_path"
+
+signature_details="$(codesign --display --verbose=4 "$app_path" 2>&1)"
+if [[ "$using_local_signing_identity" == false ]]; then
+    if [[ "$signature_details" != *"runtime"* ]]; then
+        echo "Apple 持久签名未启用 Hardened Runtime。" >&2
+        exit 5
     fi
 
-    designated_requirement="$(codesign --display --requirements - "$app_path" 2>&1)"
-    if [[ "$designated_requirement" == *"cdhash"* ]]; then
-        echo "持久签名仍绑定当前代码哈希，无法保持 TCC 授权。" >&2
+    signed_entitlements="$(codesign --display --entitlements - "$app_path" 2>/dev/null)"
+    if [[ "$signed_entitlements" != *"com.apple.security.cs.allow-jit"* ]]; then
+        echo "Apple 持久签名缺少 .NET 运行所需的 allow-jit entitlement。" >&2
+        exit 5
+    fi
+fi
+
+designated_requirement="$(codesign --display --requirements - "$app_path" 2>&1)"
+if [[ "$designated_requirement" == *"cdhash"* ]]; then
+    echo "持久签名仍绑定当前代码哈希，无法保持 TCC 授权。" >&2
+    exit 5
+fi
+if [[ "$using_local_signing_identity" == true \
+    && "$designated_requirement" != *"certificate root = H\"$codesign_identity_lower\" and identifier \"$bundle_identifier\""* ]]; then
+    echo "本地签名的 designated requirement 未固定到证书根和 Bundle ID。" >&2
+    exit 5
+fi
+if [[ "$using_local_signing_identity" == true ]]; then
+    helper_signature_details="$(codesign --display --verbose=4 "$macos_path/Shigure.MacApp" 2>&1)"
+    helper_requirement="$(codesign --display --requirements - "$macos_path/Shigure.MacApp" 2>&1)"
+    if [[ "$helper_signature_details" != *"Identifier=Shigure"* \
+        || "$helper_requirement" != *"certificate root = H\"$codesign_identity_lower\" and identifier Shigure"* ]]; then
+        echo "运行时子进程的签名主体未保持兼容的标识与证书根。" >&2
         exit 5
     fi
 fi

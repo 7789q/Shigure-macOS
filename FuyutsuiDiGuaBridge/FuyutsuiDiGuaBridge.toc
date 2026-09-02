@@ -1,0 +1,9 @@
+## Interface: 120100
+## Title: Shigure DiGua AOE Bridge
+## Notes: Adds verified cast Spell IDs to Shigure AOE timeline events without modifying DiGua.
+## Author: Shigure
+## Version: 1.1.1
+## DefaultState: enabled
+## RequiredDeps: DiGuaTimelineAudioHelper, Fuyutsui
+
+Bridge.lua

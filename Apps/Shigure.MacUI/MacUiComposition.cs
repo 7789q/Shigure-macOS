@@ -14,7 +14,9 @@ internal sealed record MacUiServices(
     MacUiStateStore UiStateStore,
     string RuntimeBaseDirectory,
     RuntimeResourceWorkspaceResult Workspace,
+    FuyutsuiAddonSyncService AddonSyncService,
     FuyutsuiAddonSyncResult AddonSync,
+    BundledModuleInstallResult BundledModules,
     string? RuntimeBlockedReason);
 
 internal static class MacUiComposition
@@ -32,7 +34,11 @@ internal static class MacUiComposition
         var addonSyncResult = runtimeBlockedReason is null
             ? addonSync.SynchronizeAll()
             : FuyutsuiAddonSyncResult.Skipped(workspace.WorkspaceDirectory, runtimeBlockedReason);
-        var moduleStore = new ModuleStore(UserDataLayout.ResolveModuleDirectory(userDataDirectory));
+        var moduleDirectory = UserDataLayout.ResolveModuleDirectory(userDataDirectory);
+        var bundledModules = new BundledModuleInstaller().Install(
+            ResolveBundledModuleDirectory(),
+            moduleDirectory);
+        var moduleStore = new ModuleStore(moduleDirectory);
         var moduleDependencies = new ModuleDependencyService(workspace.WorkspaceDirectory);
         var runtimeFactory = new MacApplicationRuntimeFactory(workspace.WorkspaceDirectory, moduleStore);
         var coordinator = new RuntimeSessionCoordinator(runtimeFactory);
@@ -53,7 +59,9 @@ internal static class MacUiComposition
             uiStateStore,
             workspace.WorkspaceDirectory,
             workspace,
+            addonSync,
             addonSyncResult,
+            bundledModules,
             runtimeBlockedReason);
     }
 
@@ -72,5 +80,17 @@ internal static class MacUiComposition
         return Directory.Exists(Path.Combine(bundledResources, "Fuyutsui"))
             ? bundledResources
             : AppContext.BaseDirectory;
+    }
+
+    internal static string ResolveBundledModuleDirectory()
+    {
+        var packagedModules = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "Resources",
+            "bundled-modules"));
+        return Directory.Exists(packagedModules)
+            ? packagedModules
+            : Path.Combine(AppContext.BaseDirectory, "bundled-modules");
     }
 }

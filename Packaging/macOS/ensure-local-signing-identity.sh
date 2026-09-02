@@ -3,6 +3,8 @@ set -euo pipefail
 
 identity_name="Shigure Local Code Signing"
 mode="${1:-ensure}"
+signing_state_directory="$HOME/Library/Application Support/Shigure"
+identity_pin_path="$signing_state_directory/local-signing-identity.sha1"
 
 if [[ $# -gt 1 || ("$mode" != "ensure" && "$mode" != "--find") ]]; then
     echo "用法: $0 [--find]" >&2
@@ -17,13 +19,50 @@ fi
 
 find_identity() {
     security find-identity -v -p codesigning "$keychain_path" 2>/dev/null \
-        | awk -v name="$identity_name" 'index($0, "\"" name "\"") { print $2; exit }'
+        | awk -v name="$identity_name" '
+            index($0, "\"" name "\"") {
+                hashes[++count] = toupper($2)
+            }
+            END {
+                if (count > 1) {
+                    print "钥匙串中存在多个同名 Shigure 签名身份，无法确定统一签名证书。" > "/dev/stderr"
+                    exit 7
+                }
+                if (count == 1) {
+                    print hashes[1]
+                }
+            }'
 }
 
 identity_hash="$(find_identity)"
 if [[ -n "$identity_hash" ]]; then
+    if [[ -f "$identity_pin_path" ]]; then
+        pinned_identity_hash="$(tr -d '[:space:]' <"$identity_pin_path" | tr '[:lower:]' '[:upper:]')"
+        if [[ ! "$pinned_identity_hash" =~ ^[0-9A-F]{40}$ ]]; then
+            echo "本地签名身份固定记录无效，请先检查: $identity_pin_path" >&2
+            exit 8
+        fi
+        if [[ "$identity_hash" != "$pinned_identity_hash" ]]; then
+            echo "当前 Shigure 签名身份与已固定证书不一致，已拒绝打包以避免系统权限失效。" >&2
+            echo "固定指纹: $pinned_identity_hash" >&2
+            echo "当前指纹: $identity_hash" >&2
+            exit 8
+        fi
+    else
+        umask 077
+        mkdir -p "$signing_state_directory"
+        printf '%s\n' "$identity_hash" >"$identity_pin_path"
+        echo "已固定本机 Shigure 签名身份，后续打包不会静默更换证书。" >&2
+    fi
+
     printf '%s\n' "$identity_hash"
     exit 0
+fi
+
+if [[ -f "$identity_pin_path" ]]; then
+    echo "已固定的 Shigure 签名身份不在当前钥匙串中，已拒绝创建新证书以避免系统权限失效。" >&2
+    echo "请恢复对应钥匙串身份；固定记录位于: $identity_pin_path" >&2
+    exit 8
 fi
 
 if [[ "$mode" == "--find" ]]; then
@@ -82,5 +121,9 @@ if [[ -z "$identity_hash" ]]; then
     exit 6
 fi
 
+umask 077
+mkdir -p "$signing_state_directory"
+printf '%s\n' "$identity_hash" >"$identity_pin_path"
 echo "已创建本机专用签名身份：$identity_name" >&2
+echo "已固定签名身份指纹，后续打包不会静默更换证书。" >&2
 printf '%s\n' "$identity_hash"

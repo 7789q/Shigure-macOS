@@ -2,6 +2,10 @@ local addon, ns = ...
 
 function Fuyutsui:UpdatePlayerBlocks()
     self.isInitialized = false
+    self:UpdateStateBlock("状态", "DiGua桥接就绪")
+    if self.PublishAOEDiagnosticState then
+        self:PublishAOEDiagnosticState()
+    end
     self.state.isDead = UnitIsDeadOrGhost("player")
     self.state.isChatOpen = false
     self.state.drinkStatus = false
@@ -230,6 +234,16 @@ function Fuyutsui:LoadPlayerMacros()
     local m = self.ClassMacros and self.ClassMacros[classFile]
     if not m then
         self.macrosPending = false
+        self.state.macroBindingStatus = 0
+        self.state.macroBindingCount = 0
+        return false
+    end
+    if InCombatLockdown() then
+        self.state.macroBindingStatus = 2
+        self.state.macroBindingCount = 0
+        self:UpdateStateBlock("状态", "宏绑定状态")
+        self:UpdateStateBlock("状态", "宏绑定数量")
+        self.macrosPending = true
         return false
     end
     local specIndex = self.state and self.state.specIndex or C_SpecializationInfo.GetSpecialization()

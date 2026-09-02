@@ -7,14 +7,22 @@ Shigure for macOS 由四层组成：
 3. `Platforms/Shigure.Platform.Mac` 使用 CoreGraphics、ApplicationServices 和 macOS 进程/窗口 API 实现平台合同。
 4. `Apps/Shigure.MacUI` 通过 `Apps/Shigure.MacApp` 与 `Presentation` 组合业务能力和 Avalonia UI。
 
-`Fuyutsui/`、`config/`、`keymap/` 与 `wow_process.txt` 随版本作为只读基线进入应用包。运行时会在 `~/Library/Application Support/Shigure/runtime` 建立可升级工作副本，用户修改与版本基线分离。
+`Fuyutsui/`、`FuyutsuiDiGuaBridge/`、`config/`、`keymap`、`wow_process.txt` 与 `BundledModules/` 随版本作为只读基线进入应用包。运行时会在 `~/Library/Application Support/Shigure/runtime` 建立可升级工作副本，并在 `~/Library/Application Support/Shigure/module` 管理用户模块；已知官方旧模块先备份再升级，未知同 ID/同名模块保留。
 
 ## Fuyutsui 协议升级
 
-- 当前基线使用 Fuyutsui 1.2.1.11：`施法` 已拆分为 `施法(倒计时)` 与 `施法(正计时)`，施法时间以 `1 秒 = 10` 编码，并增加鼠标指向及首领 1-5 的单位状态。
+- 当前基线使用 Fuyutsui 1.2.1.15：`施法` 已拆分为 `施法(倒计时)` 与 `施法(正计时)`，施法时间以 `1 秒 = 10` 编码，并增加鼠标指向及首领 1-5 的单位状态。
+- 神圣圣骑士额外输出 `公共冷却时长`、`公共冷却剩余`、`DiGua桥接就绪` 及玩家动作序号/技能/状态。GCD 字段单位为 10 毫秒；桥接握手和动作字段用于发键门禁与施法确认。
 - 工作副本和模块条件中的旧 `施法` 字段会统一迁移为 `施法(倒计时)`，随后从 `Fuyutsui/class` 重新生成 `config`；模块中依赖旧时间尺度的阈值仍需人工复核。缺失字段参与比较时不命中规则，避免 `未知字段 != 0` 阻断整个模块。
 - 玩家光环按 SpellId 观察当前存在状态，不限制施法来源；目标和焦点光环仍只观察玩家施加的同名效果。
 - 治疗吸收由独立的 6 行像素条传输，单元宽度按物理像素对齐；解码值不会覆盖组员真实生命值。治疗缺口统一按“缺失生命百分比 + 治疗吸收百分比”逐单位计算。
+- AOE 预警固定使用 `AOE事件类型` 与 `AOE事件阶段` 两个状态字段。官方 DiGua 1.8.4 仍输出 `spellID=0`；`Fuyutsui/core/diguabridge.lua` 从 DiGua 调用时间轴 API 的原始输入重发带真实读条 Spell ID 的事件，避免事件派发后的受保护字段丢失，并作为唯一机器可读映射注册表。兼容目录 `FuyutsuiDiGuaBridge` 只调用该入口，不复制机制清单。
+- 桥接以 DiGua 精确版本 `1.8.4` 为兼容门禁，并由已经加载的 Fuyutsui 本体在 `/reload` 后初始化；DiGua 缺失、版本不匹配、未知图标、`spellID=0`、受保护值或只有语音时均只进入资源预留。该实现不会改写 DiGua 文件。
+- 普通 AOE 在匹配读条剩余 1 秒内进入美德窗口。“准备吸奶盾”另行复刻 DiGua 的实时姓名板条件：命中后建立 11.7 秒倒计时，倒计时结束再等待 2 秒进入阶段 3；这条路径不依赖受保护的 Spell ID/GUID、战斗日志落盘或兼容桥自己的 addon table。现役链路、禁止改动项和验收标准见[美德道标与吸奶盾现役实现](../holy-paladin-virtue-implementation.md)。
+- 中断或失败只清除本次读条并等待重读；成功前的施法者死亡、DiGua 取消、未知时间轴移除和本地超时均安全结束事件。DiGua 对原事件调用 `CancelScriptEvent` 时，桥接插件会把取消传播给重发事件。
+- 吸奶盾成功后最多保留 10 秒本地窗口；治疗吸收可读时，首次观察到正值后连续两个零值更新结束。若 WoW 将吸收值标记为受保护值，则保守保留到本地窗口超时。
+- AOE 诊断日志默认关闭，可用 `/fu aoedebug` 切换；日志记录事件 ID、Spell ID、`unitGUID`、`castGUID`、匹配、终态和结束原因。
+- 大秘境战斗中敌方 Spell ID 或施法时间受保护时，Fuyutsui 只把 0.5 秒内与新 DiGua 预警同帧出现的姓名板读条作为候选；剩余时间通过 DurationObject 色块交给 App 推导最后安全 GCD 和美德窗口。App 日志会区分原始读条、受保护字段和受保护匹配，并在协议失效或 `/reload` 后重新建立静默基线。
 - 组员职责像素为 `0` 同时表示死亡、不可协助、超距或暂时不在视野；动态治疗、驱散、人数和吸收统计必须排除这些槽位。玩家槽位使用独立自身生命值与队伍位置校正，避免组队像素暂时滞后。
 - 友方非玩家目标使用目标类型 `152`，供模块在队伍安全时单独治疗当前 NPC。
 - 用户职业配置和生成配置可以保留本地差异；若 `Fuyutsui/main.lua` 或协议核心 Lua 存在本地冲突，Mac UI 与命令行都会禁止插件同步和运行时启动，并报告具体路径，避免混用新旧协议。
@@ -23,7 +31,9 @@ Shigure for macOS 由四层组成：
 ## 单位目标路由
 
 - `Fuyutsui/core/classmacros.lua` 是职业宏路由模式的权威源。`selector-target-v1` 先为每个治疗技能生成选择键，再复用 30 个单位目标键；`config/` 和 `keymap/` 由同一配置生成，不维护第二份手写映射。
-- 静态宏中的 `[@tanktarget]` 是 Fuyutsui 扩展目标：它在加载宏时解析为当前队伍坦克的目标，队伍成员或职责变化时重新生成，不依赖玩家当前目标。
+- `selector-target-v1` 中玩家是单位 1；模块内需要对玩家释放的动态技能必须查询单位 1，不能沿用旧静态宏的单位 0。奶骑模块回放直接读取生成的真实 keymap，保证规则单位与路由绑定一致。
+- 每次建立运行工作副本后都会从活动的 `Fuyutsui/class` 与 `Fuyutsui/core/classmacros.lua` 重新生成派生 `config` 和 `keymap`；旧版单键映射不会作为本地冲突继续覆盖新版路由，Lua 自定义则由同一生成链同步到 Mac 与 WoW。
+- 静态宏中的 `[@tanktarget]` 是 Fuyutsui 扩展目标：它在加载宏时优先解析为当前队伍坦克的目标，坦克目标暂时不可用时依次回退到玩家当前目标的目标和当前敌对目标；队伍成员或职责变化时重新生成。
 - 运行时把一次模块动作解析为有序按键序列，并在选择键释放后等待 50 毫秒再发送目标键。发送前会一次性校验完整序列，任何无效按键都不会产生部分施法。
 - WoW 端使用 `SecureHandlerClickTemplate` 在安全环境中更新目标宏文本，不通过受保护的脚本点击转发。`Fuyutsui/core/macro.lua` 因此属于协议核心；它与应用基线冲突时必须阻止混合版本运行。
 - 模块依赖保存宏路由模式。导入模块时只补充本地缺失内容，路由或既有技能定义不同仍保留本地并报告冲突。
@@ -35,17 +45,31 @@ Shigure for macOS 由四层组成：
 - 触发键同时读取当前按下状态并消费 CoreGraphics 按下脉冲，避免短促键盘或侧键点击落在扫描间隔之间；键盘自动重复不会生成新脉冲。
 - 同一触发键的多个离散脉冲会逐个消费，不再被单个布尔锁存合并。
 - CoreGraphics 事件监听在曾成功启动后若意外退出，会在下一次脉冲采样时重建，避免长时间运行后退化为仅依赖瞬时按下状态。
-- 圣疗术发送前要求同一危急目标连续两帧不高于 30%，并使用独立自身生命值校验玩家槽位，避免瞬时错帧造成满血圣疗。
+- 圣疗术发送前要求同一危急目标连续两帧不高于 30%，并使用独立自身生命值及玩家自身自律校验玩家槽位。WoW 12.1 不提供可供逻辑读取的队友特定有害光环身份，因此不得用队伍 `HARMFUL` 槽推断自律；队友资格由 WoW 拒绝非法施法，并以圣疗冷却变化确认成功。
+- 运行时先投递一次动作并等待 WoW 的玩家施法 START/SUCCEEDED 回写；若首次投递落在 GCD 内，只在真实 GCD 剩余不高于 400ms 时补发一次。读条期间普通动作保持静默，更高优先级治疗可抢占；冷却、充能、圣能与增益变化仍作为兼容确认来源。
+- 奶骑在 AOE 阶段 1 资源预留和阶段 3 等待吸收期间，队伍安全时继续按 `神圣意志或 5 圣能正义盾击 > 进攻神圣震击 > 审判` 输出。进攻技能按坦克目标、当前目标的目标、当前敌对目标回退，并以即时战斗状态为边界，不依赖不稳定的姓名板敌人数；阶段 5 最后安全 GCD 窗口仍暂停非紧急技能。
+- 奶骑清洁术选择插件已按当前角色能力过滤出的任意可驱散类型，不再只匹配魔法；全员真实血量至少 70% 时，它位于 AOE 爆发链之后、所有普通治疗之前。动作日志同时记录所有可驱散槽位和最终目标的驱散类型。
 - 治疗吸收正值需要连续两帧确认后才参与规则评估，零值立即清除，且保留 1% 至 100% 的精确数值；吸收变化会生成去重诊断。
 - 运行日志使用虚拟化逐行列表并固定保留最近 2000 行，避免日志增长导致整块文本反复重排。
+- 战斗快照、运行状态和运行日志的 UI 刷新具有独立异常边界；单个监控视图失败时只停止该类界面更新，不中断按键运行时，并把首次完整异常写入 `~/Library/Application Support/Shigure/logs/runtime-ui-errors.log`。中央状态提示与按键发送共用配置目标的 macOS 前台进程判断，只在 WoW 位于系统前台时显示；浮动状态条不受此限制。状态提示窗口已显示时只更新内容，不重复调用窗口显示。
 - 权限请求只能由用户显式触发；状态检查不得弹出系统提示。
 - 捕获与诊断默认不保存画面，显式导出只允许 PPM 诊断文件。
 
 ## 签名与发行
 
 - `ensure-local-signing-identity.sh` 只创建本机开发身份，用于保持本地 TCC 主体稳定。
+- 本机开发身份的 SHA-1 指纹固定在 `~/Library/Application Support/Shigure/local-signing-identity.sha1`；证书丢失、替换或出现多个同名身份时打包必须失败，不得静默轮换。
+- `build-app.sh` 不允许 ad-hoc 签名。日常测试固定覆盖并启动 `/Applications/Shigure.app`，避免临时包名和运行路径持续变化。
+- 本地签名的 designated requirement 固定为“证书根 + 标识符”，禁止绑定 `cdhash`；外层应用和 `Shigure.MacUI` 的标识符是 `com.arasaka.shigure.mac`，执行捕获和按键的 `Shigure.MacApp` 必须保持兼容标识符 `Shigure`。三者任一身份或 requirement 漂移都会使已有 TCC 授权失配，打包脚本必须在签名后验证它们。
+- 修改 `Packaging/macOS/*.sh` 后必须运行 `bash -n Packaging/macOS/*.sh`，并用 `codesign --verify --deep --strict` 及 `codesign --display --requirements -` 检查实际生成包；本地 Terminal 的权限探针结果不能替代从 Launch Services 启动的 GUI 验收。
 - 对外发布必须使用 Developer ID Application、Hardened Runtime、最小 entitlement、公证、staple 和 Gatekeeper 验证。
 - Sparkle 私钥只能由钥匙串读取；仓库只保存版本、公开下载地址入口和公开密钥配置位置。
 - `prepare-release.sh` 只准备本地产物，不创建 GitHub Release，也不上传文件。
 
 当前公共仓库只发布源码，没有 Developer ID 签名、公证或 Apple 审核的二进制版本。
+
+## 需求文档
+
+- [烈日奶骑大秘境模块更新 PRD](../holy-paladin-mythic-plus-prd.md)：记录已进入候选验证的 AOE 预警、资源预留、吸奶盾时序及闭环验收标准。
+- `BundledModules/` 是官方随包模块的事实来源；启动时补装缺失模块，并只对 SHA-256 精确匹配的已知官方缺陷版本先备份再升级，其他同 ID 或同名用户模块保持不变。
+- 扫描失败提示使用跨 Space、全屏辅助窗口，并在持续故障时补显；浮动条同时显示具体失败原因。

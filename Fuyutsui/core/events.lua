@@ -67,17 +67,22 @@ function Fuyutsui:PLAYER_REGEN_DISABLED()
     self:UpdateTargetCanAttack()
     state.combat = true
     state.combatStartTime = GetTime()
+    self:UpdatePlayerCombatTime()
 end
 
 function Fuyutsui:PLAYER_REGEN_ENABLED()
     self:UpdateTargetCanAttack()
     state.combat = false
+    self:UpdatePlayerCombatTime()
     if self.macrosPending then
         C_Timer.After(0, function()
             if self.macrosPending and not InCombatLockdown() then
                 self:LoadPlayerMacros()
             end
         end)
+    end
+    if self.ClearAOEWarningEvents then
+        self:ClearAOEWarningEvents("脱战兜底清理")
     end
 end
 
@@ -112,12 +117,16 @@ end
 function Fuyutsui:UNIT_SPELLCAST_START(_, unitTarget, castGUID, spellID, castBarID)
     if unitTarget == "player" then
         state.casting = true
+        self:PublishPlayerAction(spellID, 1)
         self:ApplyIncomingHealsCurve(spellID)
         self:UpdatePlayerCasting(spellID)
         self:UpdateMountCasting(spellID, true)
     end
     if unitTarget == "target" then
         target.casting = true
+    end
+    if self.ObserveAOEEnemyCast then
+        self:ObserveAOEEnemyCast(unitTarget, castGUID, spellID, false)
     end
 end
 
@@ -133,11 +142,36 @@ function Fuyutsui:UNIT_SPELLCAST_STOP(_, unitTarget, castGUID, spellID, castBarI
     elseif unitTarget == "target" then
         target.casting = false
     end
+    if self.FinishAOEEnemyCast then
+        self:FinishAOEEnemyCast(unitTarget, castGUID, spellID, "stopped")
+    end
 end
 
 function Fuyutsui:UNIT_SPELLCAST_INTERRUPTED(_, unitTarget, castGUID, spellID, castBarID)
     if unitTarget == "player" then
+        self:PublishPlayerAction(spellID, 3)
         self:UpdateMountCasting(spellID, false)
+    end
+    if self.FinishAOEEnemyCast then
+        self:FinishAOEEnemyCast(unitTarget, castGUID, spellID, "interrupted")
+    end
+end
+
+function Fuyutsui:UNIT_SPELLCAST_FAILED(_, unitTarget, castGUID, spellID, castBarID)
+    if unitTarget == "player" then
+        self:PublishPlayerAction(spellID, 4)
+    end
+    if self.FinishAOEEnemyCast then
+        self:FinishAOEEnemyCast(unitTarget, castGUID, spellID, "failed")
+    end
+end
+
+function Fuyutsui:UNIT_SPELLCAST_FAILED_QUIET(_, unitTarget, castGUID, spellID, castBarID)
+    if unitTarget == "player" then
+        self:PublishPlayerAction(spellID, 4)
+    end
+    if self.FinishAOEEnemyCast then
+        self:FinishAOEEnemyCast(unitTarget, castGUID, spellID, "failed_quiet")
     end
 end
 
@@ -145,9 +179,13 @@ function Fuyutsui:UNIT_SPELLCAST_CHANNEL_START(_, unitTarget, castGUID, spellID,
     if unitTarget == "player" then
         state.channeling = true
         state.channelingSpellID = spellID
+        self:PublishPlayerAction(spellID, 1)
         self:UpdatePlayerCasting(spellID)
     elseif unitTarget == "target" then
         target.channeling = true
+    end
+    if self.ObserveAOEEnemyCast then
+        self:ObserveAOEEnemyCast(unitTarget, castGUID, spellID, true)
     end
 end
 
@@ -161,12 +199,16 @@ function Fuyutsui:UNIT_SPELLCAST_CHANNEL_STOP(_, unitTarget, castGUID, spellID, 
     elseif unitTarget == "target" then
         target.channeling = false
     end
+    if self.FinishAOEEnemyCast then
+        self:FinishAOEEnemyCast(unitTarget, castGUID, spellID, "stopped")
+    end
 end
 
 function Fuyutsui:UNIT_SPELLCAST_EMPOWER_START(_, unitTarget, castGUID, spellID, castBarID)
     if unitTarget == "player" then
         state.empowering = true
         state.empoweringSpellID = spellID
+        self:PublishPlayerAction(spellID, 1)
         self:UpdatePlayerCasting(spellID)
     elseif unitTarget == "target" then
         target.empowering = true
@@ -186,7 +228,15 @@ function Fuyutsui:UNIT_SPELLCAST_EMPOWER_STOP(_, unitTarget, castGUID, spellID, 
 end
 
 function Fuyutsui:UNIT_SPELLCAST_SUCCEEDED(_, unitTarget, castGUID, spellID, castBarID)
-    if unitTarget ~= "player" or isSec(spellID) then return end
+    if self.FinishAOEEnemyCast then
+        self:FinishAOEEnemyCast(unitTarget, castGUID, spellID, "succeeded")
+    end
+    if unitTarget ~= "player" then return end
+    self:PublishPlayerAction(spellID, 2)
+    if isSec(spellID) then return end
+    if self.ConfirmAOEVirtue then
+        self:ConfirmAOEVirtue(spellID)
+    end
     self:UpdateDrinkStatus(spellID)
     self:UpdateInsertSpellBySuccess(spellID)
     if spellID == 384255 then
@@ -286,6 +336,9 @@ function Fuyutsui:UNIT_HEAL_ABSORB_AMOUNT_CHANGED(_, unit)
     if self.group[unit] then
         self:UpdateUnitDeath(unit, "health")
     end
+    if self.ScheduleAOEHealAbsorbUpdate then
+        self:ScheduleAOEHealAbsorbUpdate()
+    end
 end
 
 function Fuyutsui:UNIT_HEAL_PREDICTION(_, unit)
@@ -346,6 +399,9 @@ end
 function Fuyutsui:UNIT_DIED(_, unitGUID)
     if not isSec(unitGUID) then
         self:UpdateUnitDeath(unitGUID, "guid")
+        if self.CancelAOEEventsForUnitGUID then
+            self:CancelAOEEventsForUnitGUID(unitGUID)
+        end
     end
 end
 
@@ -451,15 +507,27 @@ end
 
 function Fuyutsui:ENCOUNTER_END(_, encounterID, encounterName, difficultyID, groupSize, success)
     self:UpdateEncounterID(0, 0)
+    if self.ClearAOEWarningEvents then
+        self:ClearAOEWarningEvents("ENCOUNTER_END兜底清理")
+    end
 end
 
 function Fuyutsui:ENCOUNTER_TIMELINE_EVENT_ADDED(_, eventInfo)
+    if self.ObserveAOETimelineEvent then
+        self:ObserveAOETimelineEvent(eventInfo)
+    end
 end
 
 function Fuyutsui:ENCOUNTER_TIMELINE_EVENT_REMOVED(_, eventID)
+    if self.RemoveAOETimelineEvent then
+        self:RemoveAOETimelineEvent(eventID)
+    end
 end
 
 function Fuyutsui:ENCOUNTER_TIMELINE_EVENT_STATE_CHANGED(_, eventID)
+    if self.ObserveAOETimelineState then
+        self:ObserveAOETimelineState(eventID)
+    end
 end
 
 function Fuyutsui:StartFrameUpdates()
@@ -476,6 +544,9 @@ Fuyutsui.timeElapsed = 0
 Fuyutsui.timeElapsed1 = 0
 
 function Fuyutsui:OnUpdate(elapsed)
+    if self.UpdateAOEWarningState then
+        self:UpdateAOEWarningState()
+    end
     self:UpdatePlayerCastBlocks()
     self:UpdateUnitCastingOrChannelingInfo("target")
     self:UpdateUnitCastingOrChannelingInfo("focus")
@@ -484,9 +555,11 @@ function Fuyutsui:OnUpdate(elapsed)
         self:UpdateUnitCastingOrChannelingInfo("boss" .. index)
     end
     self:UpdateGroupInRangeAndHealth()
+    self:UpdateStateBlock("状态", "公共冷却剩余")
 
     self.timeElapsed = self.timeElapsed + elapsed
     if self.timeElapsed > 0.2 then
+        self:UpdateStateBlock("状态", "公共冷却时长")
         self:UpdateSpellCooldown()
         self:UpdatePlayerAssistant()
         self:UpdateRune()

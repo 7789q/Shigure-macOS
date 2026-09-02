@@ -30,7 +30,11 @@ public sealed class StateBuilder : IRuntimeStateBuilder
                 continue;
             }
 
-            result[key] = ConvertRawValue(ResolveRaw(field, rowData, barData), JsonHelpers.GetString(JsonHelpers.Get(field, "type")));
+            var raw = ResolveRaw(field, rowData, barData);
+            // 有效性复用原有一个字节携带暂停原因；不能在 bool 转换时丢掉原因码。
+            result[key] = key == "有效性"
+                ? raw.GetValueOrDefault()
+                : ConvertRawValue(raw, JsonHelpers.GetString(JsonHelpers.Get(field, "type")));
         }
 
         if (JsonHelpers.Get(stateConfig, "spells") is JsonObject spellsConfig)
@@ -52,8 +56,45 @@ public sealed class StateBuilder : IRuntimeStateBuilder
                 positiveAbsorbs);
         }
 
+        ApplyProtectedAoeStage(result);
+
         return new GameState(result, healAbsorbDiagnostic);
     }
+
+    private static void ApplyProtectedAoeStage(IDictionary<string, object?> state)
+    {
+        if (!ReadBool(state, "AOE受保护读条")
+            || ReadInt(state, "AOE事件类型") != 1
+            || ReadInt(state, "AOE事件阶段") != 1)
+        {
+            return;
+        }
+
+        var remainingDeciseconds = ReadInt(state, "AOE读条剩余");
+        if (remainingDeciseconds <= 0)
+        {
+            return;
+        }
+
+        if (remainingDeciseconds <= 10)
+        {
+            state["AOE事件阶段"] = 2;
+            return;
+        }
+
+        var gcdCentiseconds = ReadInt(state, "公共冷却时长");
+        var lastSafeGcdThreshold = 10 + (int)Math.Ceiling(gcdCentiseconds / 10d) + 4;
+        if (remainingDeciseconds <= lastSafeGcdThreshold)
+        {
+            state["AOE事件阶段"] = 5;
+        }
+    }
+
+    private static int ReadInt(IDictionary<string, object?> values, string key) =>
+        values.TryGetValue(key, out var value) && value is not null ? Convert.ToInt32(value) : 0;
+
+    private static bool ReadBool(IDictionary<string, object?> values, string key) =>
+        values.TryGetValue(key, out var value) && value is not null && Convert.ToBoolean(value);
 
     private static Dictionary<string, object?> BuildFieldMap(
         JsonObject fieldsConfig,

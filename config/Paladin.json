@@ -34,6 +34,10 @@
     "31": "愤怒之锤",
     "32": "愤怒之锤",
     "33": "愤怒之锤",
+    "34": "神圣震击",
+    "35": "清洁术",
+    "36": "荣耀圣令",
+    "37": "黎明之光",
     "101": "奥术洪流",
     "102": "石像形态",
     "103": "影遁",
@@ -165,179 +169,339 @@
       "type": "int",
       "category": "状态"
     },
-    "法力值": {
+    "AOE事件类型": {
       "step": 24,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE事件阶段": {
+      "step": 25,
+      "type": "int",
+      "category": "状态"
+    },
+    "公共冷却时长": {
+      "step": 26,
+      "type": "int",
+      "category": "状态"
+    },
+    "公共冷却剩余": {
+      "step": 27,
+      "type": "int",
+      "category": "状态"
+    },
+    "DiGua桥接就绪": {
+      "step": 28,
+      "type": "bool",
+      "category": "状态"
+    },
+    "宏绑定状态": {
+      "step": 29,
+      "type": "int",
+      "category": "状态"
+    },
+    "宏绑定数量": {
+      "step": 30,
+      "type": "int",
+      "category": "状态"
+    },
+    "玩家动作序号": {
+      "step": 31,
+      "type": "int",
+      "category": "状态"
+    },
+    "玩家动作技能": {
+      "step": 32,
+      "type": "int",
+      "category": "状态"
+    },
+    "玩家动作状态": {
+      "step": 33,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE桥接请求数": {
+      "step": 34,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE桥接成功数": {
+      "step": 35,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE带技能预警数": {
+      "step": 36,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE原始读条数": {
+      "step": 37,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE技能受保护数": {
+      "step": 38,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE敌对状态受保护数": {
+      "step": 39,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE受保护匹配数": {
+      "step": 40,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE敌方读条数": {
+      "step": 41,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条未采纳数": {
+      "step": 42,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条匹配数": {
+      "step": 43,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条未匹配数": {
+      "step": 44,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条成功数": {
+      "step": 45,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条失败数": {
+      "step": 46,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE预警技能低位": {
+      "step": 47,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE预警技能中位": {
+      "step": 48,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE预警技能高位": {
+      "step": 49,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条技能低位": {
+      "step": 50,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条技能中位": {
+      "step": 51,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE读条技能高位": {
+      "step": 52,
+      "type": "int",
+      "category": "状态"
+    },
+    "AOE受保护读条": {
+      "step": 53,
+      "type": "bool",
+      "category": "状态"
+    },
+    "AOE读条剩余": {
+      "step": 54,
+      "type": "int",
+      "category": "状态"
+    },
+    "法力值": {
+      "step": 55,
       "type": "int",
       "category": "能量"
     },
     "神圣能量": {
-      "step": 25,
+      "step": 56,
       "type": "int",
       "category": "能量"
     },
     "治疗药水": {
-      "step": 26,
+      "step": 57,
       "type": "int",
       "category": "物品"
     },
     "爆发开关": {
-      "step": 27,
+      "step": 58,
       "type": "int",
       "category": "配置开关"
     },
     "延迟": {
-      "step": 28,
+      "step": 59,
       "type": "int",
       "category": "配置开关"
     },
     "目标类型": {
-      "step": 29,
+      "step": 60,
       "type": "int",
       "category": "目标"
     },
     "目标距离": {
-      "step": 30,
+      "step": 61,
       "type": "int",
       "category": "目标"
     },
     "目标施法(倒计时)": {
-      "step": 31,
+      "step": 62,
       "type": "int",
       "category": "目标"
     },
     "目标施法(正计时)": {
-      "step": 32,
+      "step": 63,
       "type": "int",
       "category": "目标"
     },
     "目标施法可打断": {
-      "step": 33,
+      "step": 64,
       "type": "int",
       "category": "目标"
     },
     "目标驱散类型": {
-      "step": 34,
+      "step": 65,
       "type": "int",
       "category": "目标"
     },
     "目标生命值": {
-      "step": 35,
+      "step": 66,
       "type": "int",
       "category": "目标"
     },
     "鼠标类型": {
-      "step": 36,
+      "step": 67,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标驱散类型": {
-      "step": 37,
+      "step": 68,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标生命值": {
-      "step": 38,
+      "step": 69,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标距离": {
-      "step": 39,
+      "step": 70,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标施法(倒计时)": {
-      "step": 40,
+      "step": 71,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标施法(正计时)": {
-      "step": 41,
+      "step": 72,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标施法可打断": {
-      "step": 42,
+      "step": 73,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标引导": {
-      "step": 43,
+      "step": 74,
       "type": "int",
       "category": "鼠标"
     },
     "鼠标引导可打断": {
-      "step": 44,
+      "step": 75,
       "type": "int",
       "category": "鼠标"
     },
     "auras": {
       "神圣壁垒": {
-        "step": 45,
+        "step": 76,
         "type": "int",
         "category": "玩家"
       },
       "圣洁武器": {
-        "step": 46,
+        "step": 77,
         "type": "int",
         "category": "玩家"
       },
       "神圣意志": {
-        "step": 47,
+        "step": 78,
         "type": "int",
         "category": "玩家"
       },
       "苍穹之遗": {
-        "step": 48,
+        "step": 79,
         "type": "int",
         "category": "玩家"
       },
       "圣光灌注": {
-        "step": 49,
+        "step": 80,
         "type": "int",
         "category": "玩家"
       },
       "晨光": {
-        "step": 50,
+        "step": 81,
         "type": "int",
         "category": "玩家"
       },
       "晨光-恢复": {
-        "step": 51,
+        "step": 82,
         "type": "int",
         "category": "玩家"
       },
       "神性之手": {
-        "step": 52,
+        "step": 83,
         "type": "int",
         "category": "玩家"
       },
       "复仇之怒": {
-        "step": 53,
+        "step": 84,
         "type": "int",
         "category": "玩家"
       },
       "觉醒": {
-        "step": 54,
+        "step": 85,
+        "type": "int",
+        "category": "玩家"
+      },
+      "美德道标": {
+        "step": 86,
         "type": "int",
         "category": "玩家"
       },
       "目标失格者": {
-        "step": 55,
+        "step": 87,
         "type": "int",
         "category": "目标减益"
       },
       "目标奉献": {
-        "step": 56,
+        "step": 88,
         "type": "int",
         "category": "目标减益"
       },
       "焦点失格者": {
-        "step": 57,
+        "step": 89,
         "type": "int",
         "category": "焦点减益"
       },
       "焦点奉献": {
-        "step": 58,
+        "step": 90,
         "type": "int",
         "category": "焦点减益"
       },
@@ -369,39 +533,39 @@
     },
     "spells": {
       "盲目之光": {
-        "step": 59,
+        "step": 91,
         "type": "int"
       },
       "制裁之锤": {
-        "step": 60,
+        "step": 92,
         "type": "int"
       },
       "圣盾术": {
-        "step": 61,
+        "step": 93,
         "type": "int"
       },
       "牺牲祝福": {
-        "step": 62,
+        "step": 94,
         "type": "int"
       },
       "自由祝福": {
-        "step": 63,
+        "step": 95,
         "type": "int"
       },
       "保护祝福": {
-        "step": 64,
+        "step": 96,
         "type": "int"
       },
       "圣疗术": {
-        "step": 65,
+        "step": 97,
         "type": "int"
       },
       "神圣震击": {
-        "step": 66,
+        "step": 98,
         "type": "int"
       },
       "神圣震击充能": {
-        "step": 67,
+        "step": 99,
         "type": "int"
       },
       "神圣震击层数": {
@@ -410,35 +574,35 @@
         "type": "int"
       },
       "清洁术": {
-        "step": 68,
+        "step": 100,
         "type": "int"
       },
       "审判": {
-        "step": 69,
+        "step": 101,
         "type": "int"
       },
       "圣洁鸣钟": {
-        "step": 70,
+        "step": 102,
         "type": "int"
       },
       "神圣棱镜": {
-        "step": 71,
+        "step": 103,
         "type": "int"
       },
       "光环掌握": {
-        "step": 72,
+        "step": 104,
         "type": "int"
       },
       "美德道标": {
-        "step": 73,
+        "step": 105,
         "type": "int"
       },
       "神圣壁垒": {
-        "step": 74,
+        "step": 106,
         "type": "int"
       },
       "神圣壁垒充能": {
-        "step": 75,
+        "step": 107,
         "type": "int"
       },
       "神圣壁垒层数": {
@@ -447,12 +611,12 @@
         "type": "int"
       },
       "代祷": {
-        "step": 76,
+        "step": 108,
         "type": "int"
       }
     },
     "group": {
-      "start": 77,
+      "start": 109,
       "num": 6,
       "生命值": {
         "step": 1,

@@ -35,6 +35,9 @@ public enum UnitSelectorKind
     /// <summary>带某驱散类型的首个单位。get_unit_with_dispel_type</summary>
     UnitWithDispelType,
 
+    /// <summary>带任意当前可驱散类型的首个单位。</summary>
+    UnitWithAnyDispelType,
+
     /// <summary>治疗吸收高于阈值且治疗吸收最高的单位。</summary>
     HighestHealingAbsorb,
 
@@ -111,7 +114,7 @@ public sealed class ModuleUnit
 }
 
 /// <summary>
-/// 数量统计类型, 对应 utils.py 中返回整数的统计函数。
+/// 队伍整数指标类型, 包含人数统计与聚合值。
 /// </summary>
 public enum CountKind
 {
@@ -137,11 +140,20 @@ public enum CountKind
     UnitsWithAuraAboveHealingAbsorb,
 
     /// <summary>总治疗缺口大于阈值的存活单位数。</summary>
-    UnitsAboveHealingDeficit
+    UnitsAboveHealingDeficit,
+
+    /// <summary>治疗负荷大于等于阈值的存活可用单位数。</summary>
+    UnitsAtOrAboveHealingDeficit,
+
+    /// <summary>全部存活可用单位的治疗负荷总和，单个单位封顶 100。</summary>
+    TotalHealingDeficit,
+
+    /// <summary>全部存活可用单位的实际生命缺口总和，不包含治疗吸收。</summary>
+    TotalHealthDeficit
 }
 
 /// <summary>
-/// 模块内定义的命名数量字段。仅用于条件(如 低血量人数 &gt;= 3), 不能作为目标。
+/// 模块内定义的命名整数指标。仅用于条件(如 低血量人数 &gt;= 3), 不能作为目标。
 /// </summary>
 public sealed class ModuleCountField
 {
@@ -160,6 +172,26 @@ public sealed class ModuleCountField
             HealthThreshold = HealthThreshold,
             HealthThresholdField = HealthThresholdField,
             AuraName = AuraName
+        };
+    }
+}
+
+/// <summary>由模块条件触发并可短时保持的命名布尔状态。</summary>
+public sealed class ModuleDerivedState
+{
+    public bool Enabled { get; set; } = true;
+    public string Name { get; set; } = string.Empty;
+    public string Condition { get; set; } = string.Empty;
+    public int HoldMs { get; set; }
+
+    public ModuleDerivedState Clone()
+    {
+        return new ModuleDerivedState
+        {
+            Enabled = Enabled,
+            Name = Name,
+            Condition = Condition,
+            HoldMs = HoldMs
         };
     }
 }
