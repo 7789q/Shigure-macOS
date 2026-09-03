@@ -240,6 +240,35 @@ local function GetEventRemaining(eventID)
     return ok and SafeNumber(remaining) or nil
 end
 
+local function GetSpellRemainingSeconds(spellID)
+    if not C_Spell or type(C_Spell.GetSpellCooldown) ~= "function" then return nil end
+    local ok, cooldown = pcall(C_Spell.GetSpellCooldown, spellID)
+    if not ok or type(cooldown) ~= "table" then return nil end
+    if cooldown.isEnabled == false then return nil end
+    local startTime = SafeNumber(cooldown.startTime)
+    local duration = SafeNumber(cooldown.duration)
+    local modRate = SafeNumber(cooldown.modRate) or 1
+    if not duration or duration <= 0 or modRate <= 0 then return 0 end
+    if not startTime then return nil end
+    return math.max(0, startTime + duration / modRate - GetTime())
+end
+
+local function GetEstimatedVirtueAt(event)
+    if not event then return nil end
+    if event.eventType == 2 then
+        return event.virtueReadyAt
+            or (event.impactAt + Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds)
+    end
+    return event.cast and event.cast.endsAt or event.impactAt
+end
+
+local function DivineTollExpectedReady(event, now)
+    local virtueAt = GetEstimatedVirtueAt(event)
+    local cooldownRemaining = GetSpellRemainingSeconds(375576)
+    if not virtueAt or not cooldownRemaining then return false end
+    return cooldownRemaining <= math.max(0, virtueAt - now)
+end
+
 local function SetOutput(eventType, stage, event)
     local state = Fuyutsui.state
     if state.aoeEventType ~= eventType or state.aoeEventStage ~= stage then
@@ -263,8 +292,10 @@ local function SetOutput(eventType, stage, event)
         or false
     state.aoeProtectedCastUnit = state.aoeProtectedCastActive and cast.unit or nil
     state.aoeProtectedCastIsChannel = state.aoeProtectedCastActive and cast.isChannel or false
+    state.divineTollExpectedReady = DivineTollExpectedReady(event, GetTime())
     Fuyutsui:UpdateStateBlock("状态", "AOE受保护读条")
     Fuyutsui:UpdateStateBlock("状态", "AOE读条剩余")
+    Fuyutsui:UpdateStateBlock("状态", "圣洁鸣钟预计可用")
 end
 
 function Fuyutsui:GetEstimatedGCDSeconds()
@@ -1393,6 +1424,7 @@ function Fuyutsui:InitializeAOEWarning()
     self.state.aoeEventType = 0
     self.state.aoeEventStage = 0
     self.state.aoeProtectedCastActive = false
+    self.state.divineTollExpectedReady = false
     if CreateUnitHealPredictionCalculator then
         warning.absorbCalculator = CreateUnitHealPredictionCalculator()
     end

@@ -33,6 +33,7 @@ var tests = new (string Name, Action Run)[]
     ("heal absorb stabilization contract", HealAbsorbStabilizationContract),
     ("unit selector without any aura contract", UnitSelectorWithoutAnyAuraContract),
     ("unit selector excludes unavailable role contract", UnitSelectorExcludesUnavailableRoleContract),
+    ("unit selector other player contract", UnitSelectorOtherPlayerContract),
     ("healing deficit selector contract", HealingDeficitSelectorContract),
     ("module derived state tracker contract", ModuleDerivedStateTrackerContract),
     ("bundled module installation contract", BundledModuleInstallationContract),
@@ -191,6 +192,10 @@ static void BundledModuleInstallationContract()
                 "shigure-holy-paladin-virtue-12-1",
                 "296efdf7c9564016351ec2f2df8744259540629c0673f43e50ec65b9714959d1"),
             "the locally preserved 1.2.1.21 module is upgradeable");
+        Equal(true, BundledModuleInstaller.IsKnownUpgradeableHash(
+                "shigure-holy-paladin-virtue-12-1",
+                "06fac28138cb0bf752c35e1e269a25998d07ce071a4bb5a28243f9903429460f"),
+            "the repository 1.2.1.21 module is upgradeable");
         Equal(true, BundledModuleInstaller.IsKnownUpgradeableModule(
                 "shigure-holy-paladin-virtue-12-1",
                 "烈日奶骑大秘境美德爆发-20260829",
@@ -222,40 +227,44 @@ static int ValidateHolyPaladinModule(string path)
     {
         var module = ModuleStore.Parse(File.ReadAllBytes(path));
         Equal("烈日奶骑大秘境-美德爆发 12.1", module.Name, "holy paladin module identity");
-        Equal("1.2.1.21", module.Version, "holy paladin module version");
-        Equal(CountKind.UnitsAtOrAboveHealingDeficit,
-            module.Counts.Single(count => count.Name == "D10AtLeast").Kind,
-            "holy paladin module uses the inclusive healing load count");
+        Equal("1.2.1.22", module.Version, "holy paladin module version");
         Equal(5, module.Counts.Single(count => count.Name == "D5AtLeast").HealthThreshold,
             "holy paladin module tracks the five-percent light-injury count");
+        Equal(CountKind.UnitsAtOrAboveHealingDeficit,
+            module.Counts.Single(count => count.Name == "D10AtLeast").Kind,
+            "holy paladin module preserves the ten-percent count for AOE diagnostics");
         Equal(CountKind.TotalHealingDeficit,
             module.Counts.Single(count => count.Name == "DTotal").Kind,
             "holy paladin module uses the total healing load metric");
         Equal(CountKind.TotalHealthDeficit,
             module.Counts.Single(count => count.Name == "HTotal").Kind,
             "holy paladin module separately tracks real missing health");
-        Equal(6000, module.DerivedStates.Single(state => state.Name == "群疗爆发保持").HoldMs,
-            "holy paladin burst hold duration");
         var realGroupDamage = module.DerivedStates.Single(state => state.Name == "真实群伤");
         Equal(2000, realGroupDamage.HoldMs,
             "reactive Virtue remains selected across one complete GCD after real group damage briefly recovers");
-        Equal("H90 >= 3 && HTotal >= 45 || H70 >= 2 && HTotal >= 50 || H51 >= 2",
+        Equal("H85 >= 3 && HTotal >= 50",
             realGroupDamage.Condition,
-            "real group damage excludes healing absorbs from reactive Virtue timing");
+            "real group damage requires three members below eighty-five percent and fifty total missing health");
+        Equal(false, module.DerivedStates.Any(state => state.Name == "群疗爆发保持"),
+            "holy paladin module does not keep a redundant burst-hold derived state");
+        Equal(false, module.Rules.Any(rule => rule.Condition.Contains("群疗爆发保持", StringComparison.Ordinal)),
+            "holy paladin rules re-evaluate current conditions instead of reading burst hold");
         var cleanseRule = module.Rules.Single(rule => rule.Spell == "清洁术");
         Equal("H70 == 0 && spells.清洁术 == 0", cleanseRule.Condition,
             "holy paladin Cleanse requires every available group member to be at least seventy percent");
         Equal(0, cleanseRule.DelayMs.GetValueOrDefault(),
             "holy paladin Cleanse can be pressed continuously until the game confirms its cooldown");
-        Equal(9, module.Rules.IndexOf(cleanseRule) + 1,
+        Equal(13, module.Rules.IndexOf(cleanseRule) + 1,
             "holy paladin Cleanse follows the AOE burst chain and precedes ordinary healing");
         Equal(true, module.Rules.Count >= 30,
             "holy paladin module keeps the complete priority matrix instead of a scenario subset");
+        Equal(41, module.Rules.Count,
+            "holy paladin module includes sacrifice, consumable and split lowest-health healing branches");
         Equal(true, module.Rules.All(rule => rule.LogicDelayMs.GetValueOrDefault() == 0),
             "holy paladin rules never pause the whole logic loop after a decision");
         var requiredActions = new[]
         {
-            "圣疗术", "美德道标", "荣耀圣令", "圣洁鸣钟", "光环掌握", "圣光闪现", "神圣震击",
+            "圣盾术", "圣疗术", "美德道标", "荣耀圣令", "圣洁鸣钟", "光环掌握", "圣光闪现", "神圣震击",
             "清洁术", "正义盾击", "黎明之光", "审判", "圣光术", "暂停"
         };
         foreach (var action in requiredActions)
@@ -271,57 +280,85 @@ static int ValidateHolyPaladinModule(string path)
                 .All(rule => rule.Condition.Contains("auras.圣光灌注", StringComparison.Ordinal)
                     && rule.DelayMs == 700),
             "holy paladin severe healing uses Infusion Flash of Light before enhanced Holy Light");
-        Equal(true, flashRules.Any(rule => rule.Condition.Contains("轻伤目标血量 >= 93", StringComparison.Ordinal)
-                && !rule.Condition.Contains("auras.圣光灌注", StringComparison.Ordinal)
-                && rule.DelayMs == 700),
-            "holy paladin minor healing has a bare Flash of Light fallback");
+        Equal(false, flashRules.Any(rule => rule.Condition.Contains("轻伤目标血量 >= 93", StringComparison.Ordinal)
+                && !rule.Condition.Contains("auras.圣光灌注", StringComparison.Ordinal)),
+            "holy paladin minor healing has no bare Flash of Light fallback");
         Equal(true, module.Rules
                 .Where(rule => string.Equals(rule.Spell, "圣光术", StringComparison.Ordinal))
                 .All(rule => rule.DelayMs == 700),
             "holy paladin module rate-limits Holy Light retries without pausing emergency evaluation");
         Equal(true, module.Rules
                 .Where(rule => string.Equals(rule.Spell, "圣洁鸣钟", StringComparison.Ordinal))
-                .All(rule => rule.Condition.Contains("DTotal > 0", StringComparison.Ordinal)
+                .All(rule => rule.Condition.Contains("DTotal > 50", StringComparison.Ordinal)
+                    && rule.Condition.Contains("D15AtLeast >= 3", StringComparison.Ordinal)
                     && rule.Condition.Contains("auras.美德道标 > 0", StringComparison.Ordinal)),
             "holy paladin Divine Toll requires a remaining real healing need inside Virtue");
         Equal(true, module.Rules
                 .Where(rule => string.Equals(rule.Spell, "光环掌握", StringComparison.Ordinal))
-                .All(rule => rule.Condition.Contains("D10AtLeast >= 3", StringComparison.Ordinal)
-                    && rule.Condition.Contains("DTotal >= 45", StringComparison.Ordinal)
+                .All(rule => rule.Condition.Contains("D30AtLeast >= 3", StringComparison.Ordinal)
+                    && rule.Condition.Contains("DTotal >= 120", StringComparison.Ordinal)
                     && rule.Condition.Contains("auras.美德道标 > 0", StringComparison.Ordinal)),
             "holy paladin Aura Mastery requires sustained group pressure inside Virtue");
+        Equal(15, module.Counts.Single(count => count.Name == "D15AtLeast").HealthThreshold,
+            "holy paladin module tracks fifteen-percent healing deficits");
+        Equal(30, module.Counts.Single(count => count.Name == "D30AtLeast").HealthThreshold,
+            "holy paladin module tracks thirty-percent healing deficits");
+        Equal(95, module.Counts.Single(count => count.Name == "H95").HealthThreshold,
+            "holy paladin non-Virtue Light of Dawn uses the ninety-five percent boundary");
+        Equal(85, module.Counts.Single(count => count.Name == "H85").HealthThreshold,
+            "holy paladin real group damage tracks the eighty-five percent health boundary");
+        Equal(70, module.Units.Single(unit => unit.Name == "重伤目标").HealthThreshold,
+            "holy paladin severe injury threshold is seventy percent");
+        Equal(90, module.Units.Single(unit => unit.Name == "轻伤目标").HealthThreshold,
+            "holy paladin light injury threshold is ninety percent");
         Equal(70, module.Counts.Single(count => count.Name == "H70").HealthThreshold,
             "holy paladin Cleanse boundary is represented by one shared count field");
+        var severeWordOfGloryRules = module.Rules.Where(rule =>
+            rule.Spell == "荣耀圣令" && rule.UnitName == "重伤目标").ToArray();
+        Equal(1, severeWordOfGloryRules.Length,
+            "holy paladin has one lowest-real-health severe Word of Glory branch");
+        Equal(1, module.Rules.Count(rule => rule.Spell == "荣耀圣令" && rule.UnitName == "治疗目标"),
+            "holy paladin keeps one separate healing-absorb Word of Glory branch");
+        var lightWordOfGloryRule = module.Rules.Single(rule =>
+            string.Equals(rule.Spell, "荣耀圣令", StringComparison.Ordinal)
+            && string.Equals(rule.UnitName, "轻伤目标", StringComparison.Ordinal)
+            && rule.Condition.Contains("AOE事件阶段", StringComparison.Ordinal));
+        Equal("H70 == 0 && 轻伤目标 && AOE事件阶段 in (0, 4) || H70 == 0 && 轻伤目标 && AOE事件阶段 in (1, 3) && spells.圣洁鸣钟 == 0 || H70 == 0 && 轻伤目标 && AOE事件阶段 in (1, 3) && 圣洁鸣钟预计可用 > 0", lightWordOfGloryRule.Condition,
+            "holy paladin light Word of Glory excludes severe targets and reserved AOE stages unless Divine Toll is ready");
+        Equal("神圣能量 >= 3|auras.神圣意志 > 0",
+            string.Join('|', lightWordOfGloryRule.SubConditions ?? []),
+            "holy paladin light Word of Glory accepts three Holy Power or Divine Purpose");
         var expectedPriority = new[]
         {
-            "圣疗术", "美德道标", "美德道标", "美德道标", "黎明之光", "荣耀圣令", "圣洁鸣钟", "光环掌握", "清洁术",
-            "荣耀圣令", "圣光闪现", "圣光术", "圣光术", "神圣震击", "神圣震击", "审判", "圣光术", "暂停",
-            "暂停", "荣耀圣令", "圣光术", "圣光闪现", "神圣震击", "圣光术", "正义盾击", "圣光闪现", "圣光闪现",
-            "神圣震击", "审判", "圣光术", "正义盾击", "神圣震击", "审判", "黎明之光", "圣光术", "暂停"
+            "牺牲祝福", "圣盾术", "圣疗术", "治疗石", "治疗药水", "美德道标", "美德道标", "美德道标", "黎明之光", "荣耀圣令", "圣洁鸣钟", "光环掌握", "清洁术",
+            "荣耀圣令", "荣耀圣令", "圣光闪现", "圣光术", "圣光术", "神圣震击", "神圣震击", "审判", "圣光术", "圣光术",
+            "暂停", "暂停", "荣耀圣令", "圣光术", "圣光闪现", "神圣震击", "圣光术", "圣光闪现", "神圣震击", "荣耀圣令",
+            "审判", "圣光术", "黎明之光", "正义盾击", "神圣震击", "审判", "圣光闪现", "暂停"
         };
         Equal(string.Join('|', expectedPriority), string.Join('|', module.Rules.Select(rule => rule.Spell)),
             "holy paladin complete skill priority remains ordered");
-        var groupDawnRule = module.Rules[4];
-        Equal("真实群伤 > 0 && auras.美德道标 > 0", groupDawnRule.Condition,
+        var groupDawnRule = module.Rules[8];
+        Equal("真实群伤 > 0 && DTotal >= 30 && H85 >= 2 && AOE事件类型 != 2 && auras.美德道标 > 0 && 战斗时间 > 0", groupDawnRule.Condition,
             "holy paladin prioritizes Light of Dawn for current real group damage inside Virtue");
         Equal("神圣能量 >= 3|auras.神圣意志 > 0", string.Join('|', groupDawnRule.SubConditions ?? []),
             "holy paladin group Light of Dawn accepts Holy Power or Divine Purpose");
-        var finalGcdPause = module.Rules[18];
+        var finalGcdPause = module.Rules[24];
         Equal("AOE事件阶段 == 5 && H90 == 0 && AbsorbAny == 0", finalGcdPause.Condition,
             "holy paladin only pauses full-health offense during the final safe GCD window");
-        foreach (var offenseRule in module.Rules.Skip(31).Take(2))
+        foreach (var offenseRule in module.Rules.Where(rule => rule.Condition.Contains("H90 == 0", StringComparison.Ordinal)
+            && rule.Spell is "神圣震击" or "审判"))
         {
             Equal("AOE事件阶段 == 0|AOE事件阶段 == 1|AOE事件阶段 == 3|AOE事件阶段 == 4",
                 string.Join('|', offenseRule.SubConditions ?? []),
                 $"holy paladin full-health offense crosses reserve and absorb-wait stages: {offenseRule.Spell}");
         }
         Equal("AOE事件类型 == 2 && AOE事件阶段 == 3 && spells.美德道标 == 0 && auras.美德道标 == 0",
-            module.Rules[2].Condition,
+            module.Rules[6].Condition,
             "heal absorb cast completion has an explicit Virtue timing rule");
-        Equal("真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0",
-            module.Rules[3].Condition,
+        Equal("真实群伤 > 0 && DTotal >= 30 && H85 >= 2 && AOE事件类型 != 2 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+            module.Rules[7].Condition,
             "reactive group Virtue uses current real damage outside the DiGua reserve windows");
-        Equal("AOE事件阶段 == 0|AOE事件阶段 == 4", string.Join('|', module.Rules[3].SubConditions ?? []),
+        Equal("AOE事件阶段 == 0|AOE事件阶段 == 4", string.Join('|', module.Rules[7].SubConditions ?? []),
             "DiGua reserve and final safe-GCD stages keep Virtue for the verified execution window");
         var lightOfDawnRules = module.Rules.Where(rule => rule.Spell == "黎明之光").ToArray();
         Equal(2, lightOfDawnRules.Length, "holy paladin keeps separate Virtue and healthy-group Light of Dawn rules");
@@ -329,22 +366,24 @@ static int ValidateHolyPaladinModule(string path)
                 rule.Condition.Contains("auras.美德道标 > 0", StringComparison.Ordinal)),
             "burst Light of Dawn requires Virtue");
         Equal(true, lightOfDawnRules.Any(rule =>
-                rule.Condition.Contains("H90 == 0", StringComparison.Ordinal)
-                && rule.Condition.Contains("D5AtLeast >= 3", StringComparison.Ordinal)
+                rule.Condition.Contains("H95 >= 3", StringComparison.Ordinal)
+                && rule.Condition.Contains("DTotal >= 15", StringComparison.Ordinal)
                 && rule.Condition.Contains("auras.美德道标 == 0", StringComparison.Ordinal)
-                && rule.Condition.Contains("神圣能量 >= 3", StringComparison.Ordinal)),
+                && (rule.SubConditions?.Contains("神圣能量 >= 3") == true)),
             "non-Virtue Light of Dawn requires three light injuries and no severe target");
-        Equal("H96 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4)",
-            module.Rules[30].Condition,
-            "healthy-group Shield of the Righteous uses combat state instead of nameplate counts");
-        Equal("神圣能量 >= 3|auras.神圣意志 > 0", string.Join('|', module.Rules[30].SubConditions ?? []),
-            "healthy-group Shield of the Righteous spends three or more Holy Power or Divine Purpose");
-        Equal("H96 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
-            module.Rules[31].Condition,
+        var shieldRule = module.Rules.Single(rule => rule.Spell == "正义盾击");
+        Equal(true, shieldRule.Condition.Contains("目标类型 == 1 && 目标距离 <= 5 && 目标正面 > 0", StringComparison.Ordinal),
+            "healthy-group Shield of the Righteous requires a nearby frontal hostile target");
+        Equal("神圣能量 >= 3|auras.神圣意志 > 0", string.Join('|', module.Rules[35].SubConditions ?? []),
+            "non-Virtue Light of Dawn accepts Holy Power or Divine Purpose");
+        Equal(true, module.Rules.Any(rule => rule.Spell == "神圣震击"
+                && rule.Condition.Contains("H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0", StringComparison.Ordinal)),
             "healthy-group offensive Holy Shock uses combat state instead of nameplate counts");
+        var healthyJudgment = module.Rules.Single(rule => rule.Spell == "审判"
+            && rule.Condition.Contains("H90 == 0", StringComparison.Ordinal));
         Equal(true,
-            module.Rules[32].Condition.Contains("auras.圣光灌注 == 0 && 神圣能量 < 5", StringComparison.Ordinal)
-            && module.Rules[32].Condition.Contains("auras.圣光灌注 > 0 && 神圣能量 <= 3", StringComparison.Ordinal),
+            healthyJudgment.Condition.Contains("auras.圣光灌注 == 0 && 神圣能量 < 5", StringComparison.Ordinal)
+            && healthyJudgment.Condition.Contains("auras.圣光灌注 > 0 && 神圣能量 <= 3", StringComparison.Ordinal),
             "healthy-group Judgment predicts Infusion's two Holy Power before casting");
         Equal(true, module.Rules
                 .Where(rule => rule.Spell is "正义盾击" or "审判"
@@ -443,6 +482,7 @@ static int ValidateHolyPaladinModule(string path)
             int virtueCooldown = 10,
             int virtueAura = 0,
             int bellCooldown = 10,
+            bool bellExpectedReady = false,
             int auraMasteryCooldown = 10,
             int shockCharges = 0,
             int? shockCooldown = null,
@@ -460,7 +500,13 @@ static int ValidateHolyPaladinModule(string path)
             int channeling = 0,
             int enemyCount = 1,
             int targetType = 1,
-            int targetHealth = 100)
+            int targetHealth = 100,
+            int shieldCooldown = 1,
+            int sacrificeCooldown = 1,
+            int targetInFront = 1,
+            int healthstoneAvailable = 0,
+            int healthPotionAvailable = 0,
+            int divineShieldAura = 0)
         {
             absorb ??= new int[health.Length];
             var group = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal);
@@ -483,22 +529,26 @@ static int ValidateHolyPaladinModule(string path)
                 ["生命值"] = health[0],
                 ["引导"] = channeling,
                 ["延迟"] = 0,
-                ["治疗药水"] = 1,
+                ["治疗药水"] = healthPotionAvailable,
+                ["治疗石"] = healthstoneAvailable,
                 ["自律"] = playerForbearance,
                 ["法力值"] = 100,
                 ["神圣能量"] = holyPower,
                 ["施法技能"] = 0,
                 ["AOE事件类型"] = aoeType,
                 ["AOE事件阶段"] = stage,
+                ["圣洁鸣钟预计可用"] = bellExpectedReady ? 1 : 0,
                 ["战斗时间"] = combatTime,
                 ["敌人数量"] = enemyCount,
                 ["移动"] = moving,
                 ["目标类型"] = targetType,
                 ["目标距离"] = 3,
+                ["目标正面"] = targetInFront,
                 ["目标生命值"] = targetHealth,
                 ["spells"] = new Dictionary<string, object?>
                 {
-                    ["圣盾术"] = 1,
+                    ["圣盾术"] = shieldCooldown,
+                    ["牺牲祝福"] = sacrificeCooldown,
                     ["清洁术"] = dispelSlot > 0 ? 0 : 1,
                     ["圣疗术"] = layOnHandsCooldown,
                     ["美德道标"] = virtueCooldown,
@@ -515,11 +565,49 @@ static int ValidateHolyPaladinModule(string path)
                     ["神性之手"] = divineHand,
                     ["圣光灌注"] = infusion,
                     ["圣光灌注层数"] = infusion > 0 ? 1 : 0,
-                    ["复仇之怒"] = wings
+                    ["复仇之怒"] = wings,
+                    ["圣盾术"] = divineShieldAura
                 },
                 ["group"] = group
             });
         }
+
+        var playerShield = Evaluate(State(
+            [20, 100, 100, 100, 100],
+            shieldCooldown: 0,
+            layOnHandsCooldown: 0));
+        Equal("圣盾术", Action(playerShield), "MOD-01 player health below thirty uses Divine Shield before Lay on Hands");
+        Equal(0, Convert.ToInt32(playerShield.UnitInfo["动作单位槽位"]),
+            "MOD-01 Divine Shield uses the self-target macro slot");
+
+        var sacrifice = Evaluate(State(
+            [100, 30, 100, 100, 100],
+            sacrificeCooldown: 0));
+        Equal("牺牲祝福", Action(sacrifice),
+            "MOD-01 Sacrifice Blessing protects the lowest-health other player before self defense");
+        Equal(2, Convert.ToInt32(sacrifice.UnitInfo["动作单位槽位"]),
+            "MOD-01 Sacrifice Blessing excludes the player slot from its target selector");
+
+        Equal("治疗石", Action(Evaluate(State(
+            [40, 100, 100, 100, 100],
+            healthstoneAvailable: 1))),
+            "MOD-01 healthstone is the first consumable emergency action");
+        Equal("治疗药水", Action(Evaluate(State(
+            [30, 100, 100, 100, 100],
+            healthPotionAvailable: 1))),
+            "MOD-01 health potion follows an unavailable healthstone");
+        Equal(false, new[] { "治疗石", "治疗药水" }.Contains(Action(Evaluate(State(
+            [40, 100, 100, 100, 100],
+            shieldCooldown: 0,
+            healthstoneAvailable: 1,
+            healthPotionAvailable: 1))), StringComparer.Ordinal),
+            "MOD-01 consumables are suppressed while Divine Shield is ready");
+        Equal(false, new[] { "治疗石", "治疗药水" }.Contains(Action(Evaluate(State(
+            [40, 100, 100, 100, 100],
+            divineShieldAura: 10,
+            healthstoneAvailable: 1,
+            healthPotionAvailable: 1))), StringComparer.Ordinal),
+            "MOD-01 consumables are suppressed while Divine Shield is active");
 
         var layOnHands = Evaluate(State(
             [20, 40, 100, 100, 100],
@@ -570,23 +658,36 @@ static int ValidateHolyPaladinModule(string path)
         Equal(2, emergencyShock.CooldownConfirmationInitialValue,
             "MOD-02 Holy Shock captures the charge count before delivery");
 
-        Equal("荣耀圣令", Action(Evaluate(State([85, 85, 85, 100, 100], holyPower: 3))),
-            "MOD-03 real group deficits cannot use Light of Dawn outside Virtue");
-        Equal("荣耀圣令", Action(Evaluate(State([85, 85, 85, 86, 100], holyPower: 3))),
-            "MOD-04 real group damage spends Holy Power on direct healing outside Virtue");
+        Equal("荣耀圣令", Action(Evaluate(State([84, 84, 84, 100, 100], holyPower: 3))),
+            "MOD-03 three members below eighty-five with total deficit forty-eight skip real group damage but use light Word of Glory fallback");
+        Equal("圣光术", Action(Evaluate(State([70, 100, 100, 100, 100]))),
+            "MOD-03 exactly seventy percent is not classified as severe injury");
+        Equal("荣耀圣令", Action(Evaluate(State([60, 100, 100, 100, 100], holyPower: 3))),
+            "MOD-04 real health below seventy spends Holy Power on direct healing outside Virtue");
+        Equal("荣耀圣令", Action(Evaluate(State([80, 100, 100, 100, 100], holyPower: 3))),
+            "MOD-04 light health below ninety uses Word of Glory as the instant fallback");
+        Equal("荣耀圣令", Action(Evaluate(State(
+            [80, 100, 100, 100, 100],
+            divinePurpose: 4))),
+            "MOD-04 light health can use Word of Glory through Divine Purpose");
+        Equal("圣光术", Action(Evaluate(State(
+            [80, 100, 100, 100, 100],
+            holyPower: 3,
+            stage: 1))),
+            "MOD-04 light Word of Glory preserves Holy Power during AOE resource reserve");
         Equal("正义盾击", Action(Evaluate(State([96, 96, 96, 96, 100], holyPower: 3))),
             "MOD-04 every group member above ninety-five spends three Holy Power on Shield first");
-        var virtueDecision = Evaluate(State([85, 85, 85, 85, 100], holyPower: 3, virtueCooldown: 0));
+        var virtueDecision = Evaluate(State([80, 80, 80, 80, 100], holyPower: 3, virtueCooldown: 0));
         Equal("美德道标", Action(virtueDecision),
             "MOD-05 four deficits totaling sixty open Virtue");
         Equal("美德道标", virtueDecision.CooldownConfirmationSpell,
             "MOD-05 Virtue waits for the game cooldown before retrying");
         Equal("美德道标", Action(Evaluate(State([50, 50, 50, 100, 100], holyPower: 3, virtueCooldown: 0))),
             "MOD-06 three players at fifty percent trigger catastrophe protection");
-        Equal("美德道标", Action(Evaluate(State([85, 85, 85, 100, 100], virtueCooldown: 0))),
-            "MOD-06 three meaningful deficits totaling forty-five open Virtue before damage becomes critical");
+        Equal("圣光术", Action(Evaluate(State([84, 84, 84, 100, 100], virtueCooldown: 0))),
+            "MOD-06 three members below eighty-five but total deficit forty-eight do not open Virtue");
         var groupDawnDecision = Evaluate(State(
-            [85, 85, 85, 85, 100],
+            [80, 80, 80, 80, 100],
             holyPower: 3,
             virtueAura: 5,
             bellCooldown: 0,
@@ -596,7 +697,7 @@ static int ValidateHolyPaladinModule(string path)
         Equal("神圣能量", groupDawnDecision.CooldownConfirmationStateField,
             "MOD-07 Light of Dawn confirms against Holy Power");
         var freeGroupDawn = Evaluate(State(
-            [85, 85, 85, 100, 100],
+            [80, 80, 80, 100, 100],
             holyPower: 0,
             divinePurpose: 4,
             virtueAura: 5));
@@ -605,7 +706,7 @@ static int ValidateHolyPaladinModule(string path)
         Equal("auras.神圣意志", freeGroupDawn.CooldownConfirmationStateField,
             "MOD-07 free group Light of Dawn confirms against Divine Purpose");
         var eternalFlameDecision = Evaluate(State(
-            [85, 100, 100, 100, 100],
+            [60, 100, 100, 100, 100],
             holyPower: 3,
             virtueAura: 5,
             bellCooldown: 0,
@@ -619,7 +720,7 @@ static int ValidateHolyPaladinModule(string path)
         Equal(3, eternalFlameDecision.CooldownConfirmationInitialValue,
             "MOD-07 Holy Power confirmation captures the pre-cast resource");
         var freeEternalFlame = Evaluate(State(
-            [85, 100, 100, 100, 100],
+            [60, 100, 100, 100, 100],
             holyPower: 0,
             divinePurpose: 4));
         Equal("auras.神圣意志", freeEternalFlame.CooldownConfirmationStateField,
@@ -629,19 +730,26 @@ static int ValidateHolyPaladinModule(string path)
 
         var sequenceTracker = new ModuleDerivedStateTracker(new ManualTimeProvider());
         Equal("黎明之光", Action(Evaluate(State(
-            [85, 85, 85, 85, 100],
+            [80, 80, 80, 80, 100],
             holyPower: 3,
             virtueAura: 5,
             bellCooldown: 0,
             auraMasteryCooldown: 10), sequenceTracker)),
             "MOD-08 burst sequence begins with Light of Dawn when real group damage is active");
         Equal("圣洁鸣钟", Action(Evaluate(State(
-            [100, 92, 100, 100, 100],
+            [80, 80, 80, 100, 100],
             holyPower: 0,
             virtueAura: 5,
             bellCooldown: 0,
             auraMasteryCooldown: 10), sequenceTracker)),
-            "MOD-08 burst hold continues to Divine Toll after the group threshold clears");
+            "MOD-08 Divine Toll requires three fifteen-percent deficits while the burst hold is active");
+        Equal("圣光术", Action(Evaluate(State(
+            [85, 85, 85, 95, 100],
+            holyPower: 0,
+            virtueAura: 5,
+            bellCooldown: 0,
+            auraMasteryCooldown: 10), sequenceTracker)),
+            "MOD-08 Divine Toll does not cast when current total deficit is exactly fifty");
         var divineTollDecision = Evaluate(State(
             [85, 85, 85, 85, 100],
             holyPower: 2,
@@ -680,8 +788,8 @@ static int ValidateHolyPaladinModule(string path)
             infusion: 1))),
             "MOD-10 direct healing precedes Aura Mastery while a member is critically low");
 
-        Equal("荣耀圣令", Action(Evaluate(State([85, 100, 100, 100, 100], holyPower: 3))),
-            "MOD-11 real health below ninety uses Eternal Flame");
+        Equal("荣耀圣令", Action(Evaluate(State([60, 100, 100, 100, 100], holyPower: 3))),
+            "MOD-11 real health below seventy uses Eternal Flame");
         Equal("荣耀圣令", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             [15, 15, 15, 15, 0],
@@ -764,40 +872,44 @@ static int ValidateHolyPaladinModule(string path)
             dispelSlot: 2,
             channeling: 1))),
             "MOD-20 Cleanse can be queued while another cast is in progress");
-        Equal("圣光闪现", Action(Evaluate(State(
+        Equal("神圣震击", Action(Evaluate(State(
             [100, 92, 100, 100, 100],
             infusion: 1,
             shockCharges: 2))),
-            "MOD-21 stronger Infusion Flash of Light precedes capped Holy Shock on meaningful light injury");
-        Equal("圣光闪现", Action(Evaluate(State(
+            "MOD-21 ninety-two percent uses healthy-group offensive Holy Shock after the ninety-percent threshold change");
+        Equal("神圣震击", Action(Evaluate(State(
             [100, 92, 100, 100, 100],
             infusion: 1,
             shockCharges: 1))),
-            "MOD-21 stronger Infusion Flash of Light precedes the last Holy Shock charge");
-        Equal("圣光闪现", Action(Evaluate(State(
+            "MOD-21 ninety-two percent does not use the light-injury Flash of Light branch");
+        Equal("神圣震击", Action(Evaluate(State(
             [100, 93, 100, 100, 100],
             shockCharges: 2,
             judgmentCooldown: 0))),
-            "MOD-22 minor injury uses bare Flash of Light instead of capped Holy Shock");
-        Equal("暂停", Action(Evaluate(State(
+            "MOD-22 bare Flash of Light was removed");
+        Equal("神圣震击", Action(Evaluate(State(
             [100, 93, 100, 100, 100],
             infusion: 1,
             shockCharges: 1,
             judgmentCooldown: 0))),
-            "MOD-22 minor injury does not consume Infusion with Judgment");
+            "MOD-22 ninety-three percent uses healthy-group offensive Holy Shock without bare Flash of Light");
         Equal("正义盾击", Action(Evaluate(State(
             [100, 93, 100, 100, 100],
             holyPower: 5,
             infusion: 1))),
-            "MOD-23 Shield of the Righteous prevents Holy Power overflow during light injury");
-        Equal("圣光术", Action(Evaluate(State(
+            "MOD-23 frontal hostile target allows Shield of the Righteous to prevent Holy Power overflow during light injury");
+        Equal("黎明之光", Action(Evaluate(State(
             [92, 93, 94, 100, 100],
             holyPower: 3))),
-            "MOD-24 Light of Dawn cannot heal sub-ninety-six injuries outside Virtue");
-        Equal("圣光术", Action(Evaluate(State(
+            "MOD-24 three members below ninety-five use non-Virtue Light of Dawn before offensive fillers");
+        Equal("正义盾击", Action(Evaluate(State(
+            [95, 95, 95, 100, 100],
+            holyPower: 3))),
+            "MOD-24 exactly ninety-five percent does not qualify for non-Virtue Light of Dawn");
+        Equal("暂停", Action(Evaluate(State(
             [100, 92, 100, 100, 100],
             combatTime: 0))),
-            "MOD-25 bare Holy Light is the final fallback at ninety-two percent");
+            "MOD-25 ninety-two percent is outside the ninety-percent light-injury threshold");
         Equal("暂停", Action(Evaluate(State(
             [100, 95, 100, 100, 100],
             combatTime: 0))),
@@ -811,10 +923,16 @@ static int ValidateHolyPaladinModule(string path)
             holyPower: 4,
             combatTime: 0,
             infusion: 5));
-        Equal("圣光术", Action(expiringInfusion),
+        Equal("圣光闪现", Action(expiringInfusion),
             "MOD-27 expiring out-of-combat Infusion converts to Holy Power");
         Equal(1, Convert.ToInt32(expiringInfusion.UnitInfo["动作单位槽位"]),
             "MOD-27 out-of-combat Infusion conversion targets the player slot");
+        Equal("圣光闪现", expiringInfusion.CooldownConfirmationSpell,
+            "MOD-27 Infusion conversion tracks the Flash of Light action");
+        Equal("auras.圣光灌注层数", expiringInfusion.CooldownConfirmationStateField,
+            "MOD-27 Infusion conversion confirms by the consumed Infusion stack");
+        Equal(1, expiringInfusion.CooldownConfirmationInitialValue,
+            "MOD-27 Infusion conversion captures the initial Infusion stack");
         Equal("暂停", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             holyPower: 4,
@@ -834,8 +952,45 @@ static int ValidateHolyPaladinModule(string path)
             infusion: 5,
             stage: 1))),
             "MOD-27 AOE resource reserve blocks out-of-combat Infusion conversion");
+        Equal("圣光闪现", Action(Evaluate(State(
+            [100, 100, 100, 100, 100],
+            holyPower: 4,
+            combatTime: 0,
+            infusion: 5,
+            stage: 1,
+            bellCooldown: 0))),
+            "MOD-27 ready Divine Toll releases the AOE reservation for out-of-combat Infusion conversion");
+        Equal("圣光闪现", Action(Evaluate(State(
+            [100, 100, 100, 100, 100],
+            holyPower: 4,
+            combatTime: 0,
+            infusion: 5,
+            stage: 1,
+            bellCooldown: 10,
+            bellExpectedReady: true))),
+            "MOD-27 predicted-ready Divine Toll releases the AOE reservation for out-of-combat Infusion conversion");
 
-        var playerPriority = Evaluate(State([85, 85, 100, 100, 100], holyPower: 3));
+        Equal("荣耀圣令", Action(Evaluate(State(
+            [80, 100, 100, 100, 100],
+            holyPower: 3,
+            stage: 1,
+            bellCooldown: 0))),
+            "MOD-27 ready Divine Toll releases the AOE reservation for light Word of Glory");
+        Equal("荣耀圣令", Action(Evaluate(State(
+            [80, 100, 100, 100, 100],
+            holyPower: 3,
+            stage: 1,
+            bellCooldown: 10,
+            bellExpectedReady: true))),
+            "MOD-27 predicted-ready Divine Toll releases the AOE reservation before its cooldown reaches zero");
+        Equal("圣光术", Action(Evaluate(State(
+            [80, 100, 100, 100, 100],
+            holyPower: 3,
+            stage: 1,
+            bellCooldown: 10))),
+            "MOD-27 unavailable Divine Toll keeps the AOE resource reservation for light Word of Glory");
+
+        var playerPriority = Evaluate(State([60, 60, 100, 100, 100], holyPower: 3));
         Equal("荣耀圣令", Action(playerPriority), "MOD-28 equal-risk player receives the expected heal");
         Equal(1, Convert.ToInt32(playerPriority.UnitInfo["动作单位槽位"]),
             "MOD-28 equal-risk player wins the stable slot tie");
@@ -894,14 +1049,14 @@ static int ValidateHolyPaladinModule(string path)
             combatTime: 0,
             enemyCount: 0))),
             "MOD-30 immediate out-of-combat state stops all offensive fillers without nameplate counts");
-        Equal("正义盾击", Action(Evaluate(State(
+        Equal("神圣震击", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             holyPower: 5,
             stage: 1,
             shockCharges: 2,
             judgmentCooldown: 0,
             targetType: 0))),
-            "MOD-30 AOE resource reserve spends capped Holy Power without a current hostile target");
+            "MOD-30 AOE resource reserve does not use Shield without a current hostile target");
         Equal("神圣震击", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             stage: 3,
@@ -936,6 +1091,7 @@ static int ValidateHolyPaladinModule(string path)
             "MOD-33 stage five still allows true low-health healing");
         Equal("美德道标", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
+            aoeType: 1,
             stage: 2,
             virtueCooldown: 0,
             dispelSlot: 2))),
@@ -971,15 +1127,34 @@ static int ValidateHolyPaladinModule(string path)
             stage: 3,
             virtueCooldown: 0))),
             "MOD-35 heal absorb cast completion pre-casts Virtue before the health deficit appears");
+        Equal("荣耀圣令", Action(Evaluate(State(
+            [80, 80, 80, 100, 100],
+            virtueAura: 5,
+            aoeType: 2,
+            stage: 3,
+            holyPower: 3))),
+            "MOD-35 absorb stage three uses direct healing instead of Virtue Light of Dawn");
+
+        var heldGroupDamageTracker = new ModuleDerivedStateTracker(new ManualTimeProvider());
+        Equal("美德道标", Action(Evaluate(State(
+            [80, 80, 80, 80, 100],
+            virtueCooldown: 0), heldGroupDamageTracker)),
+            "MOD-35 reactive group damage opens Virtue before the hold window");
+        Equal("正义盾击", Action(Evaluate(State(
+            [100, 100, 100, 100, 100],
+            virtueAura: 5,
+            holyPower: 3), heldGroupDamageTracker)),
+            "MOD-35 current healing need gates held group Light of Dawn after the group recovers");
 
         Equal("美德道标", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
+            aoeType: 1,
             stage: 2,
             virtueCooldown: 0,
             channeling: 1))),
             "MOD-36 AOE execution window interrupts an ordinary channel for Virtue");
         Equal("神圣震击", Action(Evaluate(State(
-            [85, 100, 100, 100, 100],
+            [60, 100, 100, 100, 100],
             shockCharges: 2,
             channeling: 1))),
             "MOD-37 true low-health healing interrupts an ordinary channel");
@@ -988,37 +1163,40 @@ static int ValidateHolyPaladinModule(string path)
             channeling: 1))),
             "MOD-37 an ordinary channel remains protected without an urgent action");
 
-        var staleBurstTracker = new ModuleDerivedStateTracker(new ManualTimeProvider());
-        Evaluate(State(
-            [80, 80, 80, 80, 100],
-            virtueAura: 5,
-            bellCooldown: 10,
-            auraMasteryCooldown: 10), staleBurstTracker);
         Equal("暂停", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             virtueAura: 5,
             bellCooldown: 0,
-            auraMasteryCooldown: 0), staleBurstTracker)),
-            "MOD-38 burst hold does not spend cooldowns after all healing need is gone");
+            auraMasteryCooldown: 0))),
+            "MOD-38 current priority checks stop burst follow-up when all healing need is gone");
 
-        var auraTailTracker = new ModuleDerivedStateTracker(new ManualTimeProvider());
-        Evaluate(State(
-            [80, 80, 80, 80, 100],
-            virtueAura: 5,
-            bellCooldown: 10,
-            auraMasteryCooldown: 10), auraTailTracker);
+        Equal("黎明之光", Action(Evaluate(State(
+            [94, 94, 94, 100, 100],
+            holyPower: 3))),
+            "MOD-38 three members below ninety-five use non-Virtue Light of Dawn before offensive fillers");
+        Equal("黎明之光", Action(Evaluate(State(
+            [94, 94, 94, 100, 100],
+            holyPower: 3,
+            combatTime: 0))),
+            "MOD-38 out-of-combat non-Virtue Light of Dawn remains allowed");
+        Equal("圣光术", Action(Evaluate(State(
+            [85, 100, 100, 100, 100],
+            stage: 5,
+            judgmentCooldown: 0))),
+            "MOD-38 stage five falls through to direct healing instead of Judgment");
+
         Equal("圣光术", Action(Evaluate(State(
             [70, 70, 100, 100, 100],
             virtueAura: 5,
             bellCooldown: 10,
-            auraMasteryCooldown: 0), auraTailTracker)),
-            "MOD-38 Aura Mastery is saved when burst hold only has two injured targets left");
+            auraMasteryCooldown: 0))),
+            "MOD-38 Aura Mastery is saved when only two severe-boundary targets remain");
         Equal("光环掌握", Action(Evaluate(State(
-            [80, 80, 80, 100, 100],
+            [60, 60, 60, 100, 100],
             virtueAura: 5,
             bellCooldown: 10,
-            auraMasteryCooldown: 0), auraTailTracker)),
-            "MOD-38 Aura Mastery remains available for three sustained deficits totaling sixty");
+            auraMasteryCooldown: 0))),
+            "MOD-38 Aura Mastery requires three thirty-percent deficits totaling one hundred twenty");
 
         foreach (var reserveStage in new[] { 1, 3, 5 })
         {
@@ -1311,6 +1489,26 @@ static void UnitSelectorExcludesUnavailableRoleContract()
         "7",
         UnitSelector.Resolve(new ModuleUnit { Kind = UnitSelectorKind.LowestHealth }, staleRaidPlayer),
         "raid player slot is resolved from group type before health reconciliation");
+}
+
+static void UnitSelectorOtherPlayerContract()
+{
+    var state = new GameState(new Dictionary<string, object?>
+    {
+        ["生命值"] = 25,
+        ["队伍类型"] = 46,
+        ["group"] = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+        {
+            ["1"] = new Dictionary<string, object?> { ["职责"] = 1, ["生命值"] = 25 },
+            ["2"] = new Dictionary<string, object?> { ["职责"] = 5, ["生命值"] = 30 },
+            ["3"] = new Dictionary<string, object?> { ["职责"] = 0, ["生命值"] = 10 }
+        }
+    });
+
+    Equal("2", UnitSelector.Resolve(
+            new ModuleUnit { Kind = UnitSelectorKind.LowestHealthOtherPlayer, HealthThreshold = 40 },
+            state),
+        "other-player selector excludes the player and unavailable NPC-like slot");
 }
 
 static void ModuleMissingBindingFallbackContract()
@@ -1825,14 +2023,14 @@ static void AoeWarningDiagnosticLogContract()
         }
     });
     Equal(
-        "AOE预警：普通AOE / 资源预留；圣能 5，圣光灌注 2 层 / 8 秒；明显缺口 0 人，总负荷 0，爆发保持 否",
+        "AOE预警：普通AOE / 资源预留；圣能 5，圣光灌注 2 层 / 8 秒；明显缺口 0 人，总负荷 0，爆发保持 否，鸣钟预计可用 否",
         tracker.Observe(reserve),
         "resource reservation transition is logged");
     Equal(null, tracker.Observe(reserve), "unchanged warning state is suppressed");
 
     var degradedTracker = new AoeWarningLogTracker();
     Equal(
-        "AOE预警：普通AOE / 资源预留；圣能 5，圣光灌注 2 层 / 8 秒；明显缺口 0 人，总负荷 0，爆发保持 否",
+        "AOE预警：普通AOE / 资源预留；圣能 5，圣光灌注 2 层 / 8 秒；明显缺口 0 人，总负荷 0，爆发保持 否，鸣钟预计可用 否",
         degradedTracker.Observe(reserve),
         "degraded warning starts from resource reservation");
     Equal(
@@ -1851,7 +2049,7 @@ static void AoeWarningDiagnosticLogContract()
         ["auras"] = new Dictionary<string, object?>()
     });
     Equal(
-        "AOE预警：普通AOE / 停止非紧急GCD；圣能 4，圣光灌注 0 层 / 0 秒；明显缺口 4 人，总负荷 60，爆发保持 是",
+        "AOE预警：普通AOE / 停止非紧急GCD；圣能 4，圣光灌注 0 层 / 0 秒；明显缺口 4 人，总负荷 60，爆发保持 是，鸣钟预计可用 否",
         tracker.Observe(gcdHold),
         "final safe-GCD transition and burst metrics are logged");
 
@@ -1866,7 +2064,7 @@ static void AoeWarningDiagnosticLogContract()
         ["auras"] = new Dictionary<string, object?>()
     });
     Equal(
-        "AOE预警：治疗吸收 / 等待生效；圣能 3，圣光灌注 0 层 / 0 秒；明显缺口 2 人，总负荷 30，爆发保持 否",
+        "AOE预警：治疗吸收 / 等待生效；圣能 3，圣光灌注 0 层 / 0 秒；明显缺口 2 人，总负荷 30，爆发保持 否，鸣钟预计可用 否",
         tracker.Observe(absorbWaiting),
         "heal absorb delay transition is logged");
     Equal("AOE预警：已结束；治疗吸收等待窗口结束", tracker.Observe(idle), "warning completion is logged");
@@ -2687,6 +2885,42 @@ static void CooldownConfirmationTrackerContract()
         "charge confirmation reports the observed state field");
     Equal(2, chargeConfirmed.InitialValue, "charge confirmation reports the initial count");
     Equal(1, chargeConfirmed.ObservedValue, "charge confirmation reports the decreased count");
+
+    var infusionConversionDecision = new LogicDecision(
+        "CTRL-F",
+        "施放 圣光闪现",
+        new Dictionary<string, object?> { ["动作单位槽位"] = 1 },
+        CooldownConfirmationSpell: "圣光闪现",
+        CooldownConfirmationStateField: "auras.圣光灌注层数",
+        CooldownConfirmationInitialValue: 1,
+        PlayerActionCode: 23);
+    var infusionConversionTracker = new CooldownConfirmationTracker();
+    infusionConversionTracker.RecordSent(infusionConversionDecision, now, new GameState(new Dictionary<string, object?>
+    {
+        ["auras"] = new Dictionary<string, object?> { ["圣光灌注层数"] = 1 },
+        ["玩家动作序号"] = 10,
+        ["玩家动作技能"] = 0,
+        ["玩家动作状态"] = 0
+    }));
+    Equal(0, infusionConversionTracker.Observe(new GameState(new Dictionary<string, object?>
+    {
+        ["auras"] = new Dictionary<string, object?> { ["圣光灌注层数"] = 0 },
+        ["玩家动作序号"] = 11,
+        ["玩家动作技能"] = 23,
+        ["玩家动作状态"] = 1
+    }), now.AddMilliseconds(100)).Count,
+        "Infusion Flash of Light does not confirm before the cast succeeds");
+    var completedInfusionConversion = infusionConversionTracker.Observe(new GameState(new Dictionary<string, object?>
+    {
+        ["auras"] = new Dictionary<string, object?> { ["圣光灌注层数"] = 0 },
+        ["玩家动作序号"] = 11,
+        ["玩家动作技能"] = 23,
+        ["玩家动作状态"] = 2
+    }), now.AddMilliseconds(200));
+    Equal(1, completedInfusionConversion.Count,
+        "successful Infusion Flash of Light emits one confirmation update");
+    Equal(true, completedInfusionConversion.Single().Confirmed,
+        "successful Infusion Flash of Light confirms after its stack is consumed");
 
     var resourceDecision = new LogicDecision(
         "CTRL-C",
@@ -4673,6 +4907,7 @@ static void FuyutsuiProtocolContract()
     var player = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "player.lua"));
     var target = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "target.lua"));
     var macro = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "macro.lua"));
+    var classMacros = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "classmacros.lua"));
     var events = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "events.lua"));
     var aoeWarning = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "aoewarning.lua"));
     var diGuaBridge = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "core", "diguabridge.lua"));
@@ -4711,8 +4946,11 @@ static void FuyutsuiProtocolContract()
         && player.Contains("state.valid = reason / 255", StringComparison.Ordinal),
         "validity keeps pause reasons in its existing protocol byte");
     Equal(true, target.Contains("UnitIsPlayer(unit)", StringComparison.Ordinal)
-        && target.Contains("index = 52", StringComparison.Ordinal),
-        "target type reuses its existing byte to distinguish friendly NPCs");
+        && target.Contains("index = 52", StringComparison.Ordinal)
+        && target.Contains("UnitPosition", StringComparison.Ordinal)
+        && target.Contains("GetPlayerFacing", StringComparison.Ordinal)
+        && target.Contains("cache.inFront", StringComparison.Ordinal),
+        "target type reuses its existing byte to distinguish friendly NPCs and tracks frontal hostility");
     Equal(true, macro.Contains("SecureHandlerClickTemplate", StringComparison.Ordinal)
         && macro.Contains("SetAttribute('macrotext'", StringComparison.Ordinal),
         "selector-target routing changes direct target macros through a secure handler");
@@ -4724,6 +4962,11 @@ static void FuyutsuiProtocolContract()
         && macro.Contains("[@%starget,harm,nodead][@targettarget,harm,nodead][harm,nodead]", StringComparison.Ordinal)
         && macro.Contains("[@targettarget,harm,nodead][harm,nodead]", StringComparison.Ordinal),
         "tank-target macros fall back through the current friendly target and current hostile target");
+    Equal(true, classMacros.Contains("[@target,harm,nodead]正义盾击", StringComparison.Ordinal)
+        && classMacros.Contains("[\"治疗石\"]", StringComparison.Ordinal)
+        && classMacros.Contains("[\"治疗药水\"] = \"item:271884", StringComparison.Ordinal)
+        && classMacros.Contains("牺牲祝福", StringComparison.Ordinal),
+        "Paladin macros expose direct hostile Shield, consumables and Sacrifice Blessing");
     Equal(true, events.Contains("function Fuyutsui:PLAYER_ROLES_ASSIGNED()", StringComparison.Ordinal)
         && events.Contains("self:LoadPlayerMacros()", StringComparison.Ordinal),
         "tank-target macros refresh after group role assignments change");
@@ -4764,10 +5007,15 @@ static void FuyutsuiProtocolContract()
         && paladin.Contains("\"AOE读条技能高位\"", StringComparison.Ordinal)
         && paladin.Contains("\"AOE受保护读条\"", StringComparison.Ordinal)
         && paladin.Contains("\"AOE读条剩余\"", StringComparison.Ordinal)
+        && paladin.Contains("\"圣洁鸣钟预计可用\"", StringComparison.Ordinal)
+        && paladin.Contains("\"正面\"", StringComparison.Ordinal)
+        && paladin.Contains("\"治疗石\"", StringComparison.Ordinal)
+        && paladin.Contains("name = \"圣盾术\", spellId = 642", StringComparison.Ordinal)
         && paladin.Contains("name = \"美德道标\", spellId = 200025", StringComparison.Ordinal),
         "holy paladin protocol exposes warning, bridge, action acknowledgement and measured GCD state");
     Equal(true, stateBlocks.Contains("[\"宏绑定状态\"] = function() return (state.macroBindingStatus or 0) / 255 end", StringComparison.Ordinal)
-        && stateBlocks.Contains("[\"宏绑定数量\"]", StringComparison.Ordinal),
+        && stateBlocks.Contains("[\"宏绑定数量\"]", StringComparison.Ordinal)
+        && stateBlocks.Contains("self.state[countKey] <= 0", StringComparison.Ordinal),
         "addon protocol exposes macro binding readiness diagnostics");
     Equal(true, aoeWarning.Contains("function Fuyutsui:PublishAOEDiagnostic", StringComparison.Ordinal)
         && aoeWarning.Contains("Fuyutsui:PublishAOEDiagnostic(\"castUnmatched\"", StringComparison.Ordinal)
@@ -4784,12 +5032,18 @@ static void FuyutsuiProtocolContract()
         "protected instanced casts use a narrow DiGua correlation and duration-object pixel fallback");
     Equal(true, aoeWarning.Contains("function Fuyutsui:GetEstimatedGCDSeconds()", StringComparison.Ordinal)
         && aoeWarning.Contains("function Fuyutsui:GetGCDRemainingSeconds()", StringComparison.Ordinal)
+        && aoeWarning.Contains("local function DivineTollExpectedReady", StringComparison.Ordinal)
+        && aoeWarning.Contains("cooldownRemaining <= math.max(0, virtueAt - now)", StringComparison.Ordinal)
+        && stateBlocks.Contains("[\"圣洁鸣钟预计可用\"] = function() return state.divineTollExpectedReady and 1 or 0 end", StringComparison.Ordinal)
+        && aoeWarning.Contains("Fuyutsui:UpdateStateBlock(\"状态\", \"圣洁鸣钟预计可用\")", StringComparison.Ordinal)
         && stateBlocks.Contains("self:GetEstimatedGCDSeconds()", StringComparison.Ordinal)
         && stateBlocks.Contains("self:GetGCDRemainingSeconds()", StringComparison.Ordinal)
         && events.Contains("self:UpdateStateBlock(\"状态\", \"公共冷却时长\")", StringComparison.Ordinal)
         && events.Contains("self:UpdateStateBlock(\"状态\", \"公共冷却剩余\")", StringComparison.Ordinal)
         && paladinConfig.Contains("\"公共冷却时长\"", StringComparison.Ordinal),
         "AOE planning and runtime input pacing share one measured GCD source");
+    Equal(true, unitSelector.Contains("LowestHealthOtherPlayer", StringComparison.Ordinal),
+        "module unit contract exposes a selector for other players only");
     Equal(true, player.Contains("function Fuyutsui:PublishPlayerAction", StringComparison.Ordinal)
         && events.Contains("self:PublishPlayerAction(spellID, 1)", StringComparison.Ordinal)
         && events.Contains("self:PublishPlayerAction(spellID, 2)", StringComparison.Ordinal)
@@ -5441,7 +5695,7 @@ static void RuntimeResourceWorkspaceContract()
                 "common = { \"荣耀圣令\" },",
                 "common = { \"荣耀圣令\", \"清毒术\" },",
                 StringComparison.Ordinal).Replace(
-                "[@tanktarget]正义盾击",
+                "[@target,harm,nodead]正义盾击",
                 "正义盾击",
                 StringComparison.Ordinal));
         File.WriteAllText(
@@ -5541,8 +5795,8 @@ static void RuntimeResourceWorkspaceContract()
                 .All(spellId => migratedPaladin.SpellsList.Any(entry => entry.SpellId == spellId)),
             "Paladin migration restores every player action mapping");
         Equal(true, ClassMacrosStore.Load(targetClassMacros).Classes["PALADIN"].StaticSpells
-                .Any(entry => string.Equals(entry.Text, "[@tanktarget]正义盾击", StringComparison.Ordinal)),
-            "Paladin migration restores the tank-target Shield of the Righteous macro");
+                .Any(entry => string.Equals(entry.Text, "[@target,harm,nodead]正义盾击", StringComparison.Ordinal)),
+            "Paladin migration restores the direct hostile Shield of the Righteous macro");
         Equal("user-change", File.ReadAllText(targetLua), "user edit is preserved");
         Equal("{\"version\":2}", File.ReadAllText(targetConfig), "managed target is updated");
         Equal(true, File.Exists(targetOldKeymap), "removed source does not delete target");

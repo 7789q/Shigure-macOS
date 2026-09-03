@@ -119,9 +119,10 @@ public sealed class AoeWarningLogTracker
         var visibleDeficits = state.GetInt("D10AtLeast");
         var totalDeficit = state.GetInt("DTotal");
         var burstHeld = state.GetInt("群疗爆发保持") > 0 ? "是" : "否";
+        var divineTollExpectedReady = state.GetInt("圣洁鸣钟预计可用") > 0 ? "是" : "否";
         return
             $"AOE预警：{typeLabel} / {stageLabel}；圣能 {holyPower}，圣光灌注 {infusionStacks} 层 / {infusion} 秒；" +
-            $"明显缺口 {visibleDeficits} 人，总负荷 {totalDeficit}，爆发保持 {burstHeld}";
+            $"明显缺口 {visibleDeficits} 人，总负荷 {totalDeficit}，爆发保持 {burstHeld}，鸣钟预计可用 {divineTollExpectedReady}";
     }
 
     public void Reset()

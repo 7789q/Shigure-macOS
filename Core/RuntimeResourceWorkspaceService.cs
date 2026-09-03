@@ -228,7 +228,7 @@ public sealed class RuntimeResourceWorkspaceService
                     string.Equals(entry.Text, "正义盾击", StringComparison.Ordinal));
                 if (shield is not null)
                 {
-                    shield.Text = "[@tanktarget]正义盾击";
+                    shield.Text = "[@target,harm,nodead]正义盾击";
                     ClassMacrosStore.Save(macros);
                     migrated.Add(NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, classMacrosPath)));
                 }

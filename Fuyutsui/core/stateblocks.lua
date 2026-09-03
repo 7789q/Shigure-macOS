@@ -35,8 +35,11 @@ local function GetItemCooldownPixel(self, countKey, itemID)
     if not self.state[countKey] then
         self:GetItemCount()
     end
+    if not self.state[countKey] or self.state[countKey] <= 0 then
+        return 0
+    end
     local remainingTime = self:GetItemRemainingTime(itemID)
-    if remainingTime and self.state[countKey] > 0 then
+    if remainingTime then
         return math.min(1, remainingTime / 255)
     end
     return 1
@@ -140,6 +143,7 @@ local stateBlockGetters = {
         ["英勇打击"] = function() return state.heroicStrike or 0 end,
         ["AOE事件类型"] = function() return (state.aoeEventType or 0) / 255 end,
         ["AOE事件阶段"] = function() return (state.aoeEventStage or 0) / 255 end,
+        ["圣洁鸣钟预计可用"] = function() return state.divineTollExpectedReady and 1 or 0 end,
         ["公共冷却时长"] = function(self)
             local seconds = self.GetEstimatedGCDSeconds and self:GetEstimatedGCDSeconds() or 1.5
             local centiseconds = math.min(255, math.max(0, math.floor(seconds * 100 + 0.5)))
@@ -287,6 +291,7 @@ local stateBlockGetters = {
             if not target.maxRange then return nil end
             return target.maxRange / 255
         end,
+        ["正面"] = function() return target.inFront and 1 or 0 end,
         ["施法(倒计时)"] = function(self) return self:GetUnitCastPixel("target", "cast") end,
         ["施法(正计时)"] = function(self) return self:GetUnitCastPixel("target", "castElapsed") end,
         ["施法可打断"] = function(self) return self:GetUnitInterruptiblePixel("target", "cast") end,

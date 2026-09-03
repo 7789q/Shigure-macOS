@@ -9,6 +9,31 @@ local mouseover = Fuyutsui.mouseover
 local boss = Fuyutsui.boss
 local nameplate = Fuyutsui.nameplate
 
+local function IsUnitInFront(unit)
+    if type(UnitPosition) ~= "function" or type(GetPlayerFacing) ~= "function" then
+        return false
+    end
+
+    local ok, inFront = pcall(function()
+        local px, py = UnitPosition("player")
+        local tx, ty = UnitPosition(unit)
+        local facing = GetPlayerFacing()
+        local isSecret = issecretvalue
+        if not (type(px) == "number" and type(py) == "number"
+            and type(tx) == "number" and type(ty) == "number" and type(facing) == "number") then
+            return false
+        end
+        if isSecret and (isSecret(px) or isSecret(py) or isSecret(tx) or isSecret(ty) or isSecret(facing)) then
+            return false
+        end
+
+        local angle = math.atan2(ty - py, tx - px)
+        local delta = math.abs(math.atan2(math.sin(angle - facing), math.cos(angle - facing)))
+        return delta <= math.pi / 2
+    end)
+    return ok and inFront == true
+end
+
 function Fuyutsui:GetUnitRange(unit)
     local minRange, maxRange = rc:GetRange(unit)
     return minRange, maxRange
@@ -117,6 +142,7 @@ function Fuyutsui:UpdateUnitCanAttack(unit)
     else
         cache.canAssist = UnitCanAssist("player", unit)
     end
+    cache.inFront = IsUnitInFront(unit)
     self:UpdateUnitType(unit)
 end
 
@@ -127,6 +153,7 @@ function Fuyutsui:UpdateUnitRangeBlock(unit)
     local minRange, maxRange = self:GetUnitRange(unit)
     cache.minRange = minRange
     cache.maxRange = maxRange
+    cache.inFront = IsUnitInFront(unit)
     if cache.canAttack then
         if cache.maxRange and self.state.specRange then
             cache.inRange = cache.maxRange <= self.state.specRange
@@ -139,6 +166,7 @@ function Fuyutsui:UpdateUnitRangeBlock(unit)
         end
     end
     self:UpdateStateBlock(category, "距离")
+    self:UpdateStateBlock(category, "正面")
 end
 
 function Fuyutsui:UpdateUnitCastingOrChannelingInfo(unit)

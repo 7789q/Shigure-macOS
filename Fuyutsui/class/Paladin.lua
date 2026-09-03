@@ -59,6 +59,7 @@ Fuyutsui.ClassBlocks = {
                 "AOE读条技能高位",
                 "AOE受保护读条",
                 "AOE读条剩余",
+                "圣洁鸣钟预计可用",
             },
             ["能量"] = {
                 "法力值",
@@ -66,6 +67,7 @@ Fuyutsui.ClassBlocks = {
             },
             ["物品"] = {
                 "治疗药水",
+                "治疗石",
             },
             ["配置开关"] = {
                 "爆发开关",
@@ -74,6 +76,7 @@ Fuyutsui.ClassBlocks = {
             ["目标"] = {
                 "类型",
                 "距离",
+                "正面",
                 "施法(倒计时)",
                 "施法(正计时)",
                 "施法可打断",
@@ -105,6 +108,7 @@ Fuyutsui.ClassBlocks = {
                 { name = "复仇之怒", spellId = 31884, maxApps = 2, },
                 { name = "觉醒", spellId = 414193, },
                 { name = "美德道标", spellId = 200025, },
+                { name = "圣盾术", spellId = 642, },
             },
             target = {
                 harmful = {

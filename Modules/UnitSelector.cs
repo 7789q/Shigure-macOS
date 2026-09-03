@@ -35,6 +35,11 @@ public static class UnitSelector
                 group,
                 threshold,
                 data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role)),
+            UnitSelectorKind.LowestHealthOtherPlayer => LowestHealthOtherPlayer(
+                group,
+                threshold,
+                ResolvePlayerSlot(state),
+                data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role)),
             UnitSelectorKind.LowestHealthWithAnyAura => unit.AuraNames is { Count: > 0 } names
                 ? LowestHealth(
                     group,
@@ -175,6 +180,42 @@ public static class UnitSelector
         var lowestPct = threshold;
         for (var i = 1; i <= 30; i++)
         {
+            var key = i.ToString();
+            if (!group.TryGetValue(key, out var data) || !RoleNotZero(data) || !predicate(data))
+            {
+                continue;
+            }
+
+            if (!TryInt(GetField(data, "生命值"), out var pct))
+            {
+                continue;
+            }
+
+            if (pct > 0 && pct < threshold && pct < lowestPct)
+            {
+                lowestUnit = key;
+                lowestPct = pct;
+            }
+        }
+
+        return lowestUnit;
+    }
+
+    private static string? LowestHealthOtherPlayer(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group,
+        int threshold,
+        int playerSlot,
+        Func<IReadOnlyDictionary<string, object?>, bool> predicate)
+    {
+        string? lowestUnit = null;
+        var lowestPct = threshold;
+        for (var i = 1; i <= 30; i++)
+        {
+            if (i == playerSlot)
+            {
+                continue;
+            }
+
             var key = i.ToString();
             if (!group.TryGetValue(key, out var data) || !RoleNotZero(data) || !predicate(data))
             {

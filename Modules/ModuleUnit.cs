@@ -8,6 +8,9 @@ public enum UnitSelectorKind
     /// <summary>生命值最低的单位。get_lowest_health_unit</summary>
     LowestHealth,
 
+    /// <summary>排除玩家自身后，其他玩家队友中生命值最低的单位。</summary>
+    LowestHealthOtherPlayer,
+
     /// <summary>拥有任一光环且生命值最低。get_lowest_health_unit_with_any_aura</summary>
     LowestHealthWithAnyAura,
 

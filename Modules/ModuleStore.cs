@@ -842,7 +842,8 @@ public static class ModuleLogic
             }
             var confirmationStateChange = ConfirmationStateChangeKind.Decreased;
             if (!observesCooldown
-                && string.Equals(actionSpell, "圣光术", StringComparison.Ordinal)
+                && (string.Equals(actionSpell, "圣光闪现", StringComparison.Ordinal)
+                    || string.Equals(actionSpell, "圣光术", StringComparison.Ordinal))
                 && rule.Condition.Contains("auras.圣光灌注层数 > 0", StringComparison.Ordinal)
                 && ModuleConditionEvaluator.TryResolveInt(state, "auras.圣光灌注层数", out var infusionStacks)
                 && infusionStacks > 0)

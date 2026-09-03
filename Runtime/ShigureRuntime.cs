@@ -453,13 +453,17 @@ public sealed class ShigureRuntime : IDisposable
             return false;
         }
 
-        // Rule 35 is the deliberate out-of-combat Infusion conversion. It is
-        // allowed to cast Holy Light on a full-health player by design.
-        if (spell == "圣光术"
-            && ((decision.UnitInfo.TryGetValue("规则编号", out var ruleValue)
-                 && Convert.ToInt32(ruleValue) == 35)
-                || (decision.UnitInfo.TryGetValue("命中条件", out var conditionValue)
-                    && conditionValue?.ToString()?.Contains("auras.圣光灌注层数 > 0", StringComparison.Ordinal) == true)))
+        // Out-of-combat Infusion conversion deliberately casts on a full-health
+        // player. The live rule uses Flash of Light; keep the legacy Holy Light
+        // rule number as a compatibility fallback for older local modules.
+        var isInfusionConversion = decision.UnitInfo.TryGetValue("命中条件", out var conditionValue)
+            && conditionValue?.ToString()?.Contains("战斗时间 == 0", StringComparison.Ordinal) == true
+            && conditionValue.ToString()?.Contains("auras.圣光灌注层数 > 0", StringComparison.Ordinal) == true;
+        var isLegacyInfusionConversion = spell == "圣光术"
+            && decision.UnitInfo.TryGetValue("规则编号", out var ruleValue)
+            && Convert.ToInt32(ruleValue) == 35;
+        if ((spell == "圣光闪现" || spell == "圣光术")
+            && (isInfusionConversion || isLegacyInfusionConversion))
         {
             return false;
         }
@@ -632,7 +636,8 @@ public sealed class ShigureRuntime : IDisposable
                 info["确认初始值"] = update.InitialValue;
                 info["确认当前值"] = update.ObservedValue;
             }
-            if (string.Equals(update.Spell, "圣光术", StringComparison.Ordinal)
+            if ((string.Equals(update.Spell, "圣光闪现", StringComparison.Ordinal)
+                 || string.Equals(update.Spell, "圣光术", StringComparison.Ordinal))
                 && string.Equals(update.StateField, "auras.圣光灌注层数", StringComparison.Ordinal))
             {
                 var conversionMessage = update.Confirmed
@@ -961,11 +966,12 @@ internal sealed class CooldownConfirmationTracker
             var stateChangeAccepted = stateChanged
                 && (!pending.PlayerActionCode.HasValue
                     || matchingActionObserved
-                    || delayedActionAcknowledgement);
+                    || delayedActionAcknowledgement)
+                && (pending.StateField != "auras.圣光灌注层数" || actionStatus == 2);
             var actionAccepted = matchingActionObserved
                 && actionStatus is 1 or 2
-                && (pending.StateField != "auras.圣光灌注层数" || stateChanged)
-                && (pending.Spell != "圣光术" || actionStatus == 2);
+                && (pending.StateField != "auras.圣光灌注层数"
+                    || stateChanged && actionStatus == 2);
             if (actionAccepted || genericActionAccepted || cooldown > 0 || stateChangeAccepted)
             {
                 _pending.Remove(spell);
@@ -1007,7 +1013,7 @@ internal sealed class CooldownConfirmationTracker
 
     private static TimeSpan ConfirmationTimeout(string spell, int initialGcdRemaining)
     {
-        if (string.Equals(spell, "圣光术", StringComparison.Ordinal))
+        if (spell is "圣光闪现" or "圣光术")
         {
             return TimeSpan.FromSeconds(3);
         }
