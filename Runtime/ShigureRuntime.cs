@@ -181,7 +181,8 @@ public sealed class ShigureRuntime : IDisposable
                 var scanInterval = RuntimeScanCadence.Resolve(
                     _options.LogicInterval,
                     _enabled,
-                    _scanUnavailable);
+                    _scanUnavailable,
+                    _cooldownConfirmationTracker.HasPending);
                 if (now - lastLogicAt >= scanInterval)
                 {
                     lastLogicAt = now;
@@ -584,7 +585,7 @@ public sealed class ShigureRuntime : IDisposable
         {
             var backedOff = _actionFailureBackoff.Observe(update, now);
             var ambiguousTarget = !update.Confirmed && update.Actions.Count > 1;
-            var observedActionStatus = _state?.GetInt("玩家动作状态") ?? 0;
+            var observedActionStatus = update.ObservedActionStatus;
             _currentStep = update.Confirmed
                 ? $"技能确认：{update.Spell} 已释放"
                 : backedOff
@@ -595,10 +596,11 @@ public sealed class ShigureRuntime : IDisposable
             var info = new Dictionary<string, object?>
             {
                 ["技能确认"] = update.Confirmed ? "释放成功" : "确认超时",
+                ["确认耗时"] = $"{Math.Max(0, (long)(now - update.SentAt).TotalMilliseconds)} ms",
                 ["技能冷却"] = update.Cooldown,
                 ["动作目标"] = string.Join(",", update.Actions.Select(action => action.Unit).Order()),
-                ["玩家动作序号"] = _state?.GetInt("玩家动作序号") ?? 0,
-                ["玩家动作技能"] = _state?.GetInt("玩家动作技能") ?? 0,
+                ["玩家动作序号"] = update.ObservedActionSerial,
+                ["玩家动作技能"] = update.ObservedActionCode,
                 ["玩家动作状态"] = observedActionStatus,
                 ["玩家动作状态说明"] = observedActionStatus switch
                 {
@@ -609,7 +611,7 @@ public sealed class ShigureRuntime : IDisposable
                     _ => "无"
                 },
                 ["期待动作技能码"] = update.ExpectedPlayerActionCode ?? 0,
-                ["公共冷却剩余"] = _state?.GetInt("公共冷却剩余") ?? 0,
+                ["公共冷却剩余"] = update.CooldownRemaining,
                 ["确认状态字段"] = update.StateField ?? "-",
                 ["确认初始值"] = update.InitialValue ?? 0,
                 ["确认当前值"] = update.ObservedValue ?? 0
@@ -625,6 +627,10 @@ public sealed class ShigureRuntime : IDisposable
             if (ambiguousTarget)
             {
                 info["失败归因"] = "同一确认窗口尝试了多个目标，不对单个目标累计失败";
+            }
+            else if (!update.Confirmed && observedActionStatus == 4)
+            {
+                info["失败诊断"] = InferObservableFailure(update.Spell);
             }
             if (backedOff)
             {
@@ -649,6 +655,49 @@ public sealed class ShigureRuntime : IDisposable
             _unitInfo = info;
             PublishSnapshot();
         }
+    }
+
+    private string InferObservableFailure(string spell)
+    {
+        var state = _state;
+        if (state is null)
+        {
+            return "WoW 已报告失败，但确认帧没有可用状态";
+        }
+
+        var gcd = state.GetInt("公共冷却剩余");
+        if (gcd > 0)
+        {
+            return $"GCD 尚未结束（约 {gcd} cs）；WoW 原始错误文本未提供";
+        }
+
+        if (string.Equals(spell, "正义盾击", StringComparison.Ordinal))
+        {
+            var targetType = state.GetInt("目标类型");
+            var distance = state.GetInt("目标距离");
+            var inFront = state.GetInt("目标正面");
+            if (targetType != 1)
+            {
+                return $"当前目标不是可攻击目标（目标类型 {targetType}）；WoW 原始错误文本未提供";
+            }
+
+            if (distance <= 0 || distance > 5)
+            {
+                return $"当前目标距离不可用或超过 5 码（{distance}）；WoW 原始错误文本未提供";
+            }
+
+            if (inFront <= 0)
+            {
+                return "当前目标正面未确认（值为 0）；WoW 原始错误文本未提供";
+            }
+
+            if (inFront == 2)
+            {
+                return "当前场景无法由 API 预判目标正面（值为 2）；已交给 WoW 施法结果确认";
+            }
+        }
+
+        return "WoW 已报告技能失败，但未提供可区分的客户端错误文本";
     }
 
     private void PublishSnapshot()
@@ -771,7 +820,9 @@ internal sealed class CooldownConfirmationTracker
     internal static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(1);
     internal static readonly TimeSpan MinimumRetrySpacing = TimeSpan.FromMilliseconds(100);
     internal static readonly TimeSpan RetryCadence = TimeSpan.FromMilliseconds(250);
-    internal const int QueueWindowCentiseconds = 40;
+    // WoW rejects delivery while a noticeable GCD remains; keep only a short
+    // hand-off window to avoid failed sends and one-second retries.
+    internal const int QueueWindowCentiseconds = 5;
     private static readonly HashSet<string> HealingSpells = new(StringComparer.Ordinal)
     {
         "圣疗术",
@@ -938,6 +989,7 @@ internal sealed class CooldownConfirmationTracker
             var actionSerial = state.GetInt("玩家动作序号");
             var actionCode = state.GetInt("玩家动作技能");
             var actionStatus = state.GetInt("玩家动作状态");
+            var gcdRemaining = state.GetInt("公共冷却剩余");
             var matchingActionObserved = pending.PlayerActionCode.HasValue
                 && actionSerial != pending.InitialActionSerial
                 && actionCode == pending.PlayerActionCode.Value;
@@ -986,7 +1038,12 @@ internal sealed class CooldownConfirmationTracker
                     pending.Actions,
                     genericActionAccepted,
                     pending.PlayerActionCode,
-                    delayedActionAcknowledgement));
+                    delayedActionAcknowledgement,
+                    state.GetInt("玩家动作序号"),
+                    state.GetInt("玩家动作技能"),
+                    state.GetInt("玩家动作状态"),
+                    state.GetInt("公共冷却剩余"),
+                    actionFailed));
             }
             else if ((actionFailed && pending.QueueWindowAttempted)
                      || now - pending.SentAt >= ConfirmationTimeout(pending.Spell, pending.InitialGcdRemaining))
@@ -1002,7 +1059,13 @@ internal sealed class CooldownConfirmationTracker
                     pending.SentAt,
                     pending.Actions,
                     false,
-                    pending.PlayerActionCode));
+                    pending.PlayerActionCode,
+                    false,
+                    actionSerial,
+                    actionCode,
+                    actionStatus,
+                    gcdRemaining,
+                    actionFailed && pending.QueueWindowAttempted));
             }
         }
 
@@ -1104,7 +1167,12 @@ internal sealed record CooldownConfirmationUpdate(
     IReadOnlySet<LogicActionKey> Actions,
     bool UsedGenericPlayerAction = false,
     int? ExpectedPlayerActionCode = null,
-    bool UsedDelayedActionAcknowledgement = false);
+    bool UsedDelayedActionAcknowledgement = false,
+    int ObservedActionSerial = 0,
+    int ObservedActionCode = 0,
+    int ObservedActionStatus = 0,
+    int CooldownRemaining = 0,
+    bool DefinitiveFailure = true);
 
 internal sealed class ActionFailureBackoff
 {
@@ -1120,6 +1188,11 @@ internal sealed class ActionFailureBackoff
             {
                 _failures.Remove(confirmedAction);
             }
+            return false;
+        }
+
+        if (!update.DefinitiveFailure)
+        {
             return false;
         }
 
@@ -1306,12 +1379,21 @@ internal static class RuntimeScanCadence
 {
     private static readonly TimeSpan IdleMinimum = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan FailureMinimum = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan ConfirmationMaximum = TimeSpan.FromMilliseconds(50);
 
     public static TimeSpan Resolve(
         TimeSpan configuredInterval,
         bool enabled,
-        bool scanUnavailable)
+        bool scanUnavailable,
+        bool hasPendingConfirmation = false)
     {
+        if (enabled && !scanUnavailable && hasPendingConfirmation)
+        {
+            return configuredInterval <= ConfirmationMaximum
+                ? configuredInterval
+                : ConfirmationMaximum;
+        }
+
         var minimum = scanUnavailable
             ? FailureMinimum
             : enabled

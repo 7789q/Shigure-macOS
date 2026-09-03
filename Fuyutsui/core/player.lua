@@ -292,7 +292,16 @@ function Fuyutsui:PublishPlayerAction(spellId, status)
     end
     if type(spellId) ~= "number" then return end
     local spell = spellsList[spellId]
-    if not spell or type(spell.index) ~= "number" then return end
+    if not spell or type(spell.index) ~= "number" then
+        -- Do not leave the previous spell code visible for an unknown event.
+        state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
+        state.playerActionSpell = 0
+        state.playerActionStatus = status
+        self:UpdateStateBlock("状态", "玩家动作技能")
+        self:UpdateStateBlock("状态", "玩家动作状态")
+        self:UpdateStateBlock("状态", "玩家动作序号")
+        return
+    end
     state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
     state.playerActionSpell = spell.index
     state.playerActionStatus = status

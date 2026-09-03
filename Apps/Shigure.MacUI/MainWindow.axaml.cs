@@ -49,6 +49,7 @@ public sealed partial class MainWindow : Window
     private readonly SemaphoreSlim _permissionRequestGate = new(1, 1);
     private readonly object _runtimeSnapshotSync = new();
     private readonly RuntimeUiUpdateGuard _runtimeUiUpdateGuard;
+    private readonly LocalRuntimeLogStore _detailedLogStore;
     private readonly DispatcherTimer _mainBoundsCaptureTimer;
     private readonly DispatcherTimer _logicToastTimer;
     private Action? _refreshPermissionStatuses;
@@ -126,6 +127,11 @@ public sealed partial class MainWindow : Window
         {
             AppendLocalLog($"内置模块同步失败：{failure}");
         }
+        foreach (var module in services.ModuleStore.GetModules())
+        {
+            AppendLocalLog(
+                $"当前模块：{module.Name}，版本 {module.Version}，ID {module.Id}，路径 {module.FilePath ?? "-"}");
+        }
         AppendModuleLoadFailures();
     }
 
@@ -157,6 +163,9 @@ public sealed partial class MainWindow : Window
         _runtimeUiUpdateGuard = new RuntimeUiUpdateGuard(Path.Combine(
             UserDataLayout.ResolveLogsDirectory(userDataDirectory),
             "runtime-ui-errors.log"));
+        _detailedLogStore = new LocalRuntimeLogStore(Path.Combine(
+            UserDataLayout.ResolveLogsDirectory(userDataDirectory),
+            "runtime-detailed.log"));
         var stateLoad = _uiStateStore?.Load() ?? new MacUiStateLoadResult(new MacUiState(), null);
         _uiState = stateLoad.State;
         _overlayLayout = _uiState.OverlayLayout;
@@ -1998,6 +2007,7 @@ public sealed partial class MainWindow : Window
 
     private void AppendLog(RuntimeLogEntry entry)
     {
+        _detailedLogStore.Append(entry);
         _logLines.Add($"[{entry.Timestamp.ToLocalTime():HH:mm:ss}] {entry.Message}");
         while (_logLines.Count > MaximumLogLines)
         {

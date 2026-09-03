@@ -279,7 +279,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "轻伤目标 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "Condition": "轻伤目标 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5",
       "UnitName": "轻伤目标",
       "Spell": "神圣震击",
       "Comment": "低于 90% 且无灌注时使用神圣震击"
@@ -317,15 +317,15 @@
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && 目标类型 == 1 && 目标距离 <= 5 && 目标正面 > 0",
+      "Condition": "战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && 目标类型 == 1 && 目标距离 <= 5",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "Unit": 32,
       "Spell": "正义盾击",
-      "Comment": "全员至少 90% 且无治疗吸收时，仅对正面 5 码内的当前敌对目标释放正义盾击；普通 AOE 最后安全窗口除外"
+      "Comment": "前面的治疗消耗规则均未触发时，在允许的 AOE 阶段对 5 码内的当前敌对目标释放正义盾击，作为通用圣能消耗；不依赖副本内不可用的正面 API"
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5",
       "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
       "Unit": 0,
       "Spell": "神圣震击",

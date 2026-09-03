@@ -291,7 +291,8 @@ local stateBlockGetters = {
             if not target.maxRange then return nil end
             return target.maxRange / 255
         end,
-        ["正面"] = function() return target.inFront and 1 or 0 end,
+        -- 0=确认背面，1=确认正面，2=位置/朝向 API 不可用，由 WoW 施法结果兜底。
+        ["正面"] = function() return target.inFront or 0 end,
         ["施法(倒计时)"] = function(self) return self:GetUnitCastPixel("target", "cast") end,
         ["施法(正计时)"] = function(self) return self:GetUnitCastPixel("target", "castElapsed") end,
         ["施法可打断"] = function(self) return self:GetUnitInterruptiblePixel("target", "cast") end,

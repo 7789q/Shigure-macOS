@@ -17,6 +17,7 @@
     <Compile Include="..\..\Apps\Shigure.MacApp\MacLauncherParentMonitor.cs" Link="MacApp\MacLauncherParentMonitor.cs" />
     <Compile Include="..\..\Apps\Shigure.MacApp\SingleInstanceLease.cs" Link="MacApp\SingleInstanceLease.cs" />
     <Compile Include="..\..\Apps\Shigure.MacUI\RuntimeUiUpdateGuard.cs" Link="MacUI\RuntimeUiUpdateGuard.cs" />
+    <Compile Include="..\..\Apps\Shigure.MacUI\LocalRuntimeLogStore.cs" Link="MacUI\LocalRuntimeLogStore.cs" />
     <Compile Include="..\..\Tools\Shigure.MacDiagnostics\MacDiagnosticCommand.cs" Link="Diagnostics\MacDiagnosticCommand.cs" />
   </ItemGroup>
 

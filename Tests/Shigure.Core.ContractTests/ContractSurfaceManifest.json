@@ -103,7 +103,11 @@
     },
     "Apps/Shigure.MacUI/MainWindow.axaml.cs": {
       "category": "macos-platform",
-      "sha256": "a06d49bd34b27d86da8c96a9e249d6cc882a19698977df8d1b9be7483a88662b"
+      "sha256": "faf77bcf1767d2e7adfdd4db6d50fff96e445bab76ddcf86639374fb30d9a699"
+    },
+    "Apps/Shigure.MacUI/LocalRuntimeLogStore.cs": {
+      "category": "macos-platform",
+      "sha256": "ab72641873a0c37b3b45d6e59ab92083d5488f2d546a012448663cecfc3ec8bf"
     },
     "Apps/Shigure.MacUI/ModuleEditorView.cs": {
       "category": "macos-platform",
@@ -135,7 +139,7 @@
     },
     "BundledModules/holy-paladin-virtue-12.1.json": {
       "category": "configuration-schema",
-      "sha256": "43a64a863de8da51b565e6b1f1e9983cefa704ae6d92dcf51aebfabbec1ce9f8"
+      "sha256": "3a1a21eda4400ef624a16b7bc8b4cf64c602ff221c3e0a1a8d7522c37baff87c"
     },
     "Core/AssemblyInfo.cs": {
       "category": "shared-contract",
@@ -143,7 +147,7 @@
     },
     "Core/BundledModuleInstaller.cs": {
       "category": "shared-contract",
-      "sha256": "f13cf320a10b160c6b39c4eeac7fbcd4c2b7627a5649cb96ea9acc1ba5baa262"
+      "sha256": "86a7ed880975b02aa1f5ceda0746758148d402370bb64acffa953a1d5560c038"
     },
     "Core/LegacyModuleMigrationService.cs": {
       "category": "shared-contract",
@@ -207,7 +211,7 @@
     },
     "Modules/ModuleStore.cs": {
       "category": "shared-contract",
-      "sha256": "4d599b26ba39f3a24e54bccda74fd2a5d6c4408bc42e1a52b20dcb34ac70dc06"
+      "sha256": "a907e1ec93779227538dd7a3171adb13028e6eb7d8ac4d93924a5ff8b7d4ce75"
     },
     "Modules/ModuleUnit.cs": {
       "category": "shared-contract",
@@ -279,7 +283,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "189cc387cc4499d7892118c603ca73f90ea7bb773b513fa230e91ebe89e5f2fd"
+      "sha256": "6b0270ee098a548eca1db42341bf4c69fece28ce521a83e720dd0d0dd636838a"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -299,7 +303,7 @@
     },
     "Presentation/RuntimeSessionController.cs": {
       "category": "shared-contract",
-      "sha256": "a7dc2497576e11b00ea998dbf25438ed99af0bd5b62c97640e6d26ed2763314d"
+      "sha256": "d6831b8c730cc966cc1a6cd3f17720035abf26f26fc71735d13d9706a6a26fee"
     },
     "Presentation/Shigure.Presentation.csproj": {
       "category": "shared-contract",
@@ -311,7 +315,7 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "deef484a5ba53113289ec36a8ddc0d05dfe5bc19173ede72e018c9d2a621f997"
+      "sha256": "8affce4df437a0ebc089cddf660efc090647fdf609f30b000146f6e5b329575a"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/aoe-warning-replay.lua": {
       "category": "shared-contract",
@@ -323,7 +327,7 @@
     },
     "Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj": {
       "category": "shared-contract",
-      "sha256": "336bc96d189946ceb61dad61ae25bb00974af879a67fd1a585061a2f4a61c1e4"
+      "sha256": "4669502a14b03bd5d4400d7fdb572d3e3c3b6b4ed56528ed18966eb5f8be15f9"
     },
     "Infrastructure/ClassStateCatalog.cs": {
       "category": "configuration-schema",
@@ -587,7 +591,7 @@
     },
     "Fuyutsui/core/player.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "f23b1e1c4bac5895f6e5af1f2d95b9f9727dc9de245d5f7473b103bc23ab6004"
+      "sha256": "b030786baa144fa46ee68eb969d4098256cce2d28bc87976308d123091e8465c"
     },
     "Fuyutsui/core/quickbutton.lua": {
       "category": "fuyutsui-authority",
@@ -599,11 +603,11 @@
     },
     "Fuyutsui/core/stateblocks.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "2ad8027f443c05de703c74583ad814b1b0d53845bbe8f56ecab7293f986aac4c"
+      "sha256": "ca01e641b3af167be46ba55cfbac247233431f660ef0845178de24f0f07d1b1d"
     },
     "Fuyutsui/core/target.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "94e6830c5b5c7f654680dd32ea8bc6b9cc1cce48dfee541e44b0252a7ffe8765"
+      "sha256": "34929a75b5effdeb727ab77ff31c9977d5cc3c0924b45e74d27824afee0872e4"
     },
     "Fuyutsui/embeds.xml": {
       "category": "fuyutsui-authority",

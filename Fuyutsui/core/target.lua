@@ -11,7 +11,7 @@ local nameplate = Fuyutsui.nameplate
 
 local function IsUnitInFront(unit)
     if type(UnitPosition) ~= "function" or type(GetPlayerFacing) ~= "function" then
-        return false
+        return 2
     end
 
     local ok, inFront = pcall(function()
@@ -21,17 +21,18 @@ local function IsUnitInFront(unit)
         local isSecret = issecretvalue
         if not (type(px) == "number" and type(py) == "number"
             and type(tx) == "number" and type(ty) == "number" and type(facing) == "number") then
-            return false
+            return 2
         end
         if isSecret and (isSecret(px) or isSecret(py) or isSecret(tx) or isSecret(ty) or isSecret(facing)) then
-            return false
+            return 2
         end
 
-        local angle = math.atan2(ty - py, tx - px)
+        -- WoW facing uses 0 = north; convert the world vector to that basis.
+        local angle = math.atan2(px - tx, ty - py)
         local delta = math.abs(math.atan2(math.sin(angle - facing), math.cos(angle - facing)))
-        return delta <= math.pi / 2
+        return delta <= math.pi / 2 and 1 or 0
     end)
-    return ok and inFront == true
+    return ok and inFront or 2
 end
 
 function Fuyutsui:GetUnitRange(unit)
@@ -99,6 +100,12 @@ local function getUnitType(unit)
     local canAttack = UnitCanAttack("player", unit)
     local canAssist = UnitCanAssist("player", unit)
     if not canAttack and not canAssist then return 0 end
+
+    -- Target-type conditions use 1 as the canonical hostile-target value.
+    -- Friendly party/NPC identities continue to use the 100+ namespace below.
+    if canAttack then
+        return 1 / 255
+    end
 
     local index = getUnitTypeIndex(unit)
     if canAssist then

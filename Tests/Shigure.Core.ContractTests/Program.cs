@@ -67,6 +67,7 @@ var tests = new (string Name, Action Run)[]
     ("runtime failure snapshot contract", RuntimeFailureSnapshotContract),
     ("runtime startup failure ownership contract", RuntimeStartupFailureOwnershipContract),
     ("runtime session ownership contract", RuntimeSessionOwnershipContract),
+    ("local runtime log store contract", LocalRuntimeLogStoreContract),
     ("mac application host lifecycle contract", MacApplicationHostLifecycleContract),
     ("mac permission command contract", MacPermissionCommandContract),
     ("mac module import command contract", MacModuleImportCommandContract),
@@ -196,6 +197,14 @@ static void BundledModuleInstallationContract()
                 "shigure-holy-paladin-virtue-12-1",
                 "06fac28138cb0bf752c35e1e269a25998d07ce071a4bb5a28243f9903429460f"),
             "the repository 1.2.1.21 module is upgradeable");
+        Equal(true, BundledModuleInstaller.IsKnownUpgradeableHash(
+                "shigure-holy-paladin-virtue-12-1",
+                "ea16efa2c7bbd04eb65ac08ef45ed5dc38a6bf0462b87738058cd5d54a29865e"),
+            "the observed local 1.2.1.21 module is upgradeable");
+        Equal(true, BundledModuleInstaller.IsKnownUpgradeableHash(
+                "shigure-holy-paladin-virtue-12-1",
+                "70d96b2b330ac68d41f070d9cd16fbf705650849f20f29f4c0330842380f2854"),
+            "the observed local 1.2.1.22 module with the stale frontal condition is upgradeable");
         Equal(true, BundledModuleInstaller.IsKnownUpgradeableModule(
                 "shigure-holy-paladin-virtue-12-1",
                 "烈日奶骑大秘境美德爆发-20260829",
@@ -372,8 +381,9 @@ static int ValidateHolyPaladinModule(string path)
                 && (rule.SubConditions?.Contains("神圣能量 >= 3") == true)),
             "non-Virtue Light of Dawn requires three light injuries and no severe target");
         var shieldRule = module.Rules.Single(rule => rule.Spell == "正义盾击");
-        Equal(true, shieldRule.Condition.Contains("目标类型 == 1 && 目标距离 <= 5 && 目标正面 > 0", StringComparison.Ordinal),
-            "healthy-group Shield of the Righteous requires a nearby frontal hostile target");
+        Equal(true, shieldRule.Condition.Contains("目标类型 == 1 && 目标距离 <= 5", StringComparison.Ordinal)
+            && !shieldRule.Condition.Contains("目标正面", StringComparison.Ordinal),
+            "Shield of the Righteous requires a nearby hostile target without the restricted frontal API gate");
         Equal("神圣能量 >= 3|auras.神圣意志 > 0", string.Join('|', module.Rules[35].SubConditions ?? []),
             "non-Virtue Light of Dawn accepts Holy Power or Divine Purpose");
         Equal(true, module.Rules.Any(rule => rule.Spell == "神圣震击"
@@ -897,7 +907,13 @@ static int ValidateHolyPaladinModule(string path)
             [100, 93, 100, 100, 100],
             holyPower: 5,
             infusion: 1))),
-            "MOD-23 frontal hostile target allows Shield of the Righteous to prevent Holy Power overflow during light injury");
+            "MOD-23 nearby hostile target allows Shield of the Righteous to prevent Holy Power overflow during light injury");
+        Equal("正义盾击", Action(Evaluate(State(
+            [100, 93, 100, 100, 100],
+            holyPower: 5,
+            infusion: 1,
+            targetInFront: 0))),
+            "MOD-23 restricted frontal state does not block Shield of the Righteous");
         Equal("黎明之光", Action(Evaluate(State(
             [92, 93, 94, 100, 100],
             holyPower: 3))),
@@ -1049,14 +1065,14 @@ static int ValidateHolyPaladinModule(string path)
             combatTime: 0,
             enemyCount: 0))),
             "MOD-30 immediate out-of-combat state stops all offensive fillers without nameplate counts");
-        Equal("神圣震击", Action(Evaluate(State(
+        Equal("暂停", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             holyPower: 5,
             stage: 1,
             shockCharges: 2,
             judgmentCooldown: 0,
             targetType: 0))),
-            "MOD-30 AOE resource reserve does not use Shield without a current hostile target");
+            "MOD-30 full Holy Power with no current hostile target stops non-emergency fillers");
         Equal("神圣震击", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             stage: 3,
@@ -1525,6 +1541,19 @@ static void ModuleMissingBindingFallbackContract()
 
     Equal("CTRL-A", decision.Hotkey, "a matched rule without a binding falls through to an executable rule");
     Equal(true, decision.UnitInfo.ContainsKey("已跳过缺失按键"), "missing high-priority binding remains diagnosable");
+
+    var legacyShield = ModuleDefinition.CreateDefault("旧盾击单位");
+    legacyShield.Id = "legacy-shield-unit";
+    legacyShield.Rules =
+    [
+        new ModuleRule { Condition = "职业 == 2", Unit = 0, Spell = "正义盾击", MacroCondition = "" }
+    ];
+    var shieldDecision = ModuleLogic.Run(legacyShield, state, new ContractKeymapResolver());
+    Equal("正义盾击", shieldDecision.UnitInfo["动作技能"], "legacy shield rule remains executable");
+    Equal(ReservedUnit.Target, Convert.ToInt32(shieldDecision.UnitInfo["动作单位槽位"]),
+        "legacy shield unit 0 falls back to current target unit 32");
+    Equal("正义盾击：Unit 0 → Unit 32", shieldDecision.UnitInfo["按键兼容回退"],
+        "legacy shield fallback is explicit in diagnostics");
 }
 
 static void HealingDeficitSelectorContract()
@@ -2683,7 +2712,7 @@ static void CooldownConfirmationTrackerContract()
         "a real-time target change still waits for the GCD queue window");
     Equal(false, queuedSameActionTracker.CanAttempt(
             urgentRetarget,
-            GcdState(35),
+            GcdState(CooldownConfirmationTracker.QueueWindowCentiseconds),
             now.AddMilliseconds(200),
             allowPreemption: false,
             out _),
@@ -2792,7 +2821,7 @@ static void CooldownConfirmationTrackerContract()
         "a higher-priority GCD heal cannot race the pending offense confirmation");
     Equal(false, gcdPreemptionTracker.CanAttempt(
             healingDecision,
-            GcdState(35),
+            GcdState(CooldownConfirmationTracker.QueueWindowCentiseconds),
             now.AddMilliseconds(20),
             allowPreemption: false,
             out _),
@@ -2828,11 +2857,18 @@ static void CooldownConfirmationTrackerContract()
         "a cooldown-less action still waits for the real GCD queue window");
     Equal(true, untrackedCooldownlessAction.CanAttempt(
             flashDecision,
-            GcdState(35),
+            GcdState(CooldownConfirmationTracker.QueueWindowCentiseconds),
             now,
             allowPreemption: false,
             out _),
         "a cooldown-less action enters the queue window before its first send");
+    Equal(false, untrackedCooldownlessAction.CanAttempt(
+            flashDecision,
+            GcdState(CooldownConfirmationTracker.QueueWindowCentiseconds + 1),
+            now,
+            allowPreemption: false,
+            out _),
+        "a cooldown-less action stays blocked until the narrow queue window");
     untrackedCooldownlessAction.RecordSent(flashDecision, now, ActionState(35));
     cleanseTracker.RecordSent(cleanseDecision, now);
     Equal(false, cleanseTracker.CanAttempt(
@@ -3061,11 +3097,11 @@ static void CooldownConfirmationTrackerContract()
         "a first GCD action waits until the real spell queue window");
     Equal(true, actionTracker.CanAttempt(
             castDecision,
-            ActionState(35),
+            ActionState(CooldownConfirmationTracker.QueueWindowCentiseconds),
             now,
             allowPreemption: false,
             out _),
-        "a first GCD action enters the real spell queue window");
+        "a first GCD action enters the narrow real spell queue window");
     Equal(true, actionTracker.CanAttempt(
             emergencyDecision,
             ActionState(80),
@@ -3100,12 +3136,12 @@ static void CooldownConfirmationTrackerContract()
         "a pending GCD action is not repeatedly delivered before the spell queue window");
     Equal(true, actionTracker.CanAttempt(
             castDecision,
-            ActionState(35),
+            ActionState(CooldownConfirmationTracker.QueueWindowCentiseconds),
             now.AddMilliseconds(300),
             allowPreemption: false,
             out _),
         "an ignored first delivery gets one retry in the real GCD queue window");
-    actionTracker.RecordSent(castDecision, now.AddMilliseconds(300), ActionState(35));
+    actionTracker.RecordSent(castDecision, now.AddMilliseconds(300), ActionState(CooldownConfirmationTracker.QueueWindowCentiseconds));
     Equal(false, actionTracker.CanAttempt(
             castDecision,
             ActionState(0),
@@ -3136,7 +3172,7 @@ static void CooldownConfirmationTrackerContract()
         "a GCD-time failure waits for the queue window instead of entering a retry loop");
     Equal(true, failedTracker.CanAttempt(
             castDecision,
-            ActionState(30, serial: 1, actionCode: 22, actionStatus: 4),
+            ActionState(CooldownConfirmationTracker.QueueWindowCentiseconds, serial: 1, actionCode: 22, actionStatus: 4),
             now.AddMilliseconds(700),
             allowPreemption: false,
             out _),
@@ -3150,6 +3186,9 @@ static void ActionFailureBackoffContract()
     var failed = new CooldownConfirmationUpdate(
         "圣疗术", false, 0, null, null, null, now, new HashSet<LogicActionKey> { action });
     var backoff = new ActionFailureBackoff();
+
+    Equal(false, backoff.Observe(failed with { DefinitiveFailure = false }, now),
+        "an ambiguous confirmation timeout never activates failure backoff");
 
     Equal(false, backoff.Observe(failed, now), "first unconfirmed cast remains retryable");
     Equal(true, backoff.Observe(failed, now.AddSeconds(1)), "second unconfirmed cast activates backoff");
@@ -3957,7 +3996,8 @@ static async Task RuntimeCooldownConfirmationContractAsync()
     Equal(true, snapshots.Any(snapshot =>
             snapshot.CurrentStep.Contains("技能确认：美德道标 已释放", StringComparison.Ordinal)
             && snapshot.UnitInfo.TryGetValue("技能确认", out var confirmation)
-            && string.Equals(confirmation?.ToString(), "释放成功", StringComparison.Ordinal)),
+            && string.Equals(confirmation?.ToString(), "释放成功", StringComparison.Ordinal)
+            && snapshot.UnitInfo.ContainsKey("确认耗时")),
         "player action acknowledgement produces an explicit successful-cast snapshot");
 }
 
@@ -4028,6 +4068,22 @@ static void RuntimeAdaptiveScanCadenceContract()
         TimeSpan.FromMilliseconds(750),
         RuntimeScanCadence.Resolve(TimeSpan.FromMilliseconds(750), enabled: true, scanUnavailable: true),
         "adaptive cadence never runs faster than the configured interval");
+    Equal(
+        TimeSpan.FromMilliseconds(50),
+        RuntimeScanCadence.Resolve(
+            configured,
+            enabled: true,
+            scanUnavailable: false,
+            hasPendingConfirmation: true),
+        "pending skill confirmations use a fast temporary scan cadence");
+    Equal(
+        TimeSpan.FromMilliseconds(500),
+        RuntimeScanCadence.Resolve(
+            configured,
+            enabled: true,
+            scanUnavailable: true,
+            hasPendingConfirmation: true),
+        "unavailable scans keep the failure backoff even while confirmation is pending");
 }
 
 static void RuntimeSessionOwnershipContract()
@@ -4949,8 +5005,12 @@ static void FuyutsuiProtocolContract()
         && target.Contains("index = 52", StringComparison.Ordinal)
         && target.Contains("UnitPosition", StringComparison.Ordinal)
         && target.Contains("GetPlayerFacing", StringComparison.Ordinal)
+        && target.Contains("return 2", StringComparison.Ordinal)
+        && target.Contains("math.atan2(px - tx, ty - py)", StringComparison.Ordinal)
         && target.Contains("cache.inFront", StringComparison.Ordinal),
-        "target type reuses its existing byte to distinguish friendly NPCs and tracks frontal hostility");
+        "target type reuses its existing byte and tracks frontal hostility with an unknown fallback");
+    Equal(true, stateBlocks.Contains("target.inFront or 0", StringComparison.Ordinal),
+        "target frontal state preserves the unknown value for WoW-side validation");
     Equal(true, macro.Contains("SecureHandlerClickTemplate", StringComparison.Ordinal)
         && macro.Contains("SetAttribute('macrotext'", StringComparison.Ordinal),
         "selector-target routing changes direct target macros through a secure handler");
@@ -5009,6 +5069,7 @@ static void FuyutsuiProtocolContract()
         && paladin.Contains("\"AOE读条剩余\"", StringComparison.Ordinal)
         && paladin.Contains("\"圣洁鸣钟预计可用\"", StringComparison.Ordinal)
         && paladin.Contains("\"正面\"", StringComparison.Ordinal)
+        && target.Contains("if canAttack then\n        return 1 / 255", StringComparison.Ordinal)
         && paladin.Contains("\"治疗石\"", StringComparison.Ordinal)
         && paladin.Contains("name = \"圣盾术\", spellId = 642", StringComparison.Ordinal)
         && paladin.Contains("name = \"美德道标\", spellId = 200025", StringComparison.Ordinal),
@@ -6523,6 +6584,36 @@ static void RuntimeSessionControllerContract()
     immediateController.DisposeAsync().AsTask().GetAwaiter().GetResult();
 }
 
+static void LocalRuntimeLogStoreContract()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"shigure-log-{Guid.NewGuid():N}");
+    var path = Path.Combine(root, "runtime-detailed.log");
+    try
+    {
+        var store = new Shigure.MacUI.LocalRuntimeLogStore(path);
+        store.Append(new RuntimeLogEntry(DateTimeOffset.UnixEpoch, "详细日志测试"));
+        Equal(true, File.ReadAllText(path).Contains("详细日志测试", StringComparison.Ordinal),
+            "local runtime log store writes UTF-8 entries");
+
+        var payload = new string('x', 1024 * 1024);
+        for (var index = 0; index < 9; index++)
+        {
+            store.Append(new RuntimeLogEntry(DateTimeOffset.UnixEpoch, payload));
+        }
+
+        Equal(true, File.Exists(path + ".1"), "local runtime log store rotates oversized files");
+        Equal(true, new FileInfo(path).Length <= Shigure.MacUI.LocalRuntimeLogStore.MaximumFileBytes,
+            "local runtime log store keeps the active file below the size limit");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+}
+
 static void RuntimeUiUpdateGuardContract()
 {
     var fixtureRoot = Path.Combine(Path.GetTempPath(), $"shigure-runtime-ui-guard-{Guid.NewGuid():N}");
@@ -7793,7 +7884,9 @@ sealed class ContractKeymapResolver : IKeymapResolver
     }
 
     public string? GetHotkey(int? unit, string spell, string? macroCondition = null) =>
-        spell == "可用技能" ? "CTRL-A" : null;
+        spell == "可用技能"
+            ? "CTRL-A"
+            : unit == ReservedUnit.Target && spell == "正义盾击" ? "CTRL-S" : null;
 
     public IReadOnlyDictionary<int, string> GetCurrentFailedSpells() => new Dictionary<int, string>();
 

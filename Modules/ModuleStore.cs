@@ -679,6 +679,7 @@ public static class ModuleLogic
         var unitSlots = ResolveDynamicFields(module, state);
         var failedSpells = keymap.GetCurrentFailedSpells();
         var oneKeySpells = keymap.GetCurrentOneKeySpells();
+        AddShieldDiagnostics(module, state, keymap, info, failedSpells);
         var missingBindings = new List<string>();
         var suppressed = new List<string>();
 
@@ -783,8 +784,29 @@ public static class ModuleLogic
 
             if (binding is null && !string.IsNullOrWhiteSpace(actionSpell))
             {
-                missingBindings.Add($"规则 {ruleIndex + 1}: {actionSpell} / 单位 {resolvedUnit.GetValueOrDefault()}");
-                continue;
+                // 1.2.1.21 的正义盾击规则曾错误使用 Unit 0；现有奶骑键位一直以 Unit 32
+                // 表示当前敌对目标。仅对这个已知迁移场景回退，避免改变其他技能的目标语义。
+                if (string.Equals(actionSpell, "正义盾击", StringComparison.Ordinal)
+                    && resolvedUnit == ReservedUnit.None
+                    && string.IsNullOrWhiteSpace(rule.Hotkey))
+                {
+                    var targetBinding = keymap.GetBinding(
+                        ReservedUnit.Target,
+                        actionSpell,
+                        resolvedMacroCondition);
+                    if (targetBinding is not null)
+                    {
+                        binding = targetBinding;
+                        resolvedUnit = ReservedUnit.Target;
+                        info["按键兼容回退"] = "正义盾击：Unit 0 → Unit 32";
+                    }
+                }
+
+                if (binding is null)
+                {
+                    missingBindings.Add($"规则 {ruleIndex + 1}: {actionSpell} / 单位 {resolvedUnit.GetValueOrDefault()}");
+                    continue;
+                }
             }
 
             var hotkey = binding?.DisplayText;
@@ -923,6 +945,69 @@ public static class ModuleLogic
         {
             info["优先级说明"] = rule.Comment.Trim();
         }
+    }
+
+    private static void AddShieldDiagnostics(
+        ModuleDefinition module,
+        GameState state,
+        IKeymapResolver keymap,
+        IDictionary<string, object?> info,
+        IReadOnlyDictionary<int, string> failedSpells)
+    {
+        var shieldRule = module.Rules.FirstOrDefault(rule =>
+            string.Equals(rule.Spell, "正义盾击", StringComparison.Ordinal));
+        if (shieldRule is null)
+        {
+            return;
+        }
+
+        var main = ModuleConditionEvaluator.TryEvaluate(
+            shieldRule.Condition,
+            state,
+            out var mainMatched,
+            out var mainError,
+            failedSpells);
+        var subResults = (shieldRule.SubConditions ?? [])
+            .Where(condition => !string.IsNullOrWhiteSpace(condition))
+            .Select(condition =>
+            {
+                var valid = ModuleConditionEvaluator.TryEvaluate(
+                    condition,
+                    state,
+                    out var matched,
+                    out var error,
+                    failedSpells);
+                return valid
+                    ? $"{condition}={(matched ? "满足" : "不满足")}"
+                    : $"{condition}=错误({error ?? "未知"})";
+            })
+            .ToArray();
+
+        var mainStatus = main
+            ? (mainMatched ? "满足" : "不满足")
+            : $"错误({mainError ?? "未知"})";
+        var configuredUnit = shieldRule.Unit.GetValueOrDefault();
+        var binding = string.IsNullOrWhiteSpace(shieldRule.Hotkey)
+            ? keymap.GetBinding(configuredUnit, shieldRule.Spell, shieldRule.MacroCondition)
+            : KeyInputBinding.Single(shieldRule.Hotkey.Trim());
+        var bindingStatus = binding?.DisplayText ?? "缺失";
+        if (binding is null
+            && configuredUnit == ReservedUnit.None
+            && string.IsNullOrWhiteSpace(shieldRule.Hotkey)
+            && keymap.GetBinding(ReservedUnit.Target, shieldRule.Spell, shieldRule.MacroCondition) is { } targetBinding)
+        {
+            bindingStatus = $"Unit 0 缺失，可回退 Unit 32 ({targetBinding.DisplayText})";
+        }
+
+        info["正义盾击规则单位"] = configuredUnit;
+        info["正义盾击绑定"] = bindingStatus;
+        info["正义盾击候选状态"] =
+            $"主条件={mainStatus}；子条件={string.Join("，", subResults)}；" +
+            $"规则单位={configuredUnit}；绑定={bindingStatus}；模块版本={module.Version}；" +
+            $"战斗时间={state.GetInt("战斗时间")}；AOE阶段={state.GetInt("AOE事件阶段")}；" +
+            $"目标类型={state.GetInt("目标类型")}；目标距离={state.GetInt("目标距离")}；" +
+            $"目标正面={state.GetInt("目标正面")}；神圣能量={state.GetInt("神圣能量")}；" +
+            $"神圣意志={state.GetInt("auras.神圣意志")}";
     }
 
     // 把模块定义的动态单位/数量各解析一次, 写入当前帧 state.Values 供条件求值与目标解析使用。
