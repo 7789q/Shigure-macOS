@@ -280,8 +280,15 @@ public sealed class ShigureRuntime : IDisposable
             return;
         }
 
+        var previousState = _state;
         var healAbsorb = _healAbsorbStabilizer.Observe(scan.HealAbsorbData);
         _state = _stateBuilder.Build(scan.RowData, scan.BarData, healAbsorb.Values);
+        if (AoeAbsorbStageGuard.EnteredReserveStage(previousState, _state))
+        {
+            // A queued filler from before the reserve window must not delay
+            // Virtue after the absorb cast's post-cast delay expires.
+            _cooldownConfirmationTracker.Reset();
+        }
         _classId = _state.GetInt("职业");
         _specId = _state.GetInt("专精");
         (_className, _specName) = ClassNames.GetClassAndSpecName(_classId, _specId);
@@ -303,7 +310,7 @@ public sealed class ShigureRuntime : IDisposable
         {
             _cooldownConfirmationTracker.Reset();
             _moduleName = null;
-            _currentStep = "等待 DiGua 桥接就绪（请确认 DiGua 版本为 1.8.4，并在插件更新后执行 /reload）";
+            _currentStep = "等待 DiGua 桥接就绪（请确认插件已加载、时间轴 API 可用，并在插件更新后执行 /reload）";
             _unitInfo = new Dictionary<string, object?>();
             return;
         }
@@ -397,6 +404,18 @@ public sealed class ShigureRuntime : IDisposable
         }
 
         var isAoeVirtueExecution = IsAoeVirtueExecution(decision);
+        if (AoeAbsorbStageGuard.ShouldBlock(_state, decision))
+        {
+            var guardedInfo = _unitInfo.ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value,
+                StringComparer.Ordinal);
+            guardedInfo["发送拦截"] = "治疗吸收延时窗口禁止普通 GCD";
+            guardedInfo["发送拦截原因"] = "阶段 5 只保留紧急治疗、驱散和友方 NPC 治疗";
+            _unitInfo = guardedInfo;
+            _currentStep = $"阶段 5 保留美德窗口：{decision.CooldownConfirmationSpell ?? "动作"}";
+            return;
+        }
         if (_state is not null
             && _state.GetInt("施法技能") > 0
             && !EmergencyActionGuard.IsEmergency(decision))
@@ -843,6 +862,9 @@ internal sealed class CooldownConfirmationTracker
 
     public bool HasPending => _pending.Count > 0;
 
+    public static bool IsOffGlobalCooldownSpell(string? spell) =>
+        !string.IsNullOrWhiteSpace(spell) && OffGlobalCooldownSpells.Contains(spell);
+
     public bool CanAttempt(
         LogicDecision decision,
         GameState? state,
@@ -1173,6 +1195,47 @@ internal sealed record CooldownConfirmationUpdate(
     int ObservedActionStatus = 0,
     int CooldownRemaining = 0,
     bool DefinitiveFailure = true);
+
+internal static class AoeAbsorbStageGuard
+{
+    public static bool EnteredReserveStage(GameState? previous, GameState current) =>
+        current.GetInt("AOE事件类型") == 2
+        && current.GetInt("AOE事件阶段") == 5
+        && (previous is null
+            || previous.GetInt("AOE事件类型") != 2
+            || previous.GetInt("AOE事件阶段") != 5);
+
+    public static bool ShouldBlock(GameState? state, LogicDecision decision)
+    {
+        if (state is null
+            || state.GetInt("AOE事件类型") != 2
+            || state.GetInt("AOE事件阶段") != 5)
+        {
+            return false;
+        }
+
+        if (!decision.UnitInfo.TryGetValue("动作技能", out var actionSpellValue))
+        {
+            return false;
+        }
+
+        var actionSpell = actionSpellValue?.ToString();
+        if (string.IsNullOrWhiteSpace(actionSpell)
+            || EmergencyActionGuard.IsEmergency(decision)
+            || CooldownConfirmationTracker.IsOffGlobalCooldownSpell(actionSpell)
+            || ReadInt(decision.UnitInfo, "目标驱散") > 0
+            || (ReadInt(decision.UnitInfo, "目标类型") == 152
+                && ReadInt(decision.UnitInfo, "目标生命值") < 100))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static int ReadInt(IReadOnlyDictionary<string, object?> values, string key) =>
+        values.TryGetValue(key, out var value) && value is not null ? Convert.ToInt32(value) : 0;
+}
 
 internal sealed class ActionFailureBackoff
 {

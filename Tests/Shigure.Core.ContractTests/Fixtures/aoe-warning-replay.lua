@@ -227,8 +227,10 @@ update(2, 1, "absorb cast stays in reservation before success")
 Fuyutsui:FinishAOEEnemyCast("nameplate2", "absorb-a", 1306517, "succeeded")
 flush()
 update(2, 1, "absorb success starts the two-second post-cast delay")
-now = 43.5
-update(2, 3, "absorb success opens the Virtue execution window after the delay")
+now = 42.5
+update(2, 5, "absorb success reserves the final GCD before Virtue is ready")
+now = 44
+update(2, 3, "absorb success opens the Virtue execution window two seconds after cast end")
 absorbs.player = 10
 Fuyutsui:ObserveAOEHealAbsorbs()
 update(2, 3, "observed absorb enters stage three")
@@ -272,7 +274,7 @@ Fuyutsui:FinishAOEEnemyCast("nameplate3", "absorb-committed", 1306517, "interrup
 flush()
 absorbs.player = 10
 Fuyutsui:ObserveAOEHealAbsorbs()
-now = 56
+now = 58
 update(2, 3, "late interruption is ignored after the post-cast delay")
 clear()
 

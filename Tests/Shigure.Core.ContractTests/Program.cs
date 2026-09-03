@@ -49,6 +49,7 @@ var tests = new (string Name, Action Run)[]
     ("legacy module state compatibility contract", LegacyModuleStateCompatibilityContract),
     ("module dependency capture and import contract", ModuleDependencyCaptureAndImportContract),
     ("cooldown confirmation tracker contract", CooldownConfirmationTrackerContract),
+    ("AOE absorb reserve guard contract", AoeAbsorbReserveGuardContract),
     ("action failure backoff contract", ActionFailureBackoffContract),
     ("emergency action guard contract", EmergencyActionGuardContract),
     ("target identity contract", TargetIdentityContract),
@@ -3179,6 +3180,53 @@ static void CooldownConfirmationTrackerContract()
         "a failed early delivery remains eligible for its single queue-window retry");
 }
 
+static void AoeAbsorbReserveGuardContract()
+{
+    static GameState State(int stage) => new(new Dictionary<string, object?>
+    {
+        ["AOE事件类型"] = 2,
+        ["AOE事件阶段"] = stage
+    });
+
+    static LogicDecision Decision(
+        string spell,
+        int unitType = 1,
+        int health = 80,
+        int dispel = 0) => new(
+        "ALT-A",
+        $"施放 {spell}",
+        new Dictionary<string, object?>
+        {
+            ["动作技能"] = spell,
+            ["动作单位槽位"] = 1,
+            ["目标类型"] = unitType,
+            ["目标生命值"] = health,
+            ["目标驱散"] = dispel
+        });
+
+    Equal(true, AoeAbsorbStageGuard.ShouldBlock(State(5), Decision("圣光术")),
+        "ordinary GCD is blocked during the absorb reserve stage");
+    Equal(false, AoeAbsorbStageGuard.ShouldBlock(State(5), Decision("圣疗术", health: 20)),
+        "emergency Lay on Hands remains available during the reserve stage");
+    Equal(false, AoeAbsorbStageGuard.ShouldBlock(State(5), Decision("清洁术", dispel: 1)),
+        "a dispel remains available during the reserve stage");
+    Equal(false, AoeAbsorbStageGuard.ShouldBlock(State(5), Decision("荣耀圣令", unitType: 152, health: 90)),
+        "an injured friendly NPC remains available during the reserve stage");
+    Equal(false, AoeAbsorbStageGuard.ShouldBlock(State(3), Decision("圣光术")),
+        "ordinary GCD is not blocked once the Virtue window is open");
+
+    Equal(true, AoeAbsorbStageGuard.EnteredReserveStage(State(1), State(5)),
+        "stage transition is detected when entering the absorb reserve stage");
+    Equal(false, AoeAbsorbStageGuard.EnteredReserveStage(State(5), State(5)),
+        "steady reserve stage does not repeatedly reset state");
+    Equal(false, AoeAbsorbStageGuard.EnteredReserveStage(State(1), new GameState(new Dictionary<string, object?>
+    {
+        ["AOE事件类型"] = 1,
+        ["AOE事件阶段"] = 5
+    })),
+        "ordinary AOE stage five does not clear absorb confirmations");
+}
+
 static void ActionFailureBackoffContract()
 {
     var now = DateTimeOffset.UnixEpoch;
@@ -5036,15 +5084,22 @@ static void FuyutsuiProtocolContract()
         "addon manifest uses the timeline Spell ID as the single AOE identity source");
     Equal(true, diGuaBridge.Contains("function Fuyutsui:InitializeDiGuaBridge()", StringComparison.Ordinal)
         && diGuaBridge.Contains("self.state.diGuaBridgeReady = true", StringComparison.Ordinal)
+        && diGuaBridge.Contains("HasTimelineCapabilities", StringComparison.Ordinal)
+        && diGuaBridge.Contains("type(timeline.AddScriptEvent) == \"function\"", StringComparison.Ordinal)
+        && diGuaBridge.Contains("type(hooksecurefunc) == \"function\"", StringComparison.Ordinal)
+        && diGuaBridge.Contains("loadFrame:RegisterEvent(\"PLAYER_LOGIN\")", StringComparison.Ordinal)
+        && diGuaBridge.Contains("loadFrame:RegisterEvent(\"PLAYER_ENTERING_WORLD\")", StringComparison.Ordinal)
+        && !diGuaBridge.Contains("~= SUPPORTED_DIGUA_VERSION", StringComparison.Ordinal)
         && compatibilityBridge.Contains("Fuyutsui:InitializeDiGuaBridge()", StringComparison.Ordinal)
         && !compatibilityBridge.Contains("CAST_SPELL_BY_ICON", StringComparison.Ordinal),
-        "the loaded Fuyutsui addon owns bridge readiness and the compatibility addon has no duplicate registry");
+        "the loaded Fuyutsui addon owns capability-based bridge readiness and the compatibility addon has no duplicate registry");
     Equal(true, compatibilityBridge.Contains("frame:RegisterEvent(\"NAME_PLATE_UNIT_ADDED\")", StringComparison.Ordinal)
         && compatibilityBridge.Contains("frame:RegisterEvent(\"NAME_PLATE_UNIT_REMOVED\")", StringComparison.Ordinal)
         && compatibilityBridge.Contains("Fuyutsui:ObserveAOEDiGuaBar(132334, 11.7, \"准备吸奶盾\", unit)", StringComparison.Ordinal)
         && compatibilityBridge.Contains("Fuyutsui:CancelAOEDiGuaBar(unit)", StringComparison.Ordinal)
         && aoeWarning.Contains("absorbVirtueDelaySeconds = 2", StringComparison.Ordinal)
-        && aoeWarning.Contains("event.virtueReadyAt = now + config.absorbVirtueDelaySeconds", StringComparison.Ordinal)
+        && aoeWarning.Contains("local impactAt = event.impactAt or now", StringComparison.Ordinal)
+        && aoeWarning.Contains("event.virtueReadyAt = impactAt + config.absorbVirtueDelaySeconds", StringComparison.Ordinal)
         && aoeWarning.Contains("local function TraceLog(message, ...)\n    DebugLog(message, ...)\nend", StringComparison.Ordinal)
         && !compatibilityBridge.Contains("|cff00ff00[Fuyutsui AOE]|r", StringComparison.Ordinal)
         && !compatibilityBridge.Contains("hooksecurefunc(addonTable, \"CustomEncounterBar\"", StringComparison.Ordinal),
@@ -5757,7 +5812,7 @@ static void RuntimeResourceWorkspaceContract()
                 "common = { \"荣耀圣令\", \"清毒术\" },",
                 StringComparison.Ordinal).Replace(
                 "[@target,harm,nodead]正义盾击",
-                "正义盾击",
+                "[@tanktarget]正义盾击",
                 StringComparison.Ordinal));
         File.WriteAllText(
             targetClass,

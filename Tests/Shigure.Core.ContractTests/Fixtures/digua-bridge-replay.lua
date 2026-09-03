@@ -32,7 +32,7 @@ C_AddOns = {
     end,
     GetAddOnMetadata = function(addonName, field)
         assert(addonName == "DiGuaTimelineAudioHelper" and field == "Version")
-        return "1.8.4"
+        return "1.8.7"
     end,
 }
 C_EncounterTimeline = {
@@ -55,10 +55,12 @@ Fuyutsui = {
     UpdateStateBlock = function() end,
 }
 assert(loadfile(sourcePath))("Fuyutsui", {})
-assert(Fuyutsui.state.diGuaBridgeReady == true, "supported DiGua version must publish bridge readiness")
-assert(type(eventHandler) == "function", "supported DiGua version must register timeline events")
-assert(type(addHook) == "function", "supported DiGua version must observe raw AddScriptEvent input")
-assert(type(cancelHook) == "function", "supported DiGua version must propagate cancellation")
+assert(Fuyutsui.state.diGuaBridgeReady == true, "capable DiGua version must publish bridge readiness")
+assert(Fuyutsui.DiGuaBridge.detectedVersion == "1.8.7", "bridge should retain the detected DiGua version for diagnostics")
+assert(Fuyutsui.DiGuaBridge.capabilityReady == true, "capable DiGua APIs must publish capability readiness")
+assert(type(eventHandler) == "function", "capable DiGua version must register timeline events")
+assert(type(addHook) == "function", "capable DiGua version must observe raw AddScriptEvent input")
+assert(type(cancelHook) == "function", "capable DiGua version must propagate cancellation")
 
 local mappingCount = 0
 for iconFileID, castSpellID in pairs(Fuyutsui.DiGuaBridge.castSpellByIcon) do
@@ -106,5 +108,15 @@ eventHandler(nil, "ENCOUNTER_TIMELINE_EVENT_ADDED", {
     duration = 10,
 })
 assert(nextEventID == beforeIgnored, "non-Shigure and already-identified events must be ignored")
+
+-- A future DiGua build with missing timeline capabilities must remain safely disabled.
+Fuyutsui = {
+    state = {},
+    UpdateStateBlock = function() end,
+}
+C_EncounterTimeline = {}
+assert(loadfile(sourcePath))("Fuyutsui", {})
+assert(Fuyutsui.state.diGuaBridgeReady ~= true, "missing timeline capabilities must not publish bridge readiness")
+assert(Fuyutsui.DiGuaBridge.capabilityReady == false, "missing timeline capabilities must keep the bridge disabled")
 
 print("DiGua bridge production Lua replay passed")

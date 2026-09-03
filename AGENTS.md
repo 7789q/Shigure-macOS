@@ -31,6 +31,7 @@ dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --r
 ## 奶骑美德回归门禁
 
 - 修改吸奶盾、美德、DiGua 桥接、AOE 阶段或相关同步/打包逻辑前，必须先阅读 `Documentation/holy-paladin-virtue-implementation.md`。
-- 现役吸奶盾入口是兼容桥复刻 DiGua 的实时姓名板条件并调用 `ObserveAOEDiGuaBar(132334, 11.7, "准备吸奶盾", unit)`；不得改回钩取兼容桥自身 `addonTable.CustomEncounterBar` 的无效方案。
-- 必须保持 `11.7 秒倒计时 -> 再等待 2 秒 -> 类型 2/阶段 3 -> 模块规则 3 -> WoW 动作确认` 的链路。普通 AOE 仍走真实读条，不得与吸奶盾一并改成倒计时提交。
+- 吸奶盾使用双输入、同一状态机：可读取真实施法时，以匹配读条的 `cast.endsAt + 2 秒` 进入类型 2/阶段 3；受保护字段导致真实时点不可用时，兼容桥复刻 DiGua 实时姓名板条件并调用 `ObserveAOEDiGuaBar(132334, 11.7, "准备吸奶盾", unit)`，以 `11.7 秒倒计时结束 + 2 秒` 回退。不得改回钩取兼容桥自身 `addonTable.CustomEncounterBar` 的无效方案，也不得按 DiGua 版本号写死兼容门禁。
+- 类型 2/阶段 5 是美德前最后 GCD 保护窗：进入时必须作废既有普通 GCD 待发送动作，运行时必须独立于模块规则顺序阻止新的普通 GCD；圣疗术、非 GCD、驱散和受伤友方 NPC 治疗例外。随后进入类型 2/阶段 3，由模块消费协议并以 WoW 动作确认闭环。
+- 普通 AOE 仍走真实读条，不得与吸奶盾一并改成裸姓名板倒计时提交。
 - 修改该链路时不得顺带调整其他技能优先级；必须运行生产 Lua 回放和契约测试，并以实战日志中的美德最终确认作为游戏内验收依据。

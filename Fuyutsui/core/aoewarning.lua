@@ -329,7 +329,15 @@ local function StageForEvent(event, now)
         -- failed/queued key still has a chance to retry.
         if event.eventType == 2 then
             if not event.virtueConfirmed then
-                if event.virtueReadyAt and now < event.virtueReadyAt then return 1 end
+                if event.virtueReadyAt and now < event.virtueReadyAt then
+                    -- Reserve the final GCD before the post-cast delay ends.
+                    -- Without this guard a filler spell can start immediately
+                    -- before stage 3 and push Virtue past its absorb window.
+                    local reserveLead = Fuyutsui:GetEstimatedGCDSeconds()
+                        + config.inputMarginSeconds
+                    if event.virtueReadyAt - now <= reserveLead then return 5 end
+                    return 1
+                end
                 return 3
             end
             -- Keep stage 3 until the event is removed after a confirmed cast
@@ -350,7 +358,8 @@ local function StageForEvent(event, now)
             event.status = "succeeded"
             event.castOutcome = "diguabar_elapsed"
             event.completed = true
-            event.virtueReadyAt = now + config.absorbVirtueDelaySeconds
+            local impactAt = event.impactAt or now
+            event.virtueReadyAt = impactAt + config.absorbVirtueDelaySeconds
             event.expiresAt = event.virtueReadyAt + config.impactActiveSeconds
             TraceLog(
                 "DiGua倒计时结束 event=%s，等待 %.2f 秒后进入阶段3",
@@ -1028,11 +1037,15 @@ local function CommitTerminal(id, cast, reason)
             tostring(event.runtimeID or event.id),
             tostring(cast.spellID or event.spellID or 0),
             tostring(cast.castGUID or "<protected>"))
-        event.impactAt = now
+        -- The terminal callback can be processed after the cast actually ended.
+        -- Anchor the post-cast delay to the observed cast end whenever it is
+        -- available; protected casts still fall back to the callback time.
+        local impactAt = cast.endsAt or now
+        event.impactAt = impactAt
         event.virtueReadyAt = event.eventType == 2
-            and now + Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds
-            or now
-        event.expiresAt = now
+            and impactAt + Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds
+            or impactAt
+        event.expiresAt = impactAt
             + (event.eventType == 2 and Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds or 0)
             + Fuyutsui.AOEWarningConfig.impactActiveSeconds
         if event.eventType == 2 then

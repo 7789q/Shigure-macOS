@@ -1,6 +1,5 @@
 local addon = ...
 
-local SUPPORTED_DIGUA_VERSION = "1.8.4"
 local STANDARD_EVENT_NAMES = {
     ["准备AOE"] = true,
     ["准备吸奶盾"] = true,
@@ -31,7 +30,8 @@ for iconFileID, spellID in pairs(CAST_SPELL_BY_ICON) do
 end
 
 Fuyutsui.DiGuaBridge = {
-    supportedVersion = SUPPORTED_DIGUA_VERSION,
+    detectedVersion = nil,
+    capabilityReady = false,
     castSpellByIcon = CAST_SPELL_BY_ICON,
     castEventTypeBySpell = CAST_EVENT_TYPE_BY_SPELL,
 }
@@ -68,11 +68,23 @@ local function IsDiGuaLoaded()
     return IsAddOnLoaded and IsAddOnLoaded("DiGuaTimelineAudioHelper")
 end
 
+local function HasTimelineCapabilities()
+    local timeline = C_EncounterTimeline
+    return timeline ~= nil
+        and type(timeline.GetEventTimeRemaining) == "function"
+        and type(timeline.AddScriptEvent) == "function"
+        and type(timeline.CancelScriptEvent) == "function"
+        and type(hooksecurefunc) == "function"
+        and type(CreateFrame) == "function"
+end
+
 function Fuyutsui:InitializeDiGuaBridge()
     if self.diGuaBridgeInitialized then return true end
-    if not IsDiGuaLoaded() or DiGuaVersion() ~= SUPPORTED_DIGUA_VERSION then return false end
+    if not IsDiGuaLoaded() or not HasTimelineCapabilities() then return false end
 
     self.diGuaBridgeInitialized = true
+    self.DiGuaBridge.detectedVersion = DiGuaVersion()
+    self.DiGuaBridge.capabilityReady = true
     self.state.diGuaBridgeReady = true
     if self.UpdateStateBlock then
         self:UpdateStateBlock("状态", "DiGua桥接就绪")
@@ -224,11 +236,19 @@ function Fuyutsui:InitializeDiGuaBridge()
 end
 
 if not Fuyutsui:InitializeDiGuaBridge() then
+    -- DiGua may already have loaded before Fuyutsui, so its ADDON_LOADED event
+    -- can be missed. Retry at login/world entry until the APIs are available.
     local loadFrame = CreateFrame("Frame")
     loadFrame:RegisterEvent("ADDON_LOADED")
-    loadFrame:SetScript("OnEvent", function(self, _, loadedAddon)
-        if loadedAddon == "DiGuaTimelineAudioHelper" and Fuyutsui:InitializeDiGuaBridge() then
-            self:UnregisterEvent("ADDON_LOADED")
+    loadFrame:RegisterEvent("PLAYER_LOGIN")
+    loadFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    loadFrame:SetScript("OnEvent", function(self, event, loadedAddon)
+        if event == "ADDON_LOADED" and loadedAddon ~= "DiGuaTimelineAudioHelper" then
+            return
+        end
+        if Fuyutsui:InitializeDiGuaBridge() then
+            self:UnregisterAllEvents()
+            self:SetScript("OnEvent", nil)
         end
     end)
 end

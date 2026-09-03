@@ -2,7 +2,7 @@ local _, addonTable = ...
 
 if Fuyutsui and Fuyutsui.InitializeDiGuaBridge then
     Fuyutsui:InitializeDiGuaBridge()
-    addonTable.supportedDiGuaVersion = Fuyutsui.DiGuaBridge.supportedVersion
+    addonTable.detectedDiGuaVersion = Fuyutsui.DiGuaBridge.detectedVersion
     addonTable.castSpellByIcon = Fuyutsui.DiGuaBridge.castSpellByIcon
 
     -- Mirror DiGua's own UNIT_SPELLCAST_START path. This frame is deliberately

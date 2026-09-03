@@ -163,7 +163,7 @@
     },
     "Core/RuntimeResourceWorkspaceService.cs": {
       "category": "shared-contract",
-      "sha256": "ca9621efe7f22a58e8c13f624ce4a6de9747d1c37fad75cacbf99f405d5fd44d"
+      "sha256": "a49e2bb0c02482e8561fe738fcb74834a96595e1bc44edc6b0e785fcac320330"
     },
     "Core/Shigure.Core.csproj": {
       "category": "shared-contract",
@@ -283,7 +283,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "6b0270ee098a548eca1db42341bf4c69fece28ce521a83e720dd0d0dd636838a"
+      "sha256": "1f1b7c4d72397bcbe14e1ef76a5807d1ceb46c6f9ae398eac49a4b7dfd60ba0d"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -315,15 +315,15 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "8affce4df437a0ebc089cddf660efc090647fdf609f30b000146f6e5b329575a"
+      "sha256": "1f07bde8a06c58ac63b39830254d7fcea8aceebc304dd8d22ecfa78b8183a278"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/aoe-warning-replay.lua": {
       "category": "shared-contract",
-      "sha256": "bc0a27f8c0149b4e854ba516d2dc91d5a38455c9082d26a1f62a2ee117b8a5b0"
+      "sha256": "9287b86347d7490929ee3c13a20c6637fd3f0ac92cf754f36d12e016eee49da2"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/digua-bridge-replay.lua": {
       "category": "shared-contract",
-      "sha256": "fbdee7a6d307d2d994a7fb687a4acc04c046b058830bb34108beae7b0bed3f88"
+      "sha256": "d7fa9c1b8cdad538e376429f7cec21a2d227765dc512343e5c83f8de0205a2f7"
     },
     "Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests.csproj": {
       "category": "shared-contract",
@@ -475,7 +475,7 @@
     },
     "FuyutsuiDiGuaBridge/Bridge.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "509e8b62bde10830866d3cebf92283e91461597317e2c049f7e1b1ffe9eb1266"
+      "sha256": "00288e7f2c12aeb8df9e98f457f7fa39cc20d60c316f499b1d6dde9f76520152"
     },
     "FuyutsuiDiGuaBridge/FuyutsuiDiGuaBridge.toc": {
       "category": "fuyutsui-authority",
@@ -543,7 +543,7 @@
     },
     "Fuyutsui/core/aoewarning.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "24ffefa31f5d05560752e20d6b650ac5da1d3988f5ed65a66bd1be02a35e6fae"
+      "sha256": "829e423317b212df3451a8b9299ef71db5bc0878deac25061f17ba6889febc0d"
     },
     "Fuyutsui/core/aoewarningdata.lua": {
       "category": "fuyutsui-authority",
@@ -551,7 +551,7 @@
     },
     "Fuyutsui/core/diguabridge.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "982b2959f1d0b041edd533b5a870ca89bbbe582f0b381dc29ae9dc2d96e16acd"
+      "sha256": "4744b2ad867c0f426685f2ef6b1e696c249474c001b820b730317c98ad8da98d"
     },
     "Fuyutsui/core/classmacros.lua": {
       "category": "fuyutsui-authority",

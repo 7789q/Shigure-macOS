@@ -225,8 +225,10 @@ public sealed class RuntimeResourceWorkspaceService
             if (macros.Classes.TryGetValue("PALADIN", out var paladinMacros))
             {
                 var shield = paladinMacros.StaticSpells.FirstOrDefault(entry =>
-                    string.Equals(entry.Text, "正义盾击", StringComparison.Ordinal));
-                if (shield is not null)
+                    string.Equals(entry.Text, "正义盾击", StringComparison.Ordinal)
+                    || string.Equals(entry.Text, "[@tanktarget]正义盾击", StringComparison.Ordinal));
+                if (shield is not null
+                    && !string.Equals(shield.Text, "[@target,harm,nodead]正义盾击", StringComparison.Ordinal))
                 {
                     shield.Text = "[@target,harm,nodead]正义盾击";
                     ClassMacrosStore.Save(macros);
