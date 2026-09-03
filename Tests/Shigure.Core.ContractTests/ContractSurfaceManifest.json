@@ -139,7 +139,7 @@
     },
     "BundledModules/holy-paladin-virtue-12.1.json": {
       "category": "configuration-schema",
-      "sha256": "3a1a21eda4400ef624a16b7bc8b4cf64c602ff221c3e0a1a8d7522c37baff87c"
+      "sha256": "f4a0f7d582d729895c36f4517a006df28721eb28989d8b9d6803da5cc2e9f0b9"
     },
     "Core/AssemblyInfo.cs": {
       "category": "shared-contract",
@@ -283,7 +283,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "1f1b7c4d72397bcbe14e1ef76a5807d1ceb46c6f9ae398eac49a4b7dfd60ba0d"
+      "sha256": "f1e5d05a13d3d475565d159af0ef71fc813eedd12203a5cbb00661e1c694b896"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -315,7 +315,7 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "1f07bde8a06c58ac63b39830254d7fcea8aceebc304dd8d22ecfa78b8183a278"
+      "sha256": "ce5d6db04c544d0e6c10c0cadbed9bff28f910d4c03b11fd587499ca1504cf18"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/aoe-warning-replay.lua": {
       "category": "shared-contract",
@@ -543,7 +543,7 @@
     },
     "Fuyutsui/core/aoewarning.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "829e423317b212df3451a8b9299ef71db5bc0878deac25061f17ba6889febc0d"
+      "sha256": "6bd7dabd52ca97232d121137bb04891e637106dadb390a5618d329c16ec259ea"
     },
     "Fuyutsui/core/aoewarningdata.lua": {
       "category": "fuyutsui-authority",

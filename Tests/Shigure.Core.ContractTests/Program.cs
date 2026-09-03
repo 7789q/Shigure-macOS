@@ -394,8 +394,16 @@ static int ValidateHolyPaladinModule(string path)
             && rule.Condition.Contains("H90 == 0", StringComparison.Ordinal));
         Equal(true,
             healthyJudgment.Condition.Contains("auras.圣光灌注 == 0 && 神圣能量 < 5", StringComparison.Ordinal)
-            && healthyJudgment.Condition.Contains("auras.圣光灌注 > 0 && 神圣能量 <= 3", StringComparison.Ordinal),
-            "healthy-group Judgment predicts Infusion's two Holy Power before casting");
+            && healthyJudgment.Condition.Contains("auras.圣光灌注 > 0 && 神圣能量 <= 3", StringComparison.Ordinal)
+            && healthyJudgment.Condition.Contains("目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28", StringComparison.Ordinal),
+            "healthy-group Judgment predicts Infusion's two Holy Power and requires a valid target");
+        var holyLightFallbacks = module.Rules.Where(rule => rule.Spell == "圣光术").ToArray();
+        Equal(true, holyLightFallbacks
+                .Where(rule => rule.Comment?.Contains("裸读", StringComparison.Ordinal) == true)
+                .All(rule => rule.Condition.Contains("spells.神圣震击层数 == 0", StringComparison.Ordinal)
+                    && rule.Condition.Contains("spells.审判 != 0", StringComparison.Ordinal)
+                    && rule.Condition.Contains("auras.圣光灌注 == 0", StringComparison.Ordinal)),
+            "Holy Light fallback yields to available Holy Shock, Judgment, and Infusion");
         Equal(true, module.Rules
                 .Where(rule => rule.Spell is "正义盾击" or "审判"
                     || rule.Spell == "神圣震击" && rule.Unit == ReservedUnit.None)
@@ -685,7 +693,7 @@ static int ValidateHolyPaladinModule(string path)
             [80, 100, 100, 100, 100],
             holyPower: 3,
             stage: 1))),
-            "MOD-04 light Word of Glory preserves Holy Power during AOE resource reserve");
+            "MOD-04 light AOE reserve uses Judgment as a Holy Power filler when it is ready");
         Equal("正义盾击", Action(Evaluate(State([96, 96, 96, 96, 100], holyPower: 3))),
             "MOD-04 every group member above ninety-five spends three Holy Power on Shield first");
         var virtueDecision = Evaluate(State([80, 80, 80, 80, 100], holyPower: 3, virtueCooldown: 0));
@@ -1083,10 +1091,17 @@ static int ValidateHolyPaladinModule(string path)
             "MOD-30 absorb waiting uses tank-target offensive Holy Shock while targeting a friendly unit");
         Equal("审判", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
+            absorb: [10, 10, 10, 10, 0],
+            stage: 3,
+            judgmentCooldown: 0,
+            targetType: 1))),
+            "MOD-30 absorb waiting uses Judgment when a valid hostile target exists");
+        Equal("暂停", Action(Evaluate(State(
+            [100, 100, 100, 100, 100],
             stage: 3,
             judgmentCooldown: 0,
             targetType: 0))),
-            "MOD-30 absorb waiting falls through to tank-target Judgment without a current target");
+            "MOD-30 absorb waiting stops offensive fillers without a valid hostile target");
         var npcShock = Evaluate(State(
             [100, 100, 100, 100, 100],
             shockCharges: 2,
@@ -1196,11 +1211,11 @@ static int ValidateHolyPaladinModule(string path)
             holyPower: 3,
             combatTime: 0))),
             "MOD-38 out-of-combat non-Virtue Light of Dawn remains allowed");
-        Equal("圣光术", Action(Evaluate(State(
+        Equal("暂停", Action(Evaluate(State(
             [85, 100, 100, 100, 100],
             stage: 5,
             judgmentCooldown: 0))),
-            "MOD-38 stage five falls through to direct healing instead of Judgment");
+            "MOD-38 stage five preserves the final GCD for the verified AOE execution window");
 
         Equal("圣光术", Action(Evaluate(State(
             [70, 70, 100, 100, 100],
@@ -2718,6 +2733,7 @@ static void CooldownConfirmationTrackerContract()
             allowPreemption: false,
             out _),
         "a pending action cannot be replaced by another target before confirmation");
+
     var differentAction = decision with
     {
         CooldownConfirmationSpell = "清洁术",
@@ -2744,6 +2760,62 @@ static void CooldownConfirmationTrackerContract()
             allowPreemption: true,
             out _),
         "an emergency action can preempt a lower-priority pending cast");
+    var offGcdRetargetTracker = new CooldownConfirmationTracker();
+    offGcdRetargetTracker.RecordSent(emergencyDecision, now);
+    var emergencyRetarget = emergencyDecision with
+    {
+        UnitInfo = new Dictionary<string, object?>
+        {
+            ["动作技能"] = "圣疗术",
+            ["动作单位槽位"] = 4
+        }
+    };
+    Equal(false, offGcdRetargetTracker.CanAttempt(
+            emergencyRetarget,
+            GcdState(0),
+            now.AddMilliseconds(100),
+            allowPreemption: true,
+            out _),
+        "the same off-GCD emergency spell cannot retarget while its cast is pending");
+    var sacrificeDecision = decision with
+    {
+        CooldownConfirmationSpell = "牺牲祝福",
+        UnitInfo = new Dictionary<string, object?>
+        {
+            ["动作技能"] = "牺牲祝福",
+            ["动作单位槽位"] = 2
+        }
+    };
+    Equal(true, tracker.CanAttempt(
+            sacrificeDecision,
+            GcdState(80),
+            now.AddMilliseconds(10),
+            allowPreemption: false,
+            out _),
+        "Sacrifice Blessing is treated as an off-GCD action");
+
+    var failedCooldownTracker = new CooldownConfirmationTracker();
+    var confirmedActionDecision = decision with { PlayerActionCode = 24 };
+    failedCooldownTracker.RecordSent(
+        confirmedActionDecision,
+        now,
+        new GameState(new Dictionary<string, object?>
+        {
+            ["spells"] = new Dictionary<string, object?> { ["美德道标"] = 0 },
+            ["玩家动作序号"] = 4
+        }));
+    var failedWithCooldown = failedCooldownTracker.Observe(
+        new GameState(new Dictionary<string, object?>
+        {
+            ["spells"] = new Dictionary<string, object?> { ["美德道标"] = 120 },
+            ["玩家动作序号"] = 5,
+            ["玩家动作技能"] = 24,
+            ["玩家动作状态"] = 4
+        }),
+        now.AddMilliseconds(100)).Single();
+    Equal(false, failedWithCooldown.Confirmed,
+        "a definite failed action cannot be confirmed by a transient positive cooldown");
+
     var emergencyTracker = new CooldownConfirmationTracker();
     emergencyTracker.RecordSent(emergencyDecision, now);
     Equal(false, emergencyTracker.CanAttempt(
@@ -2894,6 +2966,18 @@ static void CooldownConfirmationTrackerContract()
     var confirmed = tracker.Observe(State(8), now.AddMilliseconds(100)).Single();
     Equal(true, confirmed.Confirmed, "positive game cooldown confirms the cast");
     Equal(8, confirmed.Cooldown, "confirmation reports the observed cooldown");
+    Equal(false, tracker.CanAttempt(
+            decision,
+            now.AddMilliseconds(200),
+            allowPreemption: false,
+            out _),
+        "a confirmed action has a short post-confirmation hold against duplicate sends");
+    Equal(true, tracker.CanAttempt(
+            decision,
+            now.AddMilliseconds(100).Add(CooldownConfirmationTracker.PostConfirmationHold),
+            allowPreemption: false,
+            out _),
+        "the post-confirmation hold expires at its bounded deadline");
 
     tracker.RecordSent(decision, now);
     var timedOut = tracker.Observe(State(0), now.Add(CooldownConfirmationTracker.RetryAfter)).Single();
@@ -3042,9 +3126,9 @@ static void CooldownConfirmationTrackerContract()
         }
     }), now.AddMilliseconds(1100)).Single();
     Equal(1, ambiguousTarget.Actions.Count,
-        "a confirmation window retains only the latest serialized target");
-    Equal(new LogicActionKey("神圣震击", 5), ambiguousTarget.Actions.Single(),
-        "late confirmation is attributed only to the latest target generation");
+        "a confirmation window retains one target generation");
+    Equal(new LogicActionKey("神圣震击", 4), ambiguousTarget.Actions.Single(),
+        "same-spell target retargeting cannot overwrite the pending confirmation generation");
 
     var procDecision = resourceDecision with
     {
@@ -3178,6 +3262,28 @@ static void CooldownConfirmationTrackerContract()
             allowPreemption: false,
             out _),
         "a failed early delivery remains eligible for its single queue-window retry");
+
+    var unattributedFailureTracker = new CooldownConfirmationTracker();
+    unattributedFailureTracker.RecordSent(
+        new LogicDecision(
+            "ALT-A",
+            "施放 牺牲祝福",
+            new Dictionary<string, object?>
+            {
+                ["动作技能"] = "牺牲祝福",
+                ["动作单位槽位"] = 1
+            },
+            CooldownConfirmationSpell: "牺牲祝福",
+            PlayerActionCode: 24),
+        now,
+        ActionState(0, serial: 10));
+    var unattributedFailure = unattributedFailureTracker.Observe(
+        ActionState(0, serial: 11, actionCode: 0, actionStatus: 4),
+        now.AddMilliseconds(100)).Single();
+    Equal(false, unattributedFailure.Confirmed,
+        "an unattributed failed action releases the pending confirmation immediately");
+    Equal(true, unattributedFailure.DefinitiveFailure,
+        "an unattributed failed action is marked as definitive for backoff");
 }
 
 static void AoeAbsorbReserveGuardContract()
@@ -3239,6 +3345,8 @@ static void ActionFailureBackoffContract()
         "an ambiguous confirmation timeout never activates failure backoff");
 
     Equal(false, backoff.Observe(failed, now), "first unconfirmed cast remains retryable");
+    Equal(true, backoff.GetSuppressed(now.AddMilliseconds(100)).Contains(action),
+        "the first definitive failure applies a short retry backoff");
     Equal(true, backoff.Observe(failed, now.AddSeconds(1)), "second unconfirmed cast activates backoff");
     var suppressed = backoff.GetSuppressed(now.AddSeconds(1));
     Equal(true, suppressed.Contains(action), "backoff suppresses the exact failed spell and target");
@@ -5144,8 +5252,12 @@ static void FuyutsuiProtocolContract()
     Equal(true, aoeWarning.Contains("function Fuyutsui:TryBindPendingAOECast", StringComparison.Ordinal)
         && aoeWarning.Contains("protectedCorrelationSeconds = 0.5", StringComparison.Ordinal)
         && aoeWarning.Contains("protectedTiming = timing == nil", StringComparison.Ordinal)
+        && aoeWarning.Contains("impactAnchor = \"actual\"", StringComparison.Ordinal)
+        && aoeWarning.Contains("missing_end_anchor", StringComparison.Ordinal)
+        && aoeWarning.Contains("absorbDiGuaCastSeconds = 11.7", StringComparison.Ordinal)
+        && aoeWarning.Contains("锚点=%s", StringComparison.Ordinal)
         && stateBlocks.Contains("[\"AOE读条剩余\"]", StringComparison.Ordinal),
-        "protected instanced casts use a narrow DiGua correlation and duration-object pixel fallback");
+        "protected instanced casts use a narrow DiGua correlation and never fake a missing cast-end anchor");
     Equal(true, aoeWarning.Contains("function Fuyutsui:GetEstimatedGCDSeconds()", StringComparison.Ordinal)
         && aoeWarning.Contains("function Fuyutsui:GetGCDRemainingSeconds()", StringComparison.Ordinal)
         && aoeWarning.Contains("local function DivineTollExpectedReady", StringComparison.Ordinal)

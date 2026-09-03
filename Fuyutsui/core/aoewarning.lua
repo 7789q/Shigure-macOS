@@ -19,6 +19,7 @@ Fuyutsui.AOEWarningConfig = Fuyutsui.AOEWarningConfig or {
     prepareLeadSeconds = 12,
     impactActiveSeconds = 10,
     absorbPrepareSeconds = 23,
+    absorbDiGuaCastSeconds = 11.7,
     absorbVirtueDelaySeconds = 2,
     absorbInferenceLeadSeconds = 0.25,
     absorbTimelineFallbackGraceSeconds = 15,
@@ -190,6 +191,8 @@ local function NewEvent(id, eventType, impactAt, source, options)
         eventType = eventType,
         impactAt = impactAt,
         source = source,
+        impactAnchor = options.impactAnchor
+            or (source == "diguabar" and "diguabar" or nil),
         spellID = spellID,
         reservationOnly = spellID == nil,
         createdAt = GetTime(),
@@ -328,6 +331,7 @@ local function StageForEvent(event, now)
         -- Once that delay is over, keep stage 3 until Virtue is confirmed so a
         -- failed/queued key still has a chance to retry.
         if event.eventType == 2 then
+            if not event.virtueReadyAt then return 1 end
             if not event.virtueConfirmed then
                 if event.virtueReadyAt and now < event.virtueReadyAt then
                     -- Reserve the final GCD before the post-cast delay ends.
@@ -632,6 +636,7 @@ local function BindEventCast(event, unit, castGUID, spellID, isChannel, timing, 
     event.castOutcome = nil
     warning.castOwners[castKey] = event.id
     if timing then
+        event.impactAnchor = "actual"
         event.impactAt = timing.endsAt
         event.expiresAt = timing.endsAt + Fuyutsui.AOEWarningConfig.impactActiveSeconds
     end
@@ -825,7 +830,7 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
             2,
             impactAt,
             "cast",
-            { spellID = 1306517 })
+            { spellID = 1306517, impactAnchor = "diguabar" })
     end
     if not event then return true end
 
@@ -838,6 +843,9 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
         false,
         timing,
         protectedSpell)
+    if not timing then
+        event.impactAnchor = "diguabar"
+    end
     if protectedSpell then
         Fuyutsui:PublishAOEDiagnostic("rawCast", event.spellID)
         Fuyutsui:PublishAOEDiagnostic("protectedSpell", event.spellID)
@@ -881,13 +889,13 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
             and not isChannel
             and IsLikelyAbsorbCastUnit(unit) then
             local impactAt = endsAt or (type(duration) == "number" and now + duration or nil)
-                or now + self.AOEWarningConfig.absorbPrepareSeconds
+                or now + self.AOEWarningConfig.absorbDiGuaCastSeconds
                 event = NewEvent(
                 "cast:protected:" .. tostring(castGUID or unit .. ":" .. tostring(now)),
                 2,
                 impactAt,
                 "cast",
-                { spellID = 1306517 })
+                { spellID = 1306517, impactAnchor = "diguabar" })
             if event then
                 Fuyutsui:PublishAOEDiagnostic("enemyCast", event.spellID)
                 TraceLog(
@@ -959,7 +967,8 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
                     eventType,
                     impactAt,
                     "cast",
-                    { spellID = spellID })
+                    { spellID = spellID,
+                        impactAnchor = eventType == 2 and "diguabar" or nil })
                 directEvent = event ~= nil
             end
             if event then
@@ -1031,6 +1040,22 @@ local function CommitTerminal(id, cast, reason)
         ReleaseCast(event, true)
         event.status = "succeeded"
         event.castOutcome = "succeeded"
+        local impactAt = cast.endsAt
+        if event.eventType == 2 and not impactAt and event.impactAnchor ~= "diguabar" then
+            event.status = "unknown"
+            event.castOutcome = "missing_end_anchor"
+            event.completed = false
+            event.timelineFallbackBlocked = true
+            event.expiresAt = math.max(
+                event.expiresAt,
+                now + Fuyutsui.AOEWarningConfig.absorbTimelineFallbackGraceSeconds
+                    + Fuyutsui.AOEWarningConfig.impactActiveSeconds)
+            TraceLog(
+                "吸奶盾读条成功但缺少真实结束锚点 event=%s cast=%s outcome=unknown，禁止进入美德窗口",
+                tostring(event.runtimeID or event.id),
+                tostring(cast.castGUID or "<protected>"))
+            return
+        end
         event.completed = true
         TraceLog(
             "读条终态 event=%s spell=%s cast=%s reason=succeeded accepted=true status=succeeded",
@@ -1039,9 +1064,10 @@ local function CommitTerminal(id, cast, reason)
             tostring(cast.castGUID or "<protected>"))
         -- The terminal callback can be processed after the cast actually ended.
         -- Anchor the post-cast delay to the observed cast end whenever it is
-        -- available; protected casts still fall back to the callback time.
-        local impactAt = cast.endsAt or now
+        -- available; protected casts use the explicit DiGua fallback anchor.
+        impactAt = impactAt or event.impactAt or now
         event.impactAt = impactAt
+        if cast.endsAt then event.impactAnchor = "actual" end
         event.virtueReadyAt = event.eventType == 2
             and impactAt + Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds
             or impactAt
@@ -1055,7 +1081,8 @@ local function CommitTerminal(id, cast, reason)
                 Fuyutsui:ScheduleAOEHealAbsorbUpdate()
             end
             DebugLog(
-                "吸奶盾读条成功，%.2f 秒后进入阶段3 event=%s spell=%d unitGUID=%s castGUID=%s",
+                "吸奶盾读条成功，锚点=%s，结束后 %.2f 秒进入阶段3 event=%s spell=%d unitGUID=%s castGUID=%s",
+                tostring(event.impactAnchor or "unknown"),
                 Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds,
                 tostring(event.runtimeID or event.id),
                 cast.spellID,

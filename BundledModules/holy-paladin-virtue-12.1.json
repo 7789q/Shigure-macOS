@@ -196,14 +196,14 @@
     },
     {
       "Enabled": true,
-      "Condition": "重伤目标 && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5",
+      "Condition": "重伤目标 && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28 || AbsorbAny > 0 && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
       "Unit": 0,
       "Spell": "审判",
-      "Comment": "重伤且即时治疗不可用、没有灌注时用审判补充圣能；预留圣能上限避免溢出"
+      "Comment": "重伤或治疗吸收且即时治疗不可用、没有灌注时用审判补充圣能；目标无效时不发送"
     },
     {
       "Enabled": true,
-      "Condition": "移动 == false && 重伤目标",
+      "Condition": "移动 == false && 重伤目标 && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
       "UnitName": "重伤目标",
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -211,7 +211,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "移动 == false && AbsorbAny > 0",
+      "Condition": "移动 == false && AbsorbAny > 0 && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
       "UnitName": "治疗目标",
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -263,7 +263,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false",
+      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
       "Unit": 32,
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -294,14 +294,14 @@
     },
     {
       "Enabled": true,
-      "Condition": "轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5",
+      "Condition": "轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
       "Unit": 0,
       "Spell": "审判",
-      "Comment": "轻伤时震击不可用且没有灌注时用审判补充圣能，避免灌注审判抢治疗或溢出"
+      "Comment": "轻伤时震击不可用且没有灌注时用审判补充圣能；有效目标覆盖普通 AOE 阶段"
     },
     {
       "Enabled": true,
-      "Condition": "轻伤目标 && 移动 == false",
+      "Condition": "轻伤目标 && 移动 == false && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
       "UnitName": "轻伤目标",
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -333,7 +333,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 || H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 > 0 && 神圣能量 <= 3",
+      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28 || H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 > 0 && 神圣能量 <= 3 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
       "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
       "Unit": 0,
       "Spell": "审判",
