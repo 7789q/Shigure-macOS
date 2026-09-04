@@ -84,7 +84,9 @@ function Fuyutsui:OnInitialize()
 end
 
 function Fuyutsui:OnEnable()
+    self:MacroTrace("OnEnable 开始：class=%s classId=%s", tostring(classFilename), tostring(classId))
     self:GetCharacterSpecInfo()
+    self:MacroTrace("GetCharacterSpecInfo 返回：specIndex=%s specID=%s", tostring(self.state.specIndex), tostring(self.state.specID))
     self:UpdateSpellKnown()
     self:UpdatePlayerBlocks()
     if self.InitializeAOEWarning then

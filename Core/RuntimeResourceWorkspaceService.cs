@@ -13,6 +13,15 @@ public sealed class RuntimeResourceWorkspaceService
     private static readonly string[] ManagedDirectories = ["Fuyutsui", "config", "keymap"];
     private static readonly string[] OptionalManagedDirectories = ["FuyutsuiDiGuaBridge"];
     private static readonly string[] ManagedFiles = ["wow_process.txt"];
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> UpgradeableResourceHashes =
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            ["Fuyutsui/class/DeathKnight.lua"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // 用户运行目录中的旧血 DK 职业表：缺少动作确认、心打循环和血色之地字段。
+                "afd78d333fe811574ceee27b56bb5ec3a808acb7f10fd11a0cc68c464d6c4849"
+            }
+        };
     private static readonly string[] HolyPaladinRuntimeStates =
     [
         "公共冷却剩余",
@@ -116,6 +125,13 @@ public sealed class RuntimeResourceWorkspaceService
                 continue;
             }
 
+            if (IsKnownUpgradeableResource(relativePath, targetHash))
+            {
+                CopyAtomic(sourceFile.SourcePath, workspaceRoot, targetPath);
+                updated.Add(relativePath);
+                continue;
+            }
+
             if (previousManifest?.Files.TryGetValue(relativePath, out var previousHash) == true
                 && string.Equals(targetHash, previousHash, StringComparison.OrdinalIgnoreCase))
             {
@@ -152,6 +168,10 @@ public sealed class RuntimeResourceWorkspaceService
             migrated,
             regenerated.ChangedFiles);
     }
+
+    internal static bool IsKnownUpgradeableResource(string relativePath, string sha256) =>
+        UpgradeableResourceHashes.TryGetValue(relativePath, out var hashes)
+        && hashes.Contains(sha256);
 
     private static IReadOnlyList<string> MigrateLegacyCastStates(string workspaceRoot)
     {

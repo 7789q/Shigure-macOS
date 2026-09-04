@@ -15,6 +15,7 @@ public sealed record BundledModuleInstallResult(
 public sealed class BundledModuleInstaller
 {
     private const string HolyPaladinModuleId = "shigure-holy-paladin-virtue-12-1";
+    private const string BloodDeathbringerModuleId = "shigure-blood-deathbringer-12-1";
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> LegacyModuleIds =
         new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase)
         {
@@ -75,7 +76,36 @@ public sealed class BundledModuleInstaller
                 // 1.2.1.21 当前用户目录副本：正义盾击仍使用 Unit 0 且保留全员健康门槛。
                 "ea16efa2c7bbd04eb65ac08ef45ed5dc38a6bf0462b87738058cd5d54a29865e",
                 // 1.2.1.22 当前用户目录副本：正义盾击仍包含已移除的正面条件。
-                "70d96b2b330ac68d41f070d9cd16fbf705650849f20f29f4c0330842380f2854"
+                "70d96b2b330ac68d41f070d9cd16fbf705650849f20f29f4c0330842380f2854",
+                // 1.2.1.22 仓库版本：美德仍被吸奶盾阶段 1 和 GCD 发送门禁阻塞。
+                "f4a0f7d582d729895c36f4517a006df28721eb28989d8b9d6803da5cc2e9f0b9"
+            },
+            [BloodDeathbringerModuleId] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // 1.2.1.36：降低凋零和血沸逻辑暂停，但尚未提升骨盾层数策略和自保阈值。
+                "06f38d14f8e119b440d8180c7512b5d9f0a558ba691af4f566da59e0c7d34979",
+                // 1.2.1.35 当前用户目录副本：仍保留 1200/900ms 逻辑暂停。
+                "5f4081ae4fc948122c0beb21e3ef4f3210a033e6e90244c126c87e45556db6a9",
+                // 1.2.1.34：心打和血沸仍依赖失真的冷却字段，且凋零把血色之地合并进了延续光环。
+                "36e74870a1299481083aa6e7226bc41d36d88fa7e6e71aff6116e2310e6453a4",
+                // 1.2.1.33：凋零增加了失败重试限流，但限流时仍会阻塞后续输出规则。
+                "a8f6436b026cd43577b2cc0155a7c0fb49a6a2d268989ee08ce39f445d08af02",
+                // 1.2.1.32 当前用户目录副本：凋零未确认后持续重试，抢占心脏打击和血液沸腾。
+                "fd62626b9750446d4c64e897a96fd0b0a43c858ed58db7ce8466fb1c73a2fd7e",
+                // 1.2.1.31：当前用户目录版本，血沸循环和灵界打击仍可能被失真的状态门槛阻断。
+                "704844ced0451cf4e6b2ca9bcb3e430fef054a5025733b5503a8ba1a64a80f4f",
+                // 1.2.1.30 当前内置版本：骨盾开战入口依赖未稳定回写的高亮/冷却字段，近战状态会无匹配规则。
+                "0b10ec47f9cc236d3d6a5b74887c9d65ed9d6c498bbfaa2079855e143a23ed71",
+                // 1.2.1.27 当前用户目录副本：凋零和死亡印记仍要求目标类型等于 1，高亮血沸无循环门槛。
+                "3be77e66d3ae3eae7535a1ca994bdecb49f4c7420060d3d6d3bae48d8ebd2ea4",
+                // 1.2.1.22 用户目录副本：高符文能量错误选择心脏打击，且凋零缺少已有区域保护。
+                "26cc54cd5a06de4c77dc6a9322dab34f8220cd0dfc64fd69873f98847582d5f8",
+                // 1.2.1.24：直接按高符文能量灵界打击，未消费沸点/午夜舞步/破灭高亮。
+                "22b880273f958a94dcd93cadd6d876bc6d9004431162ea762c611586723debfe",
+                // 1.2.1.25：已有高亮循环，但高压层错误包含已移除的符文分流，凋零未限制站定。
+                "038a8fe584f38586f6c7e4de55ff95586b7d43ae1f6d8065de71dce597241742",
+                // 1.2.1.26：移除符文分流并限制凋零站定，但还未要求连续站定两秒和近战敌对目标。
+                "f582c7374784511487ee02d686d2fb1e27ac94282887b44163f0ac70208f1793"
             }
         };
 
@@ -157,7 +187,20 @@ public sealed class BundledModuleInstaller
     }
 
     private static bool CanUpgrade(ModuleDefinition source, InstalledModule existing) =>
-        IsKnownUpgradeableModule(source.Id, existing.Module.Id, existing.Hash);
+        IsKnownUpgradeableModule(source.Id, existing.Module.Id, existing.Hash)
+        || IsNewerBundledVersion(source, existing.Module);
+
+    internal static bool IsNewerBundledVersion(ModuleDefinition source, ModuleDefinition existing)
+    {
+        if (!string.Equals(source.Id, existing.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return Version.TryParse(source.Version, out var sourceVersion)
+            && Version.TryParse(existing.Version, out var existingVersion)
+            && sourceVersion > existingVersion;
+    }
 
     private static void Backup(string targetDirectory, InstalledModule existing)
     {

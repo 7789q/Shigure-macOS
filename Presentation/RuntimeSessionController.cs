@@ -49,6 +49,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
     private bool? _lastLoggedEnabled;
     private int? _lastLoggedMacroBindingStatus;
     private int? _lastLoggedMacroBindingCount;
+    private string? _lastLoggedMacroBindingPresence;
 
     public RuntimeSessionController(
         RuntimeSessionCoordinator coordinator,
@@ -387,16 +388,26 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             AddLog($"识别职业：{classSpec}");
         }
 
-        if (snapshot.ClassId == 2 && snapshot.SpecId == 1 && snapshot.State is not null)
+        if ((snapshot.ClassId == 2 || snapshot.ClassId == 6)
+            && snapshot.SpecId == 1
+            && snapshot.State is not null)
         {
             var macroStatus = snapshot.State.GetInt("宏绑定状态");
             var macroCount = snapshot.State.GetInt("宏绑定数量");
+            var hasStatusField = snapshot.State.Values.ContainsKey("宏绑定状态");
+            var hasCountField = snapshot.State.Values.ContainsKey("宏绑定数量");
+            var macroPresence = $"状态字段={(hasStatusField ? "有" : "无")}，数量字段={(hasCountField ? "有" : "无")}";
             if (macroStatus != _lastLoggedMacroBindingStatus
                 || macroCount != _lastLoggedMacroBindingCount)
             {
                 _lastLoggedMacroBindingStatus = macroStatus;
                 _lastLoggedMacroBindingCount = macroCount;
                 AddLog($"WoW宏绑定：{DescribeMacroBindingStatus(macroStatus)}，数量 {macroCount}");
+            }
+            if (!string.Equals(macroPresence, _lastLoggedMacroBindingPresence, StringComparison.Ordinal))
+            {
+                _lastLoggedMacroBindingPresence = macroPresence;
+                AddLog($"WoW宏绑定诊断：{macroPresence}，扫描状态字段数 {snapshot.State.Values.Count}");
             }
         }
 
@@ -468,6 +479,25 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             ("目标驱散类型", "目标驱散"),
             ("可驱散目标", "可驱散目标"),
             ("自身生命值", "自身生命"),
+            ("战斗时间", "战斗时间"),
+            ("生命值", "自身生命"),
+            ("移动", "移动"),
+            ("站定时长", "站定时长"),
+            ("目标类型", "目标类型"),
+            ("目标距离", "目标距离"),
+            ("目标正面", "目标正面"),
+            ("符文", "符文"),
+            ("符文能量", "符文能量"),
+            ("白骨之盾层数", "白骨之盾层数"),
+            ("目标血之疫病", "目标血之疫病"),
+            ("凋零充能", "凋零充能"),
+            ("凋零冷却", "凋零冷却"),
+            ("凋零光环", "凋零光环"),
+            ("灵界打击冷却", "灵界打击冷却"),
+            ("死亡抚摸冷却", "死亡抚摸冷却"),
+            ("血沸充能", "血沸充能"),
+            ("血沸循环心打次数", "血沸循环心打次数"),
+            ("候选过滤摘要", "候选过滤摘要"),
             ("安全确认", "安全确认"),
             ("确认帧", "确认帧"),
             ("动作按键", "按键"),
@@ -529,6 +559,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         _lastLoggedEnabled = null;
         _lastLoggedMacroBindingStatus = null;
         _lastLoggedMacroBindingCount = null;
+        _lastLoggedMacroBindingPresence = null;
         _healAbsorbLogTracker.Reset();
         _aoeWarningLogTracker.Reset();
     }

@@ -662,6 +662,18 @@ public sealed record ModuleLoadFailure(string FilePath, string ErrorType, string
 
 public static class ModuleLogic
 {
+    private static readonly HashSet<string> BloodRuneSpenders = new(StringComparer.Ordinal)
+    {
+        "精髓分裂",
+        "心脏打击",
+        "符文分流"
+    };
+
+    private static readonly HashSet<string> BloodRunicPowerSpenders = new(StringComparer.Ordinal)
+    {
+        "灵界打击"
+    };
+
     private static readonly HashSet<string> HolyPowerSpenders = new(StringComparer.Ordinal)
     {
         "荣耀圣令",
@@ -673,7 +685,8 @@ public static class ModuleLogic
         ModuleDefinition module,
         GameState state,
         IKeymapResolver keymap,
-        IReadOnlySet<LogicActionKey>? suppressedActions = null)
+        IReadOnlySet<LogicActionKey>? suppressedActions = null,
+        IReadOnlySet<string>? rateLimitedRuleKeys = null)
     {
         var info = CreateInfo(module, state);
         var unitSlots = ResolveDynamicFields(module, state);
@@ -682,6 +695,23 @@ public static class ModuleLogic
         AddShieldDiagnostics(module, state, keymap, info, failedSpells);
         var missingBindings = new List<string>();
         var suppressed = new List<string>();
+        var candidateDiagnostics = new List<string>();
+
+        void AddCandidateDiagnostic(string value)
+        {
+            if (candidateDiagnostics.Count < 32)
+            {
+                candidateDiagnostics.Add(value);
+            }
+        }
+
+        void PublishCandidateDiagnostics()
+        {
+            if (candidateDiagnostics.Count > 0)
+            {
+                info["候选过滤摘要"] = string.Join("；", candidateDiagnostics);
+            }
+        }
 
         for (var ruleIndex = 0; ruleIndex < module.Rules.Count; ruleIndex++)
         {
@@ -694,14 +724,25 @@ public static class ModuleLogic
 
             if (!ModuleConditionEvaluator.TryEvaluateRule(rule, state, out var conditionMatched, out var error, failedSpells))
             {
+                AddCandidateDiagnostic($"规则 {ruleIndex + 1}: 条件错误");
                 info["条件错误"] = error;
                 info["规则条件"] = rule.DescribeCondition();
                 AddRuleLogInfo(info, rule, ruleIndex, rateLimitKey, null);
+                PublishCandidateDiagnostics();
                 return new LogicDecision(null, $"{module.Name}: 条件错误", info, module.Name);
             }
 
             if (!conditionMatched)
             {
+                var reason = ModuleConditionEvaluator.DescribeUnmatchedCondition(rule, state, failedSpells);
+                AddCandidateDiagnostic($"规则 {ruleIndex + 1} {rule.Spell}: 条件不满足{reason}");
+                continue;
+            }
+
+            if (rule.DelayMs is > 0
+                && rateLimitedRuleKeys?.Contains(rateLimitKey) == true)
+            {
+                AddCandidateDiagnostic($"规则 {ruleIndex + 1} {rule.Spell}: 动作限流中");
                 continue;
             }
 
@@ -715,6 +756,7 @@ public static class ModuleLogic
                 {
                     info["已跳过确认失败动作"] = string.Join("；", suppressed);
                 }
+                PublishCandidateDiagnostics();
                 info["命中条件"] = string.IsNullOrWhiteSpace(rule.DescribeCondition()) ? "始终" : rule.DescribeCondition();
                 info["动作技能"] = ModuleSpecialActions.PauseSpell;
                 info["动作按键"] = "-";
@@ -730,6 +772,7 @@ public static class ModuleLogic
                 var slot = unitSlots.TryGetValue(rule.UnitName, out var s) ? s : null;
                 if (slot is null)
                 {
+                    AddCandidateDiagnostic($"规则 {ruleIndex + 1} {rule.Spell}: 治疗目标无效");
                     continue;
                 }
 
@@ -743,6 +786,7 @@ public static class ModuleLogic
                 actionSpell = ModuleSpecialActions.GetFailedSpell(state, failedSpells);
                 if (string.IsNullOrWhiteSpace(actionSpell))
                 {
+                    AddCandidateDiagnostic($"规则 {ruleIndex + 1} {rule.Spell}: 技能不可用");
                     continue;
                 }
             }
@@ -752,6 +796,7 @@ public static class ModuleLogic
                 actionSpell = ModuleSpecialActions.GetOneKeySpell(state, oneKeySpells);
                 if (string.IsNullOrWhiteSpace(actionSpell))
                 {
+                    AddCandidateDiagnostic($"规则 {ruleIndex + 1} {rule.Spell}: 技能不可用");
                     continue;
                 }
 
@@ -762,6 +807,7 @@ public static class ModuleLogic
                 && suppressedActions?.Contains(new LogicActionKey(actionSpell, resolvedUnit.GetValueOrDefault())) == true)
             {
                 suppressed.Add($"{actionSpell} / 单位 {resolvedUnit.GetValueOrDefault()}");
+                AddCandidateDiagnostic($"规则 {ruleIndex + 1} {actionSpell}: 确认失败退让");
                 continue;
             }
 
@@ -805,6 +851,7 @@ public static class ModuleLogic
                 if (binding is null)
                 {
                     missingBindings.Add($"规则 {ruleIndex + 1}: {actionSpell} / 单位 {resolvedUnit.GetValueOrDefault()}");
+                    AddCandidateDiagnostic($"规则 {ruleIndex + 1} {actionSpell}: 缺少按键");
                     continue;
                 }
             }
@@ -818,6 +865,7 @@ public static class ModuleLogic
             {
                 info["已跳过确认失败动作"] = string.Join("；", suppressed);
             }
+            PublishCandidateDiagnostics();
 
             var step = BuildStep(module, rule, hotkey, actionSpell);
             info["命中条件"] = string.IsNullOrWhiteSpace(rule.Condition) ? "始终" : rule.Condition;
@@ -897,10 +945,28 @@ public static class ModuleLogic
                     }
                 }
             }
+            var resourceField = BloodRuneSpenders.Contains(actionSpell)
+                ? "符文"
+                : BloodRunicPowerSpenders.Contains(actionSpell)
+                    ? "符文能量"
+                    : null;
+            var resourceCount = resourceField is null ? 0 : state.GetInt(resourceField);
+            var allowResourceOnlyConfirmation = IsBloodDeathbringerModule(module)
+                && resourceField is not null
+                && resourceCount > 0;
+            if (allowResourceOnlyConfirmation)
+            {
+                confirmationStateField = resourceField;
+                confirmationInitialValue = resourceCount;
+            }
             var playerActionCode = oneKeySpells
                 .Where(entry => string.Equals(entry.Value, actionSpell, StringComparison.Ordinal))
                 .Select(entry => (int?)entry.Key)
                 .FirstOrDefault();
+            var actionIntent = ResolveActionIntent(actionSpell, resolvedUnit, state);
+            var allowCastPreemption = CastPreemptionPolicy.Allows(actionSpell);
+            info["动作意图"] = actionIntent.ToString();
+            info["允许抢占读条"] = allowCastPreemption ? "是" : "否";
             return new LogicDecision(
                 hotkey,
                 step,
@@ -914,7 +980,10 @@ public static class ModuleLogic
                 confirmationStateField,
                 confirmationInitialValue,
                 confirmationStateChange,
-                playerActionCode);
+                playerActionCode,
+                actionIntent,
+                allowCastPreemption,
+                allowResourceOnlyConfirmation);
         }
 
         info["命中条件"] = "-";
@@ -926,7 +995,63 @@ public static class ModuleLogic
         {
             info["已跳过确认失败动作"] = string.Join("；", suppressed);
         }
+        PublishCandidateDiagnostics();
         return new LogicDecision(null, $"{module.Name}: 无匹配规则", info, module.Name);
+    }
+
+    private static LogicActionIntent ResolveActionIntent(string? spell, int? unit, GameState state)
+    {
+        if (string.IsNullOrWhiteSpace(spell))
+        {
+            return LogicActionIntent.Unknown;
+        }
+
+        if (spell is "圣盾术" or "治疗石" or "治疗药水" or "银月城生命药水")
+        {
+            return LogicActionIntent.EmergencySelfDefense;
+        }
+
+        if (spell == "圣疗术")
+        {
+            return unit == UnitSelector.ResolvePlayerSlot(state)
+                ? LogicActionIntent.EmergencySelfDefense
+                : LogicActionIntent.EmergencyPartySupport;
+        }
+
+        if (spell == "牺牲祝福")
+        {
+            return LogicActionIntent.EmergencyPartySupport;
+        }
+
+        if (spell is "美德道标" or "黎明之光" or "圣洁鸣钟" or "光环掌握")
+        {
+            return LogicActionIntent.GroupHealing;
+        }
+
+        if (unit == ReservedUnit.Target
+            && !CooldownConfirmationTracker.IsOffGlobalCooldownSpell(spell))
+        {
+            return LogicActionIntent.NpcHealing;
+        }
+
+        if (spell == "清洁术")
+        {
+            return LogicActionIntent.Dispel;
+        }
+
+        if (spell is "荣耀圣令" or "圣光闪现" or "圣光术" or "神圣震击")
+        {
+            return LogicActionIntent.DirectHealing;
+        }
+
+        if (CooldownConfirmationTracker.IsOffGlobalCooldownSpell(spell))
+        {
+            return LogicActionIntent.OffGlobalCooldown;
+        }
+
+        return spell is "暂停"
+            ? LogicActionIntent.Pause
+            : LogicActionIntent.Offensive;
     }
 
     private static void AddRuleLogInfo(
@@ -946,6 +1071,11 @@ public static class ModuleLogic
             info["优先级说明"] = rule.Comment.Trim();
         }
     }
+
+    private static bool IsBloodDeathbringerModule(ModuleDefinition module) =>
+        module.Match.ClassId == 6
+        && module.Match.SpecId == 1
+        && module.Match.HeroTalent == 1;
 
     private static void AddShieldDiagnostics(
         ModuleDefinition module,
@@ -1311,6 +1441,45 @@ public static class ModuleLogic
             info["可驱散目标"] = string.Join("；", dispellableUnits);
         }
 
+        if (IsBloodDeathbringerModule(module))
+        {
+            foreach (var (key, label) in new[]
+            {
+                ("符文", "符文"),
+                ("符文能量", "符文能量"),
+                ("敌人数量", "敌人数量"),
+                ("敌人数-有仇恨", "敌人数-有仇恨"),
+                ("爆发开关", "爆发开关"),
+                ("目标类型", "目标类型"),
+                ("目标距离", "目标距离"),
+                ("目标生命值", "目标生命值"),
+                ("站定时长", "站定时长"),
+                ("auras.白骨之盾层数", "白骨之盾层数"),
+                ("auras.血债层数", "血债层数"),
+                ("auras.沸点层数", "沸点层数"),
+                ("auras.沸点", "沸点高亮"),
+                ("auras.午夜舞步", "心脏打击高亮"),
+                ("auras.破灭", "精髓分裂高亮"),
+                ("auras.目标血之疫病", "目标血之疫病"),
+                ("移动", "移动"),
+                ("spells.枯萎凋零层数", "凋零充能"),
+                ("spells.枯萎凋零", "凋零冷却"),
+                ("auras.枯萎凋零", "凋零光环"),
+                ("auras.血色之地", "血色之地"),
+                ("spells.灵界打击", "灵界打击冷却"),
+                ("spells.死神的抚摩", "死亡抚摸冷却"),
+                ("spells.心脏打击", "心打冷却"),
+                ("spells.血液沸腾", "血沸冷却"),
+                ("spells.血液沸腾层数", "血沸充能"),
+                ("spells.符文刃舞", "符文刃舞冷却"),
+                ("auras.符文刃舞", "符文刃舞光环"),
+                ("血沸循环心打次数", "血沸循环心打次数")
+            })
+            {
+                info[label] = state.GetInt(key);
+            }
+        }
+
         return info;
     }
 
@@ -1506,6 +1675,76 @@ public static class ModuleConditionEvaluator
         matched = false;
         return true;
     }
+
+    public static string DescribeUnmatchedCondition(
+        ModuleRule rule,
+        GameState state,
+        IReadOnlyDictionary<int, string>? failedSpells = null)
+    {
+        if (TryEvaluate(rule.Condition, state, out var mainMatched, out _, failedSpells) && !mainMatched)
+        {
+            return DescribeUnmatchedExpression(rule.Condition, state, failedSpells);
+        }
+
+        foreach (var subCondition in rule.SubConditions ?? [])
+        {
+            if (TryEvaluate(subCondition, state, out var subMatched, out _, failedSpells) && !subMatched)
+            {
+                return $"（子条件{DescribeUnmatchedExpression(subCondition, state, failedSpells)}）";
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string DescribeUnmatchedExpression(
+        string? expression,
+        GameState state,
+        IReadOnlyDictionary<int, string>? failedSpells)
+    {
+        foreach (var orPart in Regex.Split(expression ?? string.Empty, @"\s*\|\|\s*"))
+        {
+            foreach (var andPart in Regex.Split(orPart, @"\s*&&\s*"))
+            {
+                if (TryEvaluateTerm(andPart, state, out var matched, out _, failedSpells) && !matched)
+                {
+                    return $"（{andPart.Trim()}，实际 {FormatResolvedTermValue(andPart, state, failedSpells)}）";
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string FormatResolvedTermValue(
+        string term,
+        GameState state,
+        IReadOnlyDictionary<int, string>? failedSpells)
+    {
+        var trimmed = term.Trim();
+        var inMatch = InRegex.Match(trimmed);
+        if (inMatch.Success)
+        {
+            return FormatDiagnosticValue(ResolveValue(state, inMatch.Groups["field"].Value.Trim(), failedSpells));
+        }
+
+        var comparison = ComparisonRegex.Match(trimmed);
+        if (comparison.Success)
+        {
+            return FormatDiagnosticValue(ResolveValue(state, comparison.Groups["field"].Value.Trim(), failedSpells));
+        }
+
+        var fieldName = trimmed.StartsWith('!') ? trimmed[1..].Trim() : trimmed;
+        return FormatDiagnosticValue(ResolveValue(state, fieldName, failedSpells));
+    }
+
+    private static string FormatDiagnosticValue(object? value) => value switch
+    {
+        null => "缺失",
+        bool boolean => boolean ? "true" : "false",
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+        _ => value.ToString() ?? "缺失"
+    };
 
     public static bool TryResolveInt(GameState state, string fieldName, out int value)
     {

@@ -8,6 +8,41 @@ local focus = Fuyutsui.focus
 local mouseover = Fuyutsui.mouseover
 local boss = Fuyutsui.boss
 local nameplate = Fuyutsui.nameplate
+local lastTargetTrace
+
+local function SafeUnitFlag(value)
+    if type(issecretvalue) == "function" and issecretvalue(value) then
+        return "secret"
+    end
+    return tostring(value)
+end
+
+local function TraceTargetState(unit, cache, exists, canAttack, canAssist)
+    if unit ~= "target" or type(Fuyutsui.MacroTrace) ~= "function" then
+        return
+    end
+
+    local typeValue = type(cache.type) == "number"
+        and math.floor(cache.type * 255 + 0.5)
+        or 0
+    local signature = table.concat({
+        SafeUnitFlag(exists),
+        SafeUnitFlag(canAttack),
+        SafeUnitFlag(canAssist),
+        SafeUnitFlag(cache.isDead),
+        tostring(typeValue),
+        tostring(cache.maxRange or "nil"),
+    }, "|")
+    if signature == lastTargetTrace then
+        return
+    end
+
+    lastTargetTrace = signature
+    Fuyutsui:MacroTrace(
+        "目标诊断：exists=%s canAttack=%s canAssist=%s dead=%s type=%s range=%s",
+        SafeUnitFlag(exists), SafeUnitFlag(canAttack), SafeUnitFlag(canAssist),
+        SafeUnitFlag(cache.isDead), tostring(typeValue), tostring(cache.maxRange or "nil"))
+end
 
 local function IsUnitInFront(unit)
     if type(UnitPosition) ~= "function" or type(GetPlayerFacing) ~= "function" then
@@ -94,6 +129,22 @@ local function getUnitTypeIndex(unit)
     return 51
 end
 
+local function getHostileType(unit)
+    local classification = UnitClassification(unit)
+    if not issecretvalue(classification) then
+        if classification == "worldboss" or classification == "boss" then
+            return 92 / 255
+        end
+    end
+
+    local level = UnitLevel(unit)
+    if type(level) == "number" and not issecretvalue(level) and level > 90 then
+        return 91 / 255
+    end
+
+    return 1 / 255
+end
+
 local function getUnitType(unit)
     if not UnitExists(unit) then return 0 end
 
@@ -101,10 +152,9 @@ local function getUnitType(unit)
     local canAssist = UnitCanAssist("player", unit)
     if not canAttack and not canAssist then return 0 end
 
-    -- Target-type conditions use 1 as the canonical hostile-target value.
-    -- Friendly party/NPC identities continue to use the 100+ namespace below.
+    -- 敌对目标使用 1/91/92 区分普通、精英和首领；友方继续使用 100+ 命名空间。
     if canAttack then
-        return 1 / 255
+        return getHostileType(unit)
     end
 
     local index = getUnitTypeIndex(unit)
@@ -127,7 +177,7 @@ function Fuyutsui:UpdateUnitType(unit)
     if not cache or not category then return end
 
     if boss and boss[unit] then
-        cache.type = (cache.canAttack and 1 or 2) / 255
+        cache.type = (cache.canAttack and 92 or 2) / 255
         self:UpdateStateBlock(category, "类型")
         return
     end
@@ -143,6 +193,7 @@ end
 function Fuyutsui:UpdateUnitCanAttack(unit)
     local cache = GetUnitCache(unit)
     if not cache then return end
+    local exists = UnitExists(unit)
     cache.canAttack = UnitCanAttack("player", unit)
     if boss and boss[unit] then
         cache.canAssist = false
@@ -151,6 +202,7 @@ function Fuyutsui:UpdateUnitCanAttack(unit)
     end
     cache.inFront = IsUnitInFront(unit)
     self:UpdateUnitType(unit)
+    TraceTargetState(unit, cache, exists, cache.canAttack, cache.canAssist)
 end
 
 function Fuyutsui:UpdateUnitRangeBlock(unit)

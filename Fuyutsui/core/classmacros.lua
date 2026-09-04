@@ -11,6 +11,17 @@ Fuyutsui.MacroBodies = {
     ["圣言祭礼"] = "/cast 圣言祭礼\n/use 16",
     ["收割者战刃"] = "/cast 投掷利刃",
 }
+
+-- 仅允许明确的高价值治疗/自保动作打断当前读条；普通动作保持读条保护。
+Fuyutsui.CastPreemptingSpells = {
+    ["圣盾术"] = true,
+    ["治疗石"] = true,
+    ["治疗药水"] = true,
+    ["银月城生命药水"] = true,
+    ["美德道标"] = true,
+    ["心灵冰冻"] = true,
+}
+
 -- 全职业宏表：按 UnitClassBase 键索引
 -- 由 LoadPlayerMacros 按当前职业与专精选取
 -- dynamicSpells 支持：纯数组（旧），或 { common = {...}, [specIndex] = {...} }
@@ -345,6 +356,10 @@ Fuyutsui.ClassMacros = {
             "[channeling]吞噬",
             "[nochanneling]吞噬",
             "[@cursor]枯萎凋零",
+            "符文分流",
+            "反魔法护罩",
+            "死亡脚步",
+            "治疗石",
         },
         specialSpells = {
             "/castsequence reset=1 死亡之握,x",

@@ -1,5 +1,12 @@
 local addon, ns = ...
 
+local FALLBACK_MACRO_STATUS_BLOCK = 500
+local FALLBACK_MACRO_COUNT_BLOCK = 501
+
+function Fuyutsui:MacroTrace(message, ...)
+    -- 保留诊断调用点，但不向 WoW 聊天框输出测试信息。
+end
+
 function Fuyutsui:UpdatePlayerBlocks()
     self.isInitialized = false
     self:UpdateStateBlock("状态", "DiGua桥接就绪")
@@ -117,7 +124,7 @@ function Fuyutsui:LoadPlayerBlocks(specIndex)
                     }
                     index = index + 1
                 else
-                    print("LoadPlayerBlocks: aura 缺少 spellId/spellIds，已跳过")
+                    self:MacroTrace("LoadPlayerBlocks: aura 缺少 spellId/spellIds，已跳过")
                 end
             end
         end
@@ -141,7 +148,7 @@ function Fuyutsui:LoadPlayerBlocks(specIndex)
     if type(t.spells) == "table" then
         for _, spell in ipairs(t.spells) do
             if type(spell) ~= "table" or not spell.spellId then
-                print("LoadPlayerBlocks: spell 缺少 spellId，已跳过")
+                self:MacroTrace("LoadPlayerBlocks: spell 缺少 spellId，已跳过")
             else
                 local spellId = spell.spellId
                 if not blocks.spells[spellId] then
@@ -194,6 +201,13 @@ function Fuyutsui:LoadPlayerBlocks(specIndex)
     end
 
     self.blocks = blocks
+    -- 保持宏状态协议在旧版职业表和本地冲突副本上仍可用。
+    if not blocks.state["宏绑定状态"] then
+        blocks.state["宏绑定状态"] = FALLBACK_MACRO_STATUS_BLOCK
+    end
+    if not blocks.state["宏绑定数量"] then
+        blocks.state["宏绑定数量"] = FALLBACK_MACRO_COUNT_BLOCK
+    end
     if self.ReleaseUnitAuraContainers then
         self:ReleaseUnitAuraContainers()
     elseif self.ReleasePlayerAuraContainers then
@@ -232,21 +246,33 @@ end
 function Fuyutsui:LoadPlayerMacros()
     local classFile = UnitClassBase("player")
     local m = self.ClassMacros and self.ClassMacros[classFile]
+    local specIndex = self.state and self.state.specIndex or C_SpecializationInfo.GetSpecialization()
+    self:MacroTrace(
+        "LoadPlayerMacros 进入：class=%s specIndex=%s inCombat=%s ClassMacros=%s classEntry=%s",
+        tostring(classFile), tostring(specIndex), tostring(InCombatLockdown()),
+        tostring(type(self.ClassMacros)), tostring(m ~= nil))
     if not m then
         self.macrosPending = false
         self.state.macroBindingStatus = 0
         self.state.macroBindingCount = 0
+        self:MacroTrace("LoadPlayerMacros 退出：缺少职业宏表，发布状态 0/0")
         return false
     end
     if InCombatLockdown() then
-        self.state.macroBindingStatus = 2
-        self.state.macroBindingCount = 0
-        self:UpdateStateBlock("状态", "宏绑定状态")
-        self:UpdateStateBlock("状态", "宏绑定数量")
+        local hadReadyBindings = self.state.macroBindingStatus == 1
+            and (self.state.macroBindingCount or 0) > 0
+        if not hadReadyBindings then
+            self.state.macroBindingStatus = 2
+            self.state.macroBindingCount = 0
+            self:UpdateStateBlock("状态", "宏绑定状态")
+            self:UpdateStateBlock("状态", "宏绑定数量")
+        end
         self.macrosPending = true
+        self:MacroTrace(
+            "LoadPlayerMacros 退出：战斗锁定，保留宏状态=%s/%s，设置 macrosPending=true",
+            tostring(self.state.macroBindingStatus), tostring(self.state.macroBindingCount))
         return false
     end
-    local specIndex = self.state and self.state.specIndex or C_SpecializationInfo.GetSpecialization()
     local dynamicSpells = ResolveDynamicSpells(m.dynamicSpells, specIndex)
     self.MacrosList = {
         dynamicSpells = dynamicSpells,
@@ -255,5 +281,6 @@ function Fuyutsui:LoadPlayerMacros()
     }
     local created = self:CreateMacro(dynamicSpells, m.staticSpells, m.specialSpells, m.keyOffset, m.routingMode)
     self.macrosPending = not created
+    self:MacroTrace("LoadPlayerMacros 退出：CreateMacro=%s，最终 macrosPending=%s", tostring(created), tostring(self.macrosPending))
     return created
 end

@@ -3,7 +3,7 @@
   "Name": "烈日奶骑大秘境-美德爆发 12.1",
   "Author": "Shigure",
   "RecommendedTalent": "CEEAzbn3egSOtoSwvPw1U1vTLAAAALAwMAAD2GzMzMjZmZBmZYZsZmFjmYYMzMMmtMAMAsB2YZmZmlZbmZ2aAAAAWAGsZgZMDzAAYmhZMGNA",
-  "Version": "1.2.1.22",
+  "Version": "1.2.1.23",
   "UnitMappingVersion": 3,
   "Enabled": true,
   "Match": { "ClassId": 2, "SpecId": 1 },
@@ -97,11 +97,11 @@
     },
     {
       "Enabled": true,
-      "Condition": "真实群伤 > 0 && DTotal >= 30 && H85 >= 2 && AOE事件类型 != 2 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
-      "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 4" ],
+      "Condition": "DTotal >= 30 && H85 >= 2 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+      "SubConditions": [ "AOE事件类型 != 2 && AOE事件阶段 == 0", "AOE事件类型 != 2 && AOE事件阶段 == 4", "AOE事件类型 == 2 && AOE事件阶段 == 1" ],
       "Unit": 1,
       "Spell": "美德道标",
-      "Comment": "战斗中无 DiGua 执行预留时由实时真实群伤开启美德；仅在阶段 0/4 反应式兜底"
+      "Comment": "实时群体治疗缺口开启美德；普通 AOE 的非执行阶段和吸奶盾阶段 1 均允许提前释放，不等待吸奶盾执行窗口"
     },
     {
       "Enabled": true,
@@ -232,7 +232,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100",
+      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "Unit": 32,
       "Spell": "荣耀圣令",
@@ -240,7 +240,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.神性之手 > 0",
+      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.神性之手 > 0",
       "Unit": 32,
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -248,7 +248,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.圣光灌注 > 0",
+      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.圣光灌注 > 0",
       "Unit": 32,
       "Spell": "圣光闪现",
       "DelayMs": 700,
@@ -256,14 +256,14 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
       "Unit": 32,
       "Spell": "神圣震击",
       "Comment": "队伍安全时用神圣震击治疗友方 NPC"
     },
     {
       "Enabled": true,
-      "Condition": "DTotal == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
+      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
       "Unit": 32,
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -317,7 +317,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && 目标类型 == 1 && 目标距离 <= 5",
+      "Condition": "战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && 目标类型 > 0 && 目标类型 < 100 && 目标距离 <= 5",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "Unit": 32,
       "Spell": "正义盾击",

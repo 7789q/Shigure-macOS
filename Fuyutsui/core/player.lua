@@ -17,6 +17,7 @@ function Fuyutsui:GetCharacterInfo()
 end
 
 function Fuyutsui:GetCharacterSpecInfo()
+    self:MacroTrace("GetCharacterSpecInfo 进入")
     self.state.specIndex = C_SpecializationInfo.GetSpecialization()
     local specID, specName, _, _, role = C_SpecializationInfo.GetSpecializationInfo(self.state.specIndex)
     self.state.specID = specID
@@ -29,19 +30,24 @@ function Fuyutsui:GetCharacterSpecInfo()
     self.state.channeling = false
     self.state.mountCasting = false
     self:LoadPlayerBlocks(self.state.specIndex)
+    self:MacroTrace("LoadPlayerBlocks 完成：specIndex=%s blocks=%s", tostring(self.state.specIndex), tostring(self.blocks ~= nil))
     self:UpdateSpellKnown()
     self:UpdatePlayerMounted()
     self:UpdateGroup()
+    self:MacroTrace("UpdateGroup 完成：group=%s", tostring(self.group ~= nil))
     -- 登录阶段其他插件可能稍后写入覆盖绑定；首次加载延后 5 秒，确保本插件最后绑定。
     C_Timer.After(5, function()
+        self:MacroTrace("登录延迟宏绑定回调触发")
         self:LoadPlayerMacros()
     end)
+    self:MacroTrace("已安排登录延迟宏绑定：5 秒")
     self:GetItemCount()
     self:UpdateStateBlock("状态", "职业")
     self:UpdateStateBlock("状态", "专精")
 end
 
 function Fuyutsui:UpdatePlayerSpecInfo()
+    self:MacroTrace("UpdatePlayerSpecInfo 进入")
     self:ClearAllTextures()
     self.state.specIndex = C_SpecializationInfo.GetSpecialization()
     local specID, specName, _, _, role = C_SpecializationInfo.GetSpecializationInfo(self.state.specIndex)
@@ -53,6 +59,7 @@ function Fuyutsui:UpdatePlayerSpecInfo()
     self:UpdateSpellKnown()
     self:UpdatePlayerBlocks()
     self:LoadPlayerMacros()
+    self:MacroTrace("UpdatePlayerSpecInfo 宏绑定调用返回")
     self:UpdateStateBlock("状态", "职业")
     self:UpdateStateBlock("状态", "专精")
 end
@@ -91,8 +98,23 @@ end
 function Fuyutsui:UpdatePlayerMoving(boolean)
     state.drinkStatus = false
     self:UpdatePlayerValid()
+    if boolean then
+        state.stationarySince = nil
+    elseif not state.stationarySince then
+        state.stationarySince = GetTime()
+    end
     state.moving = boolean and 1 / 255 or 0
     self:UpdateStateBlock("状态", "移动")
+    self:UpdatePlayerStationaryDuration()
+end
+
+function Fuyutsui:UpdatePlayerStationaryDuration()
+    local duration = 0
+    if state.moving == 0 and state.stationarySince then
+        duration = math.max(0, math.min(255, GetTime() - state.stationarySince)) / 255
+    end
+    state.stationaryDuration = duration
+    self:UpdateStateBlock("状态", "站定时长")
 end
 
 function Fuyutsui:UpdatePlayerCastBlocks()
@@ -302,12 +324,27 @@ function Fuyutsui:PublishPlayerAction(spellId, status)
         self:UpdateStateBlock("状态", "玩家动作序号")
         return
     end
+    if state.specIndex == 1 and status == 2 then
+        if spell.name == "心脏打击" then
+            state.bloodBoilHeartStrikeCount = math.min(3, (state.bloodBoilHeartStrikeCount or 0) + 1)
+            self:UpdateStateBlock("状态", "血沸循环心打次数")
+        elseif spell.name == "血液沸腾" then
+            state.bloodBoilHeartStrikeCount = 0
+            self:UpdateStateBlock("状态", "血沸循环心打次数")
+        end
+    end
     state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
     state.playerActionSpell = spell.index
     state.playerActionStatus = status
     self:UpdateStateBlock("状态", "玩家动作技能")
     self:UpdateStateBlock("状态", "玩家动作状态")
     self:UpdateStateBlock("状态", "玩家动作序号")
+end
+
+function Fuyutsui:ResetBloodBoilCycleCount()
+    if state.bloodBoilHeartStrikeCount == 0 then return end
+    state.bloodBoilHeartStrikeCount = 0
+    self:UpdateStateBlock("状态", "血沸循环心打次数")
 end
 
 function Fuyutsui:UpdatePlayerConfig()

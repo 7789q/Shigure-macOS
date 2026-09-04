@@ -139,7 +139,11 @@
     },
     "BundledModules/holy-paladin-virtue-12.1.json": {
       "category": "configuration-schema",
-      "sha256": "f4a0f7d582d729895c36f4517a006df28721eb28989d8b9d6803da5cc2e9f0b9"
+      "sha256": "2a14b81a0bff2bdad9fbe7b70b3a3b04aa8d0374463cdbd352e52f3171721f48"
+    },
+    "BundledModules/blood-deathbringer-12.1.json": {
+      "category": "configuration-schema",
+      "sha256": "778a4fad04ba66dc41a1c57db333b2960f31402ac1e2277bb0101782f8d4a8c3"
     },
     "Core/AssemblyInfo.cs": {
       "category": "shared-contract",
@@ -147,7 +151,7 @@
     },
     "Core/BundledModuleInstaller.cs": {
       "category": "shared-contract",
-      "sha256": "86a7ed880975b02aa1f5ceda0746758148d402370bb64acffa953a1d5560c038"
+      "sha256": "e8cc09c031715bc01c4f476e12a636158cf1c78bb612ca4f19a46465581bd2e8"
     },
     "Core/LegacyModuleMigrationService.cs": {
       "category": "shared-contract",
@@ -163,7 +167,7 @@
     },
     "Core/RuntimeResourceWorkspaceService.cs": {
       "category": "shared-contract",
-      "sha256": "a49e2bb0c02482e8561fe738fcb74834a96595e1bc44edc6b0e785fcac320330"
+      "sha256": "c6c6603011bca8a0930789f95f5a9798d8a4a5db982f9a15aadbd2456c9fdf79"
     },
     "Core/Shigure.Core.csproj": {
       "category": "shared-contract",
@@ -183,7 +187,7 @@
     },
     "Modules/LogicRegistry.cs": {
       "category": "shared-contract",
-      "sha256": "ef445163939f2a2ea22004ddd1ec54c37e700ac9d948586a06569f2ab84c45af"
+      "sha256": "fdcc3ac9b86d02a9023bbf312def48f7b029a27af7997a8fb83e2de956eb0758"
     },
     "Modules/ModuleDependencies.cs": {
       "category": "shared-contract",
@@ -211,7 +215,7 @@
     },
     "Modules/ModuleStore.cs": {
       "category": "shared-contract",
-      "sha256": "a907e1ec93779227538dd7a3171adb13028e6eb7d8ac4d93924a5ff8b7d4ce75"
+      "sha256": "332ec6febf9fa97e6951864497e5e8332d90c9b44e201bce6c2645fa4ed1cbd4"
     },
     "Modules/ModuleUnit.cs": {
       "category": "shared-contract",
@@ -275,7 +279,7 @@
     },
     "Runtime/RuntimeDependencies.cs": {
       "category": "shared-contract",
-      "sha256": "55901ea227b0dc9e57f1e6017594ddf853cc2a9548630b9ee3e4e02849845b5f"
+      "sha256": "ab15b035082a50de69eb5682422c97bff0aa4ef4baff339b611acc3bebb4ac04"
     },
     "Runtime/ScreenScanResult.cs": {
       "category": "shared-contract",
@@ -283,7 +287,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "f1e5d05a13d3d475565d159af0ef71fc813eedd12203a5cbb00661e1c694b896"
+      "sha256": "2f993be54eeba1857dfae977321dde8a8677d9ee4727820911fa5743c61ff965"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -303,7 +307,7 @@
     },
     "Presentation/RuntimeSessionController.cs": {
       "category": "shared-contract",
-      "sha256": "d6831b8c730cc966cc1a6cd3f17720035abf26f26fc71735d13d9706a6a26fee"
+      "sha256": "ec71ff39ed4a6ea7666cc556fd10bd8b1a69158ea409c38c605e3fa2d4e642c8"
     },
     "Presentation/Shigure.Presentation.csproj": {
       "category": "shared-contract",
@@ -315,11 +319,11 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "ce5d6db04c544d0e6c10c0cadbed9bff28f910d4c03b11fd587499ca1504cf18"
+      "sha256": "1d6316c2cae3b5eb154e826090c19f33d9691b18163f6630af01ce83156eaf7f"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/aoe-warning-replay.lua": {
       "category": "shared-contract",
-      "sha256": "9287b86347d7490929ee3c13a20c6637fd3f0ac92cf754f36d12e016eee49da2"
+      "sha256": "4ff96a2e23a3169018bac579e7684a09cee8140ba1f040415d4153fb568ef2a6"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/digua-bridge-replay.lua": {
       "category": "shared-contract",
@@ -359,7 +363,7 @@
     },
     "config/DeathKnight.json": {
       "category": "configuration-schema",
-      "sha256": "b26ea125cdba63452f45048fa000b11475d2e2f051084d56c2423f8dfc310d79"
+      "sha256": "b2a5bd786deb2dd5976c759ce20464bc8634c70d118477cbc3237106390f65db"
     },
     "config/DemonHunter.json": {
       "category": "configuration-schema",
@@ -411,11 +415,11 @@
     },
     "config/common.json": {
       "category": "configuration-schema",
-      "sha256": "24bbe030192f252e360219585fe75d73aea03d2669f73aa013e8b1345e96fba8"
+      "sha256": "787d4bb78f34201a1af7c9280bab43e223e10958395b6e5e2dcf0238e61bc074"
     },
     "keymap/deathknight.json": {
       "category": "configuration-schema",
-      "sha256": "29dafb7ff8f9b9e02c4e571f399d5dc939359ad595cbfab548aa8c0d8cdbcae1"
+      "sha256": "b9267c65bdd0589786360d0ccc40a9769994bb0713bb85fb1dcbd01da474cb41"
     },
     "keymap/demonhunter.json": {
       "category": "configuration-schema",
@@ -483,7 +487,7 @@
     },
     "Fuyutsui/class/DeathKnight.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "264c5d34caef50f821e24aed89d20f7498dd9b67871dad788cbff0275c273193"
+      "sha256": "1b757c91764e9342d37af2e0a516337ef0349f17e07b84e153b206f92bb9e2ec"
     },
     "Fuyutsui/class/DemonHunter.lua": {
       "category": "fuyutsui-authority",
@@ -543,7 +547,7 @@
     },
     "Fuyutsui/core/aoewarning.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "6bd7dabd52ca97232d121137bb04891e637106dadb390a5618d329c16ec259ea"
+      "sha256": "e9af53ddfbd44cf2d6977ebd4c7120dadb3a310f89dba1384de9ac552f51e369"
     },
     "Fuyutsui/core/aoewarningdata.lua": {
       "category": "fuyutsui-authority",
@@ -555,7 +559,7 @@
     },
     "Fuyutsui/core/classmacros.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "48fcd4f35754ca281bfb34c0413761b7f09881f5a423eb6aad659ff922708908"
+      "sha256": "47f04b0b1f3098395bd733b8507db8b57c84b4be14e2c96672c20f2e4646e184"
     },
     "Fuyutsui/core/commands.lua": {
       "category": "fuyutsui-authority",
@@ -567,7 +571,7 @@
     },
     "Fuyutsui/core/core.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "8a25485926092791baef83c7927a98e9e21e1c9a52bdb91ed3ab407c38f2d7ec"
+      "sha256": "fd11d483ae1427ff130a7bb29f52f4972b1f2767ac3cb87a13225b2e1a575fdf"
     },
     "Fuyutsui/core/curves.lua": {
       "category": "fuyutsui-authority",
@@ -575,7 +579,7 @@
     },
     "Fuyutsui/core/events.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "e467db0aa9c38b49301a085b490a80951fb43e82b8f821907af2f4add682d438"
+      "sha256": "ce570626eb476f2cde3838b8a1167172d0e06166fe0745804575cd2f5cb09451"
     },
     "Fuyutsui/core/group.lua": {
       "category": "fuyutsui-authority",
@@ -587,11 +591,11 @@
     },
     "Fuyutsui/core/macro.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "eef005c395af2c732ef515f86f1d2be28a0e3b43a90ad68a2404e4b368d70944"
+      "sha256": "2948e67b2363886ea4c447639c1f132a593d8d7edc01688c601e6852397f7db4"
     },
     "Fuyutsui/core/player.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "b030786baa144fa46ee68eb969d4098256cce2d28bc87976308d123091e8465c"
+      "sha256": "c10358cb886e53ab6a627cceae11db1942a10d0ae08a928df17f1b475624b396"
     },
     "Fuyutsui/core/quickbutton.lua": {
       "category": "fuyutsui-authority",
@@ -599,15 +603,15 @@
     },
     "Fuyutsui/core/spells.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "712f34f1fe3966c39bda77240a67898e18b16dd3ffcb9b365ca44b5cefefa43b"
+      "sha256": "54367afb1f1560fa6686ba0bd441112bd7ea4707609c3f7968a1b163dfd17533"
     },
     "Fuyutsui/core/stateblocks.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "ca01e641b3af167be46ba55cfbac247233431f660ef0845178de24f0f07d1b1d"
+      "sha256": "0d3310f238e9b41aa55a80ccb2914e5668b879af5a3de0a1c07c9bb9df8c16c4"
     },
     "Fuyutsui/core/target.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "34929a75b5effdeb727ab77ff31c9977d5cc3c0924b45e74d27824afee0872e4"
+      "sha256": "37e143be348d6e575fda439be3301f157dbe53da790eb1fbf888924cc2bcfd4f"
     },
     "Fuyutsui/embeds.xml": {
       "category": "fuyutsui-authority",
@@ -623,7 +627,7 @@
     },
     "Fuyutsui/main.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "fa3511e8d98cfc12397d60cb393ae71a1c789857e32e5da396daca7fdea97ae6"
+      "sha256": "383cc07bda81644243dde9e457d897d78be8b650de374f6c8e5e2c7bab35d8c4"
     },
     "Infrastructure/ClassBlocksStore.cs": {
       "category": "fuyutsui-generation",

@@ -129,9 +129,9 @@ add(11, "准备吸奶盾", 0, 3)
 now = 21
 update(2, 1, "spell zero absorb timeline waits through grace")
 now = 36
-update(2, 1, "spell zero absorb timeline stays reserved after fallback grace")
+update(0, 0, "spell zero absorb timeline releases public stage after fallback grace")
 now = 38
-update(2, 1, "spell zero absorb timeline never becomes execution without success")
+update(0, 0, "spell zero absorb timeline remains released without success")
 clear()
 
 -- Ordinary AOE enters the real cast windows, interruption preserves the warning,
@@ -159,9 +159,9 @@ add(3, "准备吸奶盾", 1306517, 3)
 now = 34
 update(2, 1, "cast-aware absorb timeline waits for a late cast")
 now = 49
-update(2, 1, "cast-aware absorb timeline remains reserved after fallback grace")
+update(0, 0, "cast-aware absorb timeline releases public stage after fallback grace")
 now = 51
-update(2, 1, "cast-aware absorb timeline never opens Virtue without success")
+update(0, 0, "cast-aware absorb timeline remains released without success")
 clear()
 
 -- A positive heal-absorb sample without a successful cast terminal is only
@@ -213,9 +213,9 @@ Fuyutsui:RemoveAOETimelineEvent(12)
 now = 38
 update(2, 1, "canceled absorb timeline remains in grace")
 now = 53
-update(2, 1, "canceled absorb timeline remains reserved after fallback grace")
+update(0, 0, "canceled absorb timeline releases public stage after fallback grace")
 now = 55
-update(2, 1, "canceled absorb timeline never opens execution without success")
+update(0, 0, "canceled absorb timeline remains released without success")
 clear()
 
 -- A visible cast terminal remains the strongest execution signal.

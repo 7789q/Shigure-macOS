@@ -107,8 +107,6 @@ end
 
 local function DebugLog(message, ...)
     if not DebugEnabled() then return end
-    local ok, text = pcall(string.format, message, ...)
-    print("|cff00ff00[Fuyutsui AOE]|r " .. (ok and text or message))
 end
 
 -- 默认不向 WoW 聊天框刷屏；需要排查时通过 /fu aoedebug 显式开启。
@@ -402,7 +400,10 @@ local function StageForEvent(event, now)
                 tostring(event.runtimeID or event.id),
                 tostring(event.spellID or 0))
         end
-        return 1
+        -- The reservation may remain in memory for late-cast correlation, but
+        -- it must stop driving the public stage after the grace period. This
+        -- releases reactive healing without fabricating a successful cast.
+        return 0
     end
     if not event.cast or event.reservationOnly or event.cast.protectedTiming then return 1 end
     if event.eventType == 2 then
@@ -505,7 +506,8 @@ local function FindMatchingEvent(now, spellID, endsAt)
             and not event.reservationOnly
             and now <= event.expiresAt
             and not event.cast
-            and not event.completed then
+            and not event.completed
+            and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked) then
             local distance = endsAt and math.abs(event.impactAt - endsAt) or 0
             if not selected or distance < selectedDistance
                 or (distance == selectedDistance and event.sequence < selected.sequence) then
@@ -688,6 +690,7 @@ local function FindRecentSemanticEvent(now)
             and not event.reservationOnly
             and not event.cast
             and not event.completed
+            and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked)
             and math.abs(now - event.createdAt) <= threshold
             and (not selected or event.createdAt > selected.createdAt
                 or (event.createdAt == selected.createdAt and event.sequence > selected.sequence)) then
@@ -733,7 +736,10 @@ local function BindPendingCandidate(event, candidate)
 end
 
 function Fuyutsui:TryBindPendingAOECast(event)
-    if not event or event.reservationOnly or event.cast or event.completed then return false end
+    if not event or event.reservationOnly or event.cast or event.completed
+        or (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked) then
+        return false
+    end
     local now = GetTime()
     PrunePendingCasts(now)
     local threshold = self.AOEWarningConfig.protectedCorrelationSeconds
@@ -769,7 +775,9 @@ end
 local function FindDiagnosticEvent(now, endsAt)
     local selected, selectedDistance
     for _, event in pairs(warning.events) do
-        if now <= event.expiresAt and not event.completed then
+        if now <= event.expiresAt
+            and not event.completed
+            and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked) then
             local distance = endsAt and math.abs(event.impactAt - endsAt) or 0
             if not selected
                 or distance < selectedDistance
@@ -816,10 +824,25 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
             if candidate.eventType == 2
                 and not candidate.cast
                 and not candidate.completed
+                and not candidate.timelineFallbackBlocked
                 and math.abs(candidate.impactAt - impactAt)
                     <= Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds then
                 event = candidate
                 break
+            end
+        end
+    end
+    if not event then
+        -- A timed-out timeline row remains only for diagnostics/correlation.
+        -- Do not create a new direct event for a late cast and resurrect the
+        -- public Virtue window after the row's grace period.
+        for _, candidate in pairs(warning.events) do
+            if candidate.eventType == 2
+                and candidate.source == "timeline"
+                and candidate.timelineFallbackBlocked
+                and math.abs(candidate.impactAt - impactAt)
+                    <= Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds then
+                return true
             end
         end
     end

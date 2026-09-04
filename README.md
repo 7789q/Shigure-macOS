@@ -6,6 +6,8 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 当前版本的用户可见变化见 [更新日志](CHANGELOG.md)。
 
+血DK死亡使者模块的实施范围、插件与运行时边界、阶段计划和实战反馈模板见[实施与维护计划](Documentation/blood-deathbringer-12.1-implementation-plan.md)。
+
 ## 主要功能
 
 - 原生 macOS 13+ Avalonia 桌面界面，支持 Apple Silicon 与 Intel 构建。
@@ -95,7 +97,7 @@ codesign --display --verbose=4 artifacts/macos/Shigure.app/Contents/MacOS/Shigur
 ~/Library/Application Support/Shigure/runtime
 ```
 
-模块、日志和界面状态位于同一 `Application Support/Shigure` 数据根。启动时 APP 从包内 `BundledModules/` 补装模块；已知官方旧哈希会先备份再升级，未知同 ID/同名模块保留。仓库中的 `module/`、`cache/`、日志、屏幕导出、签名材料和构建产物均被忽略，不应提交。
+模块、日志和界面状态位于同一 `Application Support/Shigure` 数据根。启动时 APP 从包内 `BundledModules/` 补装模块；同一内置模块 ID 发现包内版本更高时会先备份再自动升级，跨 ID 的历史模块仍需命中已知官方旧哈希才升级，同版本或更高版本的用户模块保留。仓库中的 `module/`、`cache/`、日志、屏幕导出、签名材料和构建产物均被忽略，不应提交。
 
 ## 目录结构
 

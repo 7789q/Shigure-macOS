@@ -96,6 +96,16 @@ local function buildTankTargetMacro(spell)
         spell)
 end
 
+local function BaseSpellName(spell)
+    return spell:match("^%[@[^%]]+%](.+)$") or spell
+end
+
+local function AddCastPreemption(spell, macro)
+    local preempting = Fuyutsui.CastPreemptingSpells
+        and Fuyutsui.CastPreemptingSpells[BaseSpellName(spell)]
+    return preempting and "/stopcasting\n" .. macro or macro
+end
+
 -- 解析法术名/宏体：优先查 MacroBodies；以 / 开头则原样使用；否则加 /cast
 local function resolveMacroBody(spell)
     if not spell or spell == "" then
@@ -105,18 +115,18 @@ local function resolveMacroBody(spell)
     local body = bodies and bodies[spell]
     if body then
         if body:sub(1, 1) == "/" then
-            return body
+            return AddCastPreemption(spell, body)
         end
-        return "/cast " .. body
+        return AddCastPreemption(spell, "/cast " .. body)
     end
     if spell:sub(1, 1) == "/" then
         return spell
     end
     local tankTargetSpell = spell:match("^%[@tanktarget%](.+)$")
     if tankTargetSpell then
-        return buildTankTargetMacro(tankTargetSpell)
+        return AddCastPreemption(spell, buildTankTargetMacro(tankTargetSpell))
     end
-    return "/cast " .. spell
+    return AddCastPreemption(spell, "/cast " .. spell)
 end
 
 function Fuyutsui:ClearMacros()
@@ -136,14 +146,18 @@ end
 
 local function buildDynamicMacro(spell, raidIdx)
     if not spell or spell == "" then return nil end
+    local prefix = Fuyutsui.CastPreemptingSpells
+        and Fuyutsui.CastPreemptingSpells[BaseSpellName(spell)]
+        and "/stopcasting\n"
+        or ""
     if raidIdx == 1 then
-        return format("/cast [group:raid,@raid1]%s;[group:party,@player]%s;[nogroup,@player]%s", spell, spell,
+        return format("%s/cast [group:raid,@raid1]%s;[group:party,@player]%s;[nogroup,@player]%s", prefix, spell, spell,
             spell)
     elseif raidIdx <= 5 then
-        return format("/cast [group:raid,@raid%d]%s;[group:party,@party%d]%s", raidIdx, spell, raidIdx - 1,
+        return format("%s/cast [group:raid,@raid%d]%s;[group:party,@party%d]%s", prefix, raidIdx, spell, raidIdx - 1,
             spell)
     end
-    return format("/cast [group:raid,@raid%d]%s", raidIdx, spell)
+    return format("%s/cast [group:raid,@raid%d]%s", prefix, raidIdx, spell)
 end
 
 local function createSelectorTargetMacros(dynamicData, keyOffset)
@@ -205,8 +219,22 @@ local function createSelectorTargetMacros(dynamicData, keyOffset)
 end
 
 function Fuyutsui:CreateMacro(dynamicData, staticData, specialData, keyOffset, routingMode)
+    self:MacroTrace(
+        "CreateMacro 进入：dynamic=%s static=%s special=%s offset=%s routing=%s inCombat=%s",
+        tostring(type(dynamicData) == "table" and #dynamicData or 0),
+        tostring(type(staticData) == "table" and #staticData or 0),
+        tostring(type(specialData) == "table" and #specialData or 0),
+        tostring(keyOffset), tostring(routingMode), tostring(InCombatLockdown()))
     if InCombatLockdown() then
-        publishMacroStatus(2, 0)
+        local hadReadyBindings = Fuyutsui.state.macroBindingStatus == 1
+            and (Fuyutsui.state.macroBindingCount or 0) > 0
+        if not hadReadyBindings then
+            publishMacroStatus(2, 0)
+        end
+        self.macrosPending = true
+        self:MacroTrace(
+            "CreateMacro 退出：战斗锁定，保留宏状态=%s/%s，设置 macrosPending=true",
+            tostring(Fuyutsui.state.macroBindingStatus), tostring(Fuyutsui.state.macroBindingCount))
         return false
     end
 
@@ -216,6 +244,7 @@ function Fuyutsui:CreateMacro(dynamicData, staticData, specialData, keyOffset, r
 
     if not self:ClearMacros() then
         publishMacroStatus(3, 0)
+        self:MacroTrace("CreateMacro 退出：ClearMacros 失败，发布状态 3/0")
         return false
     end
 
@@ -264,5 +293,6 @@ function Fuyutsui:CreateMacro(dynamicData, staticData, specialData, keyOffset, r
         if spell and spell ~= "" then staticSlots = staticSlots + 1 end
     end
     publishMacroStatus(1, dynamicSlots + staticSlots)
+    self:MacroTrace("CreateMacro 成功：发布状态 1/%s", tostring(dynamicSlots + staticSlots))
     return true
 end

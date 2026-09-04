@@ -124,6 +124,8 @@ local stateBlockGetters = {
         ["有效性"] = function() return state.valid or 0 end,
         ["战斗时间"] = function() return state.combatTime or 0 end,
         ["移动"] = function() return state.moving or 0 end,
+        ["站定时长"] = function() return state.stationaryDuration or 0 end,
+        ["血沸循环心打次数"] = function() return math.min(3, state.bloodBoilHeartStrikeCount or 0) / 255 end,
         ["生命值"] = function() return state.healthPercent or 0 end,
         ["一键辅助"] = function() return state.assistantSpell or 0 end,
         ["插入法术"] = function() return state.insertSpell or 0 end,
@@ -208,6 +210,7 @@ local stateBlockGetters = {
         ["治疗石"] = function(self) return GetItemCooldownPixel(self, "HealthstoneCount", 5512) end,
         ["鲁莽药水"] = function(self) return GetItemCooldownPixel(self, "RecklessnessCount", 241288) end,
         ["圣光潜力"] = function(self) return GetItemCooldownPixel(self, "LightsPotentialCount", 241308) end,
+        ["银月城生命药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
 
         ["施法(正计时)"] = function(self) return self:GetUnitCastPixel("player", "castElapsed") end,
         ["施法(倒计时)"] = function(self) return self:GetUnitCastPixel("player", "cast") end,
@@ -275,6 +278,7 @@ local stateBlockGetters = {
         ["治疗石"] = function(self) return GetItemCooldownPixel(self, "HealthstoneCount", 5512) end,
         ["鲁莽药水"] = function(self) return GetItemCooldownPixel(self, "RecklessnessCount", 241288) end,
         ["圣光潜力"] = function(self) return GetItemCooldownPixel(self, "LightsPotentialCount", 241308) end,
+        ["银月城生命药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
     },
     ["配置开关"] = {
         ["爆发开关"] = function(self) return GetConfigPixel(self, "cooldowns") end,

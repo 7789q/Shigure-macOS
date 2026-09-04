@@ -10,5 +10,15 @@
     "专精": {
         "step": 3,
         "type": "int"
+    },
+    "宏绑定状态": {
+        "step": 500,
+        "type": "int",
+        "category": "状态"
+    },
+    "宏绑定数量": {
+        "step": 501,
+        "type": "int",
+        "category": "状态"
     }
 }

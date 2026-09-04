@@ -5,7 +5,7 @@ public interface IClassLogic
     LogicDecision Run(GameState state, string? specName);
 }
 
-public sealed class LogicRegistry : IRuntimeLogic, IActionSuppressionAwareRuntimeLogic
+public sealed class LogicRegistry : IRuntimeLogic, IActionSuppressionAwareRuntimeLogic, IRateLimitAwareRuntimeLogic
 {
     private readonly Dictionary<int, IClassLogic> _logicByClass;
     private readonly IClassLogic _defaultLogic;
@@ -43,6 +43,16 @@ public sealed class LogicRegistry : IRuntimeLogic, IActionSuppressionAwareRuntim
         GameState state,
         bool runLogic,
         IReadOnlySet<LogicActionKey> suppressedActions)
+        => Evaluate(classId, specId, specName, state, runLogic, suppressedActions, EmptyRateLimitedRuleKeys);
+
+    public LogicEvaluation Evaluate(
+        int? classId,
+        int? specId,
+        string? specName,
+        GameState state,
+        bool runLogic,
+        IReadOnlySet<LogicActionKey> suppressedActions,
+        IReadOnlySet<string> rateLimitedRuleKeys)
     {
         _keymap.SelectForClass(classId, specId);
         var module = FindModule(classId, specId, state);
@@ -52,7 +62,7 @@ public sealed class LogicRegistry : IRuntimeLogic, IActionSuppressionAwareRuntim
             _derivedStateTracker.Apply(module, state, runLogic);
             return new LogicEvaluation(
                 module.Name,
-                runLogic ? ModuleLogic.Run(module, state, _keymap, suppressedActions) : null);
+                runLogic ? ModuleLogic.Run(module, state, _keymap, suppressedActions, rateLimitedRuleKeys) : null);
         }
 
         _derivedStateTracker.Reset();
@@ -71,6 +81,7 @@ public sealed class LogicRegistry : IRuntimeLogic, IActionSuppressionAwareRuntim
     }
 
     private static readonly IReadOnlySet<LogicActionKey> EmptySuppressedActions = new HashSet<LogicActionKey>();
+    private static readonly IReadOnlySet<string> EmptyRateLimitedRuleKeys = new HashSet<string>(StringComparer.Ordinal);
 
     private ModuleDefinition? FindModule(int? classId, int? specId, GameState state)
     {

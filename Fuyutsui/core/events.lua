@@ -11,7 +11,7 @@ function Fuyutsui:RefreshZoneState()
     state.mapInfo = C_Map.GetMapInfo(state.mapID)
     state.subzone = GetSubZoneText()
     if GetBindLocation() == state.subzone then
-        print("欢迎回家!")
+        self:MacroTrace("欢迎回家")
     end
 end
 
@@ -24,6 +24,7 @@ function Fuyutsui:ZONE_CHANGED_INDOORS()
 end
 
 function Fuyutsui:PLAYER_ENTERING_WORLD()
+    self:MacroTrace("PLAYER_ENTERING_WORLD 收到")
     state.mapID = C_Map.GetBestMapForUnit("player") or 0
     self:UpdateHolyArmaments(375576)
     self:UpdateReaverGlaive(204157)
@@ -31,9 +32,11 @@ function Fuyutsui:PLAYER_ENTERING_WORLD()
     self:GetMountsInfo()
     self:UpdateChargedComboPoints()
     C_Timer.After(3, function()
+        self:MacroTrace("PLAYER_ENTERING_WORLD 延迟回调触发")
         self:UpdateGroup()
         self:LoadPlayerMacros()
     end)
+    self:MacroTrace("已安排进入世界宏绑定回调：3 秒")
 end
 
 function Fuyutsui:PLAYER_TALENT_UPDATE()
@@ -64,18 +67,23 @@ function Fuyutsui:PLAYER_MOUNT_DISPLAY_CHANGED()
 end
 
 function Fuyutsui:PLAYER_REGEN_DISABLED()
+    self:MacroTrace("PLAYER_REGEN_DISABLED：进入战斗，macrosPending=%s", tostring(self.macrosPending))
     self:UpdateTargetCanAttack()
+    self:ResetBloodBoilCycleCount()
     state.combat = true
     state.combatStartTime = GetTime()
     self:UpdatePlayerCombatTime()
 end
 
 function Fuyutsui:PLAYER_REGEN_ENABLED()
+    self:MacroTrace("PLAYER_REGEN_ENABLED：脱离战斗，macrosPending=%s", tostring(self.macrosPending))
     self:UpdateTargetCanAttack()
+    self:ResetBloodBoilCycleCount()
     state.combat = false
     self:UpdatePlayerCombatTime()
     if self.macrosPending then
         C_Timer.After(0, function()
+            self:MacroTrace("脱战宏绑定重试回调触发：inCombat=%s", tostring(InCombatLockdown()))
             if self.macrosPending and not InCombatLockdown() then
                 self:LoadPlayerMacros()
             end
@@ -241,13 +249,13 @@ function Fuyutsui:UNIT_SPELLCAST_SUCCEEDED(_, unitTarget, castGUID, spellID, cas
     self:UpdateInsertSpellBySuccess(spellID)
     if spellID == 384255 then
         self:ClearAllFuyutsuiBars()
-        print("切换天赋")
+        self:MacroTrace("切换天赋")
         C_Timer.After(1, function()
             self:UpdatePlayerSpecInfo()
         end)
     elseif spellID == 200749 then
         self:ClearAllFuyutsuiBars()
-        print("切换专精")
+        self:MacroTrace("切换专精")
         C_Timer.After(1, function()
             self:UpdatePlayerSpecInfo()
         end)
@@ -379,11 +387,13 @@ end
 
 local rosterTimer
 function Fuyutsui:GROUP_ROSTER_UPDATE()
+    self:MacroTrace("GROUP_ROSTER_UPDATE 收到")
     state.castTargetName, state.castTargetUnit = nil, nil
     if rosterTimer then
         rosterTimer:Cancel()
     end
     rosterTimer = C_Timer.NewTimer(1, function()
+        self:MacroTrace("GROUP_ROSTER_UPDATE 延迟回调触发")
         self:UpdateGroup()
         self:UpdateGroupCount()
         self:UpdateGroupType()
@@ -548,6 +558,7 @@ function Fuyutsui:OnUpdate(elapsed)
         self:UpdateAOEWarningState()
     end
     self:UpdatePlayerCastBlocks()
+    self:UpdatePlayerStationaryDuration()
     self:UpdateUnitCastingOrChannelingInfo("target")
     self:UpdateUnitCastingOrChannelingInfo("focus")
     self:UpdateUnitCastingOrChannelingInfo("mouseover")
