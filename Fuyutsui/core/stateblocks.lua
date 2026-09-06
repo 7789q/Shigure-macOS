@@ -45,6 +45,23 @@ local function GetItemCooldownPixel(self, countKey, itemID)
     return 1
 end
 
+local function GetAnyHealthPotionCooldownPixel(self)
+    if not self.state.HealthPotionCount then
+        self:GetItemCount()
+    end
+    if not self.state.HealthPotionCount or self.state.HealthPotionCount <= 0 then
+        return 0
+    end
+    local available = 0
+    for _, itemID in ipairs({ 241304, 241305, 271884, 271885 }) do
+        local remainingTime = self:GetItemRemainingTime(itemID)
+        if remainingTime and remainingTime > 0 then
+            available = math.max(available, math.min(1, remainingTime / 255))
+        end
+    end
+    return available
+end
+
 --- mode: "cast" | "castElapsed" | "channel"
 function Fuyutsui:GetUnitCastPixel(unit, mode)
     local castCurve = self.castCurve
@@ -126,6 +143,9 @@ local stateBlockGetters = {
         ["移动"] = function() return state.moving or 0 end,
         ["站定时长"] = function() return state.stationaryDuration or 0 end,
         ["血沸循环心打次数"] = function() return math.min(3, state.bloodBoilHeartStrikeCount or 0) / 255 end,
+        ["血沸自动链"] = function() return state.bloodBoilAutoChain and 1 / 255 or 0 end,
+        ["血沸高亮"] = function() return state.bloodBoilHighlightActive and 1 / 255 or 0 end,
+        ["符文刃舞爆发窗口"] = function() return state.deathbringerBurstWindow and 1 / 255 or 0 end,
         ["生命值"] = function() return state.healthPercent or 0 end,
         ["一键辅助"] = function() return state.assistantSpell or 0 end,
         ["插入法术"] = function() return state.insertSpell or 0 end,
@@ -145,7 +165,17 @@ local stateBlockGetters = {
         ["英勇打击"] = function() return state.heroicStrike or 0 end,
         ["AOE事件类型"] = function() return (state.aoeEventType or 0) / 255 end,
         ["AOE事件阶段"] = function() return (state.aoeEventStage or 0) / 255 end,
+        ["AOE吸奶盾锚点"] = function() return (state.aoeAbsorbAnchor or 0) / 255 end,
+        ["AOE吸奶盾预计剩余"] = function() return math.min(255, state.aoeAbsorbVirtueRemaining or 0) / 255 end,
         ["圣洁鸣钟预计可用"] = function() return state.divineTollExpectedReady and 1 or 0 end,
+        ["单目标需求"] = function() return math.min(255, state.singleNeed or 0) / 255 end,
+        ["多人爆发需求"] = function() return math.min(255, state.burstGroupNeed or 0) / 255 end,
+        ["多人持续需求"] = function() return math.min(255, state.sustainGroupNeed or 0) / 255 end,
+        ["预计治疗人数"] = function() return math.min(255, state.spreadCount or 0) / 255 end,
+        ["美德主目标"] = function() return math.min(255, state.virtueMainTargetIndex or 0) / 255 end,
+        ["美德覆盖人数"] = function() return math.min(255, state.virtueCoverageCount or 0) / 255 end,
+        ["美德转移需求"] = function() return math.min(255, state.virtueTransferNeed or 0) / 255 end,
+        ["美德覆盖溢出"] = function() return math.min(255, state.virtueCoverageOverflow or 0) / 255 end,
         ["公共冷却时长"] = function(self)
             local seconds = self.GetEstimatedGCDSeconds and self:GetEstimatedGCDSeconds() or 1.5
             local centiseconds = math.min(255, math.max(0, math.floor(seconds * 100 + 0.5)))
@@ -211,6 +241,7 @@ local stateBlockGetters = {
         ["鲁莽药水"] = function(self) return GetItemCooldownPixel(self, "RecklessnessCount", 241288) end,
         ["圣光潜力"] = function(self) return GetItemCooldownPixel(self, "LightsPotentialCount", 241308) end,
         ["银月城生命药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
+        ["浓缩银月城生命药水"] = function(self) return GetAnyHealthPotionCooldownPixel(self) end,
 
         ["施法(正计时)"] = function(self) return self:GetUnitCastPixel("player", "castElapsed") end,
         ["施法(倒计时)"] = function(self) return self:GetUnitCastPixel("player", "cast") end,
@@ -279,6 +310,7 @@ local stateBlockGetters = {
         ["鲁莽药水"] = function(self) return GetItemCooldownPixel(self, "RecklessnessCount", 241288) end,
         ["圣光潜力"] = function(self) return GetItemCooldownPixel(self, "LightsPotentialCount", 241308) end,
         ["银月城生命药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
+        ["浓缩银月城生命药水"] = function(self) return GetAnyHealthPotionCooldownPixel(self) end,
     },
     ["配置开关"] = {
         ["爆发开关"] = function(self) return GetConfigPixel(self, "cooldowns") end,
@@ -291,12 +323,13 @@ local stateBlockGetters = {
         ["类型"] = function() return target.type or 0 end,
         ["驱散类型"] = function() return 0 end,
         ["生命值"] = function() return target.healthPercent or 0 end,
+        ["死亡"] = function() return target.isDead and 1 / 255 or 0 end,
         ["距离"] = function()
             if not target.maxRange then return nil end
             return target.maxRange / 255
         end,
         -- 0=确认背面，1=确认正面，2=位置/朝向 API 不可用，由 WoW 施法结果兜底。
-        ["正面"] = function() return target.inFront or 0 end,
+        ["正面"] = function() return (target.inFront or 0) / 255 end,
         ["施法(倒计时)"] = function(self) return self:GetUnitCastPixel("target", "cast") end,
         ["施法(正计时)"] = function(self) return self:GetUnitCastPixel("target", "castElapsed") end,
         ["施法可打断"] = function(self) return self:GetUnitInterruptiblePixel("target", "cast") end,

@@ -22,6 +22,7 @@ public sealed class AoeWarningLogTracker
     private readonly Dictionary<string, int> _lastDiagnosticCounters = new(StringComparer.Ordinal);
     private int _lastType;
     private int _lastStage;
+    private int _lastAbsorbAnchor;
     private bool _hasActiveObservation;
     private bool _hasDiagnosticObservation;
 
@@ -84,9 +85,10 @@ public sealed class AoeWarningLogTracker
             }
 
             _hasActiveObservation = false;
-            var completion = CompletionLabel(_lastStage);
+            var completion = CompletionLabel(_lastType, _lastStage, _lastAbsorbAnchor);
             _lastType = 0;
             _lastStage = 0;
+            _lastAbsorbAnchor = 0;
             return $"AOE预警：已结束{completion}";
         }
 
@@ -98,6 +100,7 @@ public sealed class AoeWarningLogTracker
         _hasActiveObservation = true;
         _lastType = eventType;
         _lastStage = stage;
+        _lastAbsorbAnchor = eventType == 2 ? state.GetInt("AOE吸奶盾锚点") : 0;
         var typeLabel = eventType switch
         {
             1 => "普通AOE",
@@ -120,15 +123,19 @@ public sealed class AoeWarningLogTracker
         var totalDeficit = state.GetInt("DTotal");
         var burstHeld = state.GetInt("群疗爆发保持") > 0 ? "是" : "否";
         var divineTollExpectedReady = state.GetInt("圣洁鸣钟预计可用") > 0 ? "是" : "否";
+        var absorbTiming = eventType == 2
+            ? $"；吸奶盾锚点 {AbsorbAnchorLabel(state.GetInt("AOE吸奶盾锚点"))}，预计美德剩余 {state.GetInt("AOE吸奶盾预计剩余") / 100.0:F2} 秒"
+            : string.Empty;
         return
             $"AOE预警：{typeLabel} / {stageLabel}；圣能 {holyPower}，圣光灌注 {infusionStacks} 层 / {infusion} 秒；" +
-            $"明显缺口 {visibleDeficits} 人，总负荷 {totalDeficit}，爆发保持 {burstHeld}，鸣钟预计可用 {divineTollExpectedReady}";
+            $"明显缺口 {visibleDeficits} 人，总负荷 {totalDeficit}，爆发保持 {burstHeld}，鸣钟预计可用 {divineTollExpectedReady}{absorbTiming}";
     }
 
     public void Reset()
     {
         _lastType = 0;
         _lastStage = 0;
+        _lastAbsorbAnchor = 0;
         _hasActiveObservation = false;
         _hasDiagnosticObservation = false;
         _lastDiagnosticCounters.Clear();
@@ -145,11 +152,33 @@ public sealed class AoeWarningLogTracker
         + state.GetInt($"{prefix}中位") * 256
         + state.GetInt($"{prefix}高位") * 65536;
 
-    private static string CompletionLabel(int previousStage) => previousStage switch
+    private static string AbsorbAnchorLabel(int code) => code switch
     {
-        1 => "；未进入执行窗口，可能为读条未匹配、受保护值或预警取消",
-        2 or 5 => "；对应读条已结束或中断",
-        3 => "；治疗吸收等待窗口结束",
-        _ => string.Empty
+        1 => "真实读条结束",
+        2 => "DiGua倒计时结束",
+        3 => "锚点未知",
+        4 => "真实读条结束时间缺失",
+        _ => "未上报"
     };
+
+    private static string CompletionLabel(int previousType, int previousStage, int previousAbsorbAnchor)
+    {
+        if (previousType == 2 && previousStage == 1)
+        {
+            return previousAbsorbAnchor switch
+            {
+                3 => "；吸奶盾锚点未解析，安全取消，未进入执行窗口",
+                4 => "；真实读条结束时间缺失，安全取消，未进入执行窗口",
+                _ => "；吸奶盾未进入执行窗口，可能为读条未匹配或预警取消"
+            };
+        }
+
+        return previousStage switch
+        {
+            1 => "；未进入执行窗口，可能为读条未匹配、受保护值或预警取消",
+            2 or 5 => "；对应读条已结束或中断",
+            3 => "；治疗吸收等待窗口结束",
+            _ => string.Empty
+        };
+    }
 }

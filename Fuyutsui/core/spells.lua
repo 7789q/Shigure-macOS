@@ -296,7 +296,10 @@ function Fuyutsui:GetItemRemainingTime(itemID)
 end
 
 function Fuyutsui:UpdateItemCooldown()
-    local itemNames = { "治疗药水", "魔法药水", "治疗石", "鲁莽药水", "圣光潜力", "银月城生命药水" }
+    local itemNames = {
+        "治疗药水", "魔法药水", "治疗石", "鲁莽药水", "圣光潜力",
+        "银月城生命药水", "浓缩银月城生命药水",
+    }
     for _, name in ipairs(itemNames) do
         self:UpdateBareStateBlock(name, { "物品", "状态" })
     end

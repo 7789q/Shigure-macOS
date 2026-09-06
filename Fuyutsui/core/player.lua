@@ -9,6 +9,265 @@ local spellsList = Fuyutsui.spellsList
 
 local drinkStatusTimer = nil
 
+local BLOOD_BOIL_SPELL_ID = 50842
+local BLOOD_BOIL_HIGHLIGHT_AURA_IDS = { 1265968, 1265982 }
+local BLOOD_BOIL_PROC_WINDOW_SECONDS = 15
+local BLOOD_BOIL_ECHO_WINDOW_SECONDS = 3
+local BLOOD_BOIL_GLOW_GRACE_SECONDS = 1
+local BLOOD_BOIL_DUPLICATE_CAST_SECONDS = 0.25
+local DEATHBRINGER_BURST_WINDOW_SECONDS = 3
+local deathbringerBurstWindowTimer = nil
+
+local IsSpellOverlayed = C_SpellActivationOverlay and C_SpellActivationOverlay.IsSpellOverlayed
+    or IsSpellOverlayed
+
+local function IsSecret(value)
+    return issecretvalue and issecretvalue(value)
+end
+
+local function BaseOf(spellID)
+    if not spellID or IsSecret(spellID) then return nil end
+    if C_Spell and C_Spell.GetBaseSpell then
+        local ok, baseSpellID = pcall(C_Spell.GetBaseSpell, spellID)
+        if ok and baseSpellID then return baseSpellID end
+    end
+    if C_SpellBook and C_SpellBook.FindBaseSpellByID then
+        local ok, baseSpellID = pcall(C_SpellBook.FindBaseSpellByID, spellID)
+        if ok and baseSpellID then return baseSpellID end
+    end
+end
+
+local function LiveID(spellID)
+    if not spellID or IsSecret(spellID) then return nil end
+    if C_Spell and C_Spell.GetOverrideSpell then
+        local ok, liveSpellID = pcall(C_Spell.GetOverrideSpell, spellID)
+        if ok and liveSpellID then return liveSpellID end
+    end
+    if C_SpellBook and C_SpellBook.FindSpellOverrideByID then
+        local ok, liveSpellID = pcall(C_SpellBook.FindSpellOverrideByID, spellID)
+        if ok and liveSpellID then return liveSpellID end
+    end
+end
+
+local function FindPlayerAuraBySpellID(spellID)
+    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+        for index = 1, 40 do
+            local ok, aura = pcall(
+                C_UnitAuras.GetAuraDataByIndex,
+                "player",
+                index,
+                "HELPFUL"
+            )
+            if not ok then
+                break
+            end
+            if not aura then break end
+            local auraSpellID = aura.spellId
+            if not IsSecret(auraSpellID)
+                and type(auraSpellID) == "number"
+                and auraSpellID == spellID then
+                return aura
+            end
+        end
+    end
+    if AuraUtil and AuraUtil.FindAuraBySpellID then
+        local ok, aura = pcall(AuraUtil.FindAuraBySpellID, spellID, "player", "HELPFUL")
+        if ok then return aura end
+    end
+end
+
+function Fuyutsui:IsBloodBoilSpell(spellID)
+    if not spellID or IsSecret(spellID) then return false end
+    if spellID == BLOOD_BOIL_SPELL_ID then return true end
+    for _, auraID in ipairs(BLOOD_BOIL_HIGHLIGHT_AURA_IDS) do
+        if spellID == auraID then return true end
+    end
+    if BaseOf(spellID) == BLOOD_BOIL_SPELL_ID then return true end
+    return LiveID(BLOOD_BOIL_SPELL_ID) == spellID
+end
+
+local function IsBloodBoilAuraActive()
+    for _, spellID in ipairs(BLOOD_BOIL_HIGHLIGHT_AURA_IDS) do
+        if FindPlayerAuraBySpellID(spellID) then
+            return true
+        end
+    end
+    return false
+end
+
+local function IsBloodBoilOverlayLive()
+    if not IsSpellOverlayed then return nil end
+    local liveSpellID = LiveID(BLOOD_BOIL_SPELL_ID)
+    local spellIDs = { BLOOD_BOIL_SPELL_ID, liveSpellID }
+    for _, spellID in ipairs(spellIDs) do
+        if spellID and not IsSecret(spellID) then
+            local ok, active = pcall(IsSpellOverlayed, spellID)
+            if ok and active then return true end
+        end
+    end
+    return false
+end
+
+function Fuyutsui:IsBloodBoilHighlightActive()
+    local overlayLive = IsBloodBoilOverlayLive()
+    if overlayLive == true then return true end
+    return IsBloodBoilAuraActive()
+end
+
+function Fuyutsui:SetBloodBoilHighlightActive(active)
+    local changed = state.bloodBoilHighlightActive ~= active
+    state.bloodBoilHighlightActive = active
+    if changed then
+        self:UpdateStateBlock("状态", "血沸高亮")
+        self:UpdateStateBlock("状态", "血沸自动链")
+    end
+end
+
+function Fuyutsui:SetBloodBoilAutoChain(active)
+    if state.bloodBoilAutoChain == active then return end
+    state.bloodBoilAutoChain = active
+    self:UpdateStateBlock("状态", "血沸自动链")
+end
+
+function Fuyutsui:StartBloodBoilProcWindow(now)
+    self:SetBloodBoilAutoChain(true)
+    state.bloodBoilPhase = "PROC"
+    state.bloodBoilProcWindowUntil = now + BLOOD_BOIL_PROC_WINDOW_SECONDS
+    state.bloodBoilEchoWindowUntil = nil
+    state.bloodBoilPendingTriggers = 0
+    state.bloodBoilRepeatHighlight = false
+end
+
+function Fuyutsui:StartBloodBoilEchoWindow(now)
+    self:SetBloodBoilAutoChain(true)
+    state.bloodBoilPhase = "ECHO"
+    state.bloodBoilEchoWindowUntil = now + BLOOD_BOIL_ECHO_WINDOW_SECONDS
+    state.bloodBoilRepeatHighlight = false
+end
+
+function Fuyutsui:HandleBloodBoilOverlay(active, spellID)
+    if spellID and not IsSecret(spellID) and not self:IsBloodBoilSpell(spellID) then
+        return
+    end
+
+    local now = GetTime()
+    if not active then
+        local stillActive = self:IsBloodBoilHighlightActive()
+        state.bloodBoilOverlayOn = stillActive
+        state.bloodBoilLastOverlayHideAt = now
+        self:SetBloodBoilHighlightActive(stillActive)
+        if not stillActive then
+            state.bloodBoilPhase = nil
+            state.bloodBoilProcWindowUntil = nil
+            state.bloodBoilEchoWindowUntil = nil
+            state.bloodBoilPendingTriggers = 0
+            state.bloodBoilRepeatHighlight = false
+            self:SetBloodBoilAutoChain(false)
+        end
+        return
+    end
+
+    local risingEdge = not state.bloodBoilOverlayOn
+    state.bloodBoilOverlayOn = true
+    self:SetBloodBoilHighlightActive(true)
+    if not risingEdge then return end
+
+    self:StartBloodBoilProcWindow(now)
+end
+
+function Fuyutsui:RefreshBloodBoilOverlayState()
+    local active = self:IsBloodBoilHighlightActive()
+    self:HandleBloodBoilOverlay(active)
+end
+
+function Fuyutsui:BloodBoilGlowGate()
+    local now = GetTime()
+    local overlayLive = IsBloodBoilOverlayLive()
+    if overlayLive == true or state.bloodBoilOverlayOn then
+        return true
+    end
+    if state.bloodBoilLastOverlayHideAt
+        and now - state.bloodBoilLastOverlayHideAt <= BLOOD_BOIL_GLOW_GRACE_SECONDS then
+        return true
+    end
+    return IsBloodBoilAuraActive()
+end
+
+function Fuyutsui:ConfirmBloodBoilSpellcast(spellID)
+    if not self:IsBloodBoilSpell(spellID) then return end
+    local now = GetTime()
+    if state.bloodBoilLastCastAt
+        and now - state.bloodBoilLastCastAt <= BLOOD_BOIL_DUPLICATE_CAST_SECONDS then
+        return
+    end
+    state.bloodBoilLastCastAt = now
+
+    if state.bloodBoilPhase == "PROC" or state.bloodBoilPhase == "ECHO" then
+        state.bloodBoilPhase = nil
+        state.bloodBoilProcWindowUntil = nil
+        state.bloodBoilEchoWindowUntil = nil
+        state.bloodBoilPendingTriggers = 0
+        state.bloodBoilRepeatHighlight = false
+        self:SetBloodBoilAutoChain(false)
+        return
+    end
+end
+
+function Fuyutsui:UpdateBloodBoilAutomationState()
+    local now = GetTime()
+    if state.bloodBoilPhase == "PROC"
+        and state.bloodBoilProcWindowUntil
+        and now > state.bloodBoilProcWindowUntil then
+        state.bloodBoilPhase = nil
+        state.bloodBoilProcWindowUntil = nil
+        state.bloodBoilPendingTriggers = 0
+        state.bloodBoilRepeatHighlight = false
+        self:SetBloodBoilAutoChain(false)
+    end
+end
+
+function Fuyutsui:ResetBloodBoilAutomation()
+    state.bloodBoilAutoChain = false
+    state.bloodBoilHighlightActive = false
+    state.bloodBoilOverlayOn = false
+    state.bloodBoilPhase = nil
+    state.bloodBoilProcWindowUntil = nil
+    state.bloodBoilEchoWindowUntil = nil
+    state.bloodBoilPendingTriggers = 0
+    state.bloodBoilRepeatHighlight = false
+    state.bloodBoilLastOverlayHideAt = nil
+    state.bloodBoilLastCastAt = nil
+    self:UpdateStateBlock("状态", "血沸自动链")
+end
+
+function Fuyutsui:MarkDeathbringerBurstWindow()
+    if deathbringerBurstWindowTimer then
+        deathbringerBurstWindowTimer:Cancel()
+    end
+    state.deathbringerBurstWindow = true
+    self:UpdateStateBlock("状态", "符文刃舞爆发窗口")
+    deathbringerBurstWindowTimer = C_Timer.NewTimer(DEATHBRINGER_BURST_WINDOW_SECONDS, function()
+        state.deathbringerBurstWindow = false
+        deathbringerBurstWindowTimer = nil
+        self:UpdateStateBlock("状态", "符文刃舞爆发窗口")
+    end)
+end
+
+function Fuyutsui:IsDeathbringerBurstSpell(spellID)
+    if not spellID or IsSecret(spellID) then return false end
+    return spellID == 49028 or BaseOf(spellID) == 49028 or LiveID(49028) == spellID
+end
+
+function Fuyutsui:ResetDeathbringerBurstWindow()
+    if deathbringerBurstWindowTimer then
+        deathbringerBurstWindowTimer:Cancel()
+        deathbringerBurstWindowTimer = nil
+    end
+    if not state.deathbringerBurstWindow then return end
+    state.deathbringerBurstWindow = false
+    self:UpdateStateBlock("状态", "符文刃舞爆发窗口")
+end
+
 function Fuyutsui:GetCharacterInfo()
     self.db.char.level = UnitLevel("player")
     self.state.name = UnitName("player")
@@ -48,6 +307,7 @@ end
 
 function Fuyutsui:UpdatePlayerSpecInfo()
     self:MacroTrace("UpdatePlayerSpecInfo 进入")
+    self:ResetBloodBoilAutomation()
     self:ClearAllTextures()
     self.state.specIndex = C_SpecializationInfo.GetSpecialization()
     local specID, specName, _, _, role = C_SpecializationInfo.GetSpecializationInfo(self.state.specIndex)
@@ -231,13 +491,17 @@ end
 
 function Fuyutsui:UpdateGroupType()
     local index = 0
-    if UnitInRaid("player") then
+    if self:IsRaidGroup() then
         index = UnitInRaid("player") or 0
     elseif UnitInParty("player") then
         index = 46
     end
     state.groupType = index / 255 or 0
     self:UpdateStateBlock("状态", "队伍类型")
+end
+
+function Fuyutsui:IsRaidGroup()
+    return UnitInRaid("player") ~= nil
 end
 
 function Fuyutsui:UpdateGroupCount()

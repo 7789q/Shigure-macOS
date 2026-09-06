@@ -25,6 +25,8 @@ internal static class MacUiComposition
     {
         var userDataDirectory = UserDataLayout.ResolveUserDataDirectory(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+        var uiStateStore = new MacUiStateStore(userDataDirectory);
+        var uiState = uiStateStore.Load().State;
         var versionResourceDirectory = ResolveVersionResourceDirectory();
         var workspace = new RuntimeResourceWorkspaceService().Initialize(
             versionResourceDirectory,
@@ -35,9 +37,14 @@ internal static class MacUiComposition
             ? addonSync.SynchronizeAll()
             : FuyutsuiAddonSyncResult.Skipped(workspace.WorkspaceDirectory, runtimeBlockedReason);
         var moduleDirectory = UserDataLayout.ResolveModuleDirectory(userDataDirectory);
+        var moduleSourceDirectory = ResolveBundledModuleSourceDirectory(uiState.LocalModuleSourceDirectory);
         var bundledModules = new BundledModuleInstaller().Install(
-            ResolveBundledModuleDirectory(),
-            moduleDirectory);
+            moduleSourceDirectory,
+            moduleDirectory,
+            sourceIsAuthoritative: !string.Equals(
+                moduleSourceDirectory,
+                ResolveBundledModuleDirectory(),
+                StringComparison.Ordinal));
         var moduleStore = new ModuleStore(moduleDirectory);
         var moduleDependencies = new ModuleDependencyService(workspace.WorkspaceDirectory);
         var runtimeFactory = new MacApplicationRuntimeFactory(workspace.WorkspaceDirectory, moduleStore);
@@ -49,7 +56,6 @@ internal static class MacUiComposition
         var configUpdates = runtimeBlockedReason is null
             ? new ProjectConfigUpdateService(workspace.WorkspaceDirectory, addonSync)
             : null;
-        var uiStateStore = new MacUiStateStore(userDataDirectory);
         return new MacUiServices(
             moduleStore,
             moduleDependencies,
@@ -93,4 +99,9 @@ internal static class MacUiComposition
             ? packagedModules
             : Path.Combine(AppContext.BaseDirectory, "bundled-modules");
     }
+
+    internal static string ResolveBundledModuleSourceDirectory(string? localSourceDirectory) =>
+        !string.IsNullOrWhiteSpace(localSourceDirectory) && Directory.Exists(localSourceDirectory)
+            ? Path.GetFullPath(localSourceDirectory)
+            : ResolveBundledModuleDirectory();
 }

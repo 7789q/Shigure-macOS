@@ -385,4 +385,21 @@ now = 125
 update(2, 3, "DiGua bar opens absorb execution")
 clear()
 
+-- DiGua keeps one independent timeline event per nameplate unit. Two Ritual
+-- Lords may announce the same absorb countdown at the same time; removing one
+-- nameplate must not deduplicate or cancel the other one.
+now = 130
+Fuyutsui:ObserveAOEDiGuaBar(132334, 3, "准备吸奶盾", "nameplate12")
+Fuyutsui:ObserveAOEDiGuaBar(132334, 3, "准备吸奶盾", "nameplate13")
+now = 131
+update(2, 1, "parallel DiGua bars remain independently reserved")
+Fuyutsui:CancelAOEDiGuaBar("nameplate12")
+update(2, 1, "canceling one DiGua unit preserves the other bar")
+start("nameplate13", "parallel-absorb", 1306517, 2)
+Fuyutsui:FinishAOEEnemyCast("nameplate13", "parallel-absorb", 1306517, "succeeded")
+flush()
+now = 135
+update(2, 3, "the surviving DiGua unit owns the final Virtue window")
+clear()
+
 print("AOE warning production Lua replay passed")

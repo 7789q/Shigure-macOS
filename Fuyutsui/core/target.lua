@@ -135,6 +135,9 @@ local function getHostileType(unit)
         if classification == "worldboss" or classification == "boss" then
             return 92 / 255
         end
+        if classification == "elite" or classification == "rare" or classification == "rareelite" then
+            return 91 / 255
+        end
     end
 
     local level = UnitLevel(unit)
@@ -241,9 +244,14 @@ end
 
 function Fuyutsui:UpdateUnitDeathStatus(unit)
     local cache = GetUnitCache(unit)
+    local category = unitZHMap[unit]
     if not cache then return end
+    cache.guid = UnitGUID(unit)
     cache.isDead = UnitIsDeadOrGhost(unit)
     self:UpdateUnitType(unit)
+    if category then
+        self:UpdateStateBlock(category, "死亡")
+    end
 end
 
 function Fuyutsui:UpdateUnitHealthBlock(unit)

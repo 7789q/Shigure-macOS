@@ -433,16 +433,29 @@ public sealed class ShigureRuntime : IDisposable
             return;
         }
 
+        if (IsBloodDeathKnight() && !IsBloodDeathKnightSkillReady(decision, _state))
+        {
+            var guardedInfo = _unitInfo.ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value,
+                StringComparer.Ordinal);
+            guardedInfo["发送拦截"] = "血DK技能当前不可用";
+            guardedInfo["发送拦截原因"] = "技能自身冷却或充能层数不足，等待状态更新";
+            _unitInfo = guardedInfo;
+            _currentStep = $"等待技能可用：{decision.CooldownConfirmationSpell ?? "技能"}";
+            return;
+        }
+
         if (!IsDispatchTargetValid(decision))
         {
             var guardedInfo = _unitInfo.ToDictionary(
                 entry => entry.Key,
                 entry => entry.Value,
                 StringComparer.Ordinal);
-            guardedInfo["发送拦截"] = "当前目标不满足审判施放条件";
-            guardedInfo["发送拦截原因"] = "目标类型或距离在发送前重新校验失败";
+            guardedInfo["发送拦截"] = "当前目标不满足技能施放条件";
+            guardedInfo["发送拦截原因"] = "目标类型、距离或正面状态在发送前重新校验失败";
             _unitInfo = guardedInfo;
-            _currentStep = "跳过无效目标的审判";
+            _currentStep = $"跳过无效目标：{decision.CooldownConfirmationSpell ?? "技能"}";
             return;
         }
 
@@ -536,6 +549,31 @@ public sealed class ShigureRuntime : IDisposable
 
     private bool IsBloodDeathKnight() => _classId == 6 && _specId == 1;
 
+    internal static bool IsBloodDeathKnightSkillReady(LogicDecision decision, GameState? state)
+    {
+        if (state is null
+            || !decision.UnitInfo.TryGetValue("动作技能", out var actionSpellValue)
+            || actionSpellValue is null)
+        {
+            return true;
+        }
+
+        var spell = actionSpellValue.ToString();
+        if (string.IsNullOrWhiteSpace(spell)
+            || CooldownConfirmationTracker.IsOffGlobalCooldownSpell(spell))
+        {
+            return true;
+        }
+
+        if (spell == "血液沸腾")
+        {
+            return state.GetInt("spells.血液沸腾层数") > 0;
+        }
+
+        return !state.Spells.TryGetValue(spell, out var cooldown)
+            || Convert.ToInt32(cooldown) <= 0;
+    }
+
     private bool ShouldSuppressStaleHealing(LogicDecision decision)
     {
         if (_state is null
@@ -582,10 +620,58 @@ public sealed class ShigureRuntime : IDisposable
         return health >= 100 && absorb <= 0;
     }
 
-    private bool IsDispatchTargetValid(LogicDecision decision)
+    internal static bool IsDispatchTargetValid(LogicDecision decision)
     {
-        if (!decision.UnitInfo.TryGetValue("动作技能", out var actionSpell)
-            || !string.Equals(actionSpell?.ToString(), "审判", StringComparison.Ordinal))
+        if (!decision.UnitInfo.TryGetValue("动作技能", out var actionSpell))
+        {
+            return true;
+        }
+
+        var spell = actionSpell?.ToString();
+        if (decision.UnitInfo.ContainsKey("目标死亡")
+            && ReadInt(decision.UnitInfo, "目标死亡") > 0
+            && (spell is "心灵冰冻" or "死亡之握" or "窒息" or "致盲冰雨"
+                or "死神的抚摩" or "死神印记" or "灵界打击" or "心脏打击"
+                or "精髓分裂" or "血液沸腾" or "枯萎凋零" or "神圣震击"))
+        {
+            return false;
+        }
+
+        if (string.Equals(spell, "审判", StringComparison.Ordinal))
+        {
+            if (!decision.UnitInfo.ContainsKey("目标类型")
+                || !decision.UnitInfo.ContainsKey("目标距离"))
+            {
+                return true;
+            }
+
+            var targetType = ReadInt(decision.UnitInfo, "目标类型");
+            var distance = ReadInt(decision.UnitInfo, "目标距离");
+            return targetType != 0 && distance > 0 && distance <= 28;
+        }
+
+        if (spell is "灵界打击" or "心脏打击" or "精髓分裂" or "血液沸腾" or "枯萎凋零")
+        {
+            if (!decision.UnitInfo.ContainsKey("目标类型")
+                || !decision.UnitInfo.ContainsKey("目标距离"))
+            {
+                return true;
+            }
+
+            var targetType = ReadInt(decision.UnitInfo, "目标类型");
+            var distance = ReadInt(decision.UnitInfo, "目标距离");
+            return targetType != 0 && distance > 0 && distance <= 5;
+        }
+
+        if (!string.Equals(spell, "神圣震击", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Unit 0/32 uses the current WoW target. Dynamic group targets have
+        // their own selector state and must not be checked against target/*.
+        var unit = ReadInt(decision.UnitInfo, "动作单位槽位");
+        if (unit > 0 && unit != ReservedUnit.Target)
         {
             return true;
         }
@@ -596,9 +682,22 @@ public sealed class ShigureRuntime : IDisposable
             return true;
         }
 
-        var targetType = ReadInt(decision.UnitInfo, "目标类型");
-        var distance = ReadInt(decision.UnitInfo, "目标距离");
-        return targetType != 0 && distance > 0 && distance <= 28;
+        var targetTypeForShock = ReadInt(decision.UnitInfo, "目标类型");
+        var distanceForShock = ReadInt(decision.UnitInfo, "目标距离");
+        if (targetTypeForShock == 0 || distanceForShock <= 0 || distanceForShock > 40)
+        {
+            return false;
+        }
+
+        // Hostile Holy Shock requires facing the target. Value 2 means the
+        // API cannot determine facing, so WoW remains the final authority.
+        if (targetTypeForShock < 100 && decision.UnitInfo.ContainsKey("目标正面"))
+        {
+            var inFront = ReadInt(decision.UnitInfo, "目标正面");
+            return inFront is 1 or 2;
+        }
+
+        return true;
     }
 
     private static int ReadInt(IReadOnlyDictionary<string, object?> values, string key) =>
@@ -726,7 +825,9 @@ public sealed class ShigureRuntime : IDisposable
             _currentStep = update.Confirmed
                 ? $"技能确认：{update.Spell} 已释放"
                 : backedOff
-                    ? $"技能确认：{update.Spell} 连续未生效，临时让出优先级"
+                    ? update.Spell == "灵界打击"
+                        ? "技能确认：灵界打击未生效，进入紧急保命降级"
+                        : $"技能确认：{update.Spell} 连续未生效，临时让出优先级"
                     : ambiguousTarget
                         ? $"技能确认：{update.Spell} 状态未变化，目标归因不确定，允许重试"
                         : $"技能确认：{update.Spell} 状态未变化，允许重试";
@@ -1078,16 +1179,18 @@ internal sealed class CooldownConfirmationTracker
         "圣盾术",
         "治疗石",
         "治疗药水",
-        "银月城生命药水"
+        "银月城生命药水",
+        "浓缩银月城生命药水"
     };
     private static readonly HashSet<string> OffGlobalCooldownSpells = new(StringComparer.Ordinal)
     {
         "圣疗术",
         "牺牲祝福",
-        "光环掌握",
         "亡者复生",
         "巫妖之躯",
-        "心灵冰冻"
+        "心灵冰冻",
+        "吸血鬼之血",
+        "冰封之韧"
     };
     private readonly Dictionary<string, PendingCooldownConfirmation> _pending = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _recentlyConfirmed = new(StringComparer.Ordinal);
@@ -1165,7 +1268,7 @@ internal sealed class CooldownConfirmationTracker
             if (action == pending.LastAction)
             {
                 pending.Urgency = Math.Min(pending.Urgency, urgency);
-                return now - pending.LastAttemptAt >= RetryCadence;
+                return false;
             }
 
             // Keep target attribution unambiguous. A changed target is allowed
@@ -1199,8 +1302,7 @@ internal sealed class CooldownConfirmationTracker
         var decisionSpell = ResolveConfirmationSpell(decision);
         if (decisionSpell is not null
             && _pending.TryGetValue(decisionSpell, out var pending)
-            && ResolveUrgency(decision) >= pending.Urgency
-            && now - pending.LastAttemptAt < RetryCadence)
+            && ResolveUrgency(decision) >= pending.Urgency)
         {
             pendingSpell = pending.Spell;
             return false;
@@ -1302,7 +1404,29 @@ internal sealed class CooldownConfirmationTracker
                 && actionSerial != pending.InitialActionSerial
                 && actionCode == 0
                 && actionStatus is 3 or 4;
-            var definitiveActionFailure = actionFailed || unattributedOffGcdFailure;
+            var unattributedLayOnHandsAcknowledgement =
+                string.Equals(pending.Spell, "圣疗术", StringComparison.Ordinal)
+                && pending.PlayerActionCode.HasValue
+                && actionSerial != pending.InitialActionSerial
+                && actionCode == 0
+                && actionStatus == 2;
+            var unattributedLayOnHandsFailure =
+                string.Equals(pending.Spell, "圣疗术", StringComparison.Ordinal)
+                && pending.PlayerActionCode.HasValue
+                && actionSerial != pending.InitialActionSerial
+                && actionCode == 0
+                && actionStatus is 3 or 4;
+            var resourceOnlyActionFailure = pending.AllowResourceOnlyConfirmation
+                && actionSerial != pending.InitialActionSerial
+                && actionStatus is 3 or 4;
+            var definitiveActionFailure = actionFailed
+                || unattributedOffGcdFailure
+                || unattributedLayOnHandsFailure
+                || pending.PlayerActionCode is null
+                    && actionSerial != pending.InitialActionSerial
+                    && actionCode == 0
+                    && actionStatus is 3 or 4
+                || resourceOnlyActionFailure;
             var observedValue = string.IsNullOrWhiteSpace(pending.StateField)
                 ? (int?)null
                 : state.GetInt(pending.StateField);
@@ -1320,21 +1444,55 @@ internal sealed class CooldownConfirmationTracker
                 && actionSerial == pending.InitialActionSerial
                 && actionCode != pending.PlayerActionCode.Value
                 && actionStatus is 1 or 2;
+            // WoW can report a successful Shield of the Righteous with an
+            // anonymous action code while the Holy Power update is already
+            // visible. The resource transition plus a successful new action
+            // serial is sufficient to confirm this specific spender; other
+            // Holy Power changes must still retain their action-code match.
+            var unattributedHolyPowerAcknowledgement = stateChanged
+                && string.Equals(pending.Spell, "正义盾击", StringComparison.Ordinal)
+                && string.Equals(pending.StateField, "神圣能量", StringComparison.Ordinal)
+                && pending.PlayerActionCode.HasValue
+                && actionSerial != pending.InitialActionSerial
+                && actionCode == 0
+                && actionStatus == 2;
+            // Divine Purpose is consumed by all three Holy Power spenders. Its
+            // aura can clear in the same update where WoW omits the action code,
+            // so keep this anonymous acknowledgement scoped to those spenders
+            // and to a new successful player-action serial.
+            var unattributedDivinePurposeAcknowledgement = stateChanged
+                && pending.Spell is "荣耀圣令" or "黎明之光" or "正义盾击"
+                && string.Equals(pending.StateField, "auras.神圣意志", StringComparison.Ordinal)
+                && pending.PlayerActionCode.HasValue
+                && actionSerial != pending.InitialActionSerial
+                && actionCode == 0
+                && actionStatus == 2;
             var stateChangeAccepted = stateChanged
                 && (pending.AllowResourceOnlyConfirmation
                     || pending.PlayerActionCode.HasValue
-                        && (matchingActionObserved || delayedActionAcknowledgement))
+                        && (matchingActionObserved
+                            || delayedActionAcknowledgement
+                            || unattributedHolyPowerAcknowledgement
+                            || unattributedDivinePurposeAcknowledgement))
                 && (pending.StateField != "auras.圣光灌注层数" || actionStatus == 2);
             var actionAccepted = matchingActionObserved
                 && actionStatus is 1 or 2
                 && (pending.StateField != "auras.圣光灌注层数"
                     || stateChanged && actionStatus == 2);
+            var anonymousActionAccepted = unattributedLayOnHandsAcknowledgement
+                || unattributedDivinePurposeAcknowledgement;
             var cooldownAdvanced = cooldown > 0
                 && cooldown > pending.InitialCooldown;
             var confirmationSource = stateChangeAccepted
-                ? $"状态字段变化：{pending.StateField}"
+                ? unattributedHolyPowerAcknowledgement
+                    ? "神圣能量字段变化（正义盾击动作码未回写）"
+                    : unattributedDivinePurposeAcknowledgement
+                        ? "神圣意志字段变化（动作码未回写）"
+                    : $"状态字段变化：{pending.StateField}"
                 : cooldownAdvanced
                     ? $"技能冷却/充能变化：spells.{spell}"
+                    : anonymousActionAccepted
+                        ? "匿名玩家动作成功事件"
                     : actionAccepted
                         ? "玩家施法成功事件"
                         : null;
@@ -1343,7 +1501,8 @@ internal sealed class CooldownConfirmationTracker
                 confirmationSource += "（动作事件回写滞后）";
             }
             if (!definitiveActionFailure
-                && (actionAccepted || cooldownAdvanced || stateChangeAccepted))
+                && (actionAccepted || anonymousActionAccepted
+                    || cooldownAdvanced || stateChangeAccepted))
             {
                 _pending.Remove(spell);
                 _recentlyConfirmed[spell] = now;
@@ -1639,7 +1798,10 @@ internal sealed class ActionFailureBackoff
         var failureCount = _failures.TryGetValue(failedAction, out var previous)
             ? previous.FailureCount + 1
             : 1;
-        if (failureCount < FailureThreshold)
+        var failureThreshold = update.Spell == "灵界打击"
+            ? 1
+            : FailureThreshold;
+        if (failureCount < failureThreshold)
         {
             _failures[failedAction] = new FailureState(failureCount, now.Add(InitialRetryBackoff));
             return false;

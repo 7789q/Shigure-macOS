@@ -1073,6 +1073,26 @@ public sealed partial class MainWindow : Window
         var validateConfig = CommandButton("验证配置", (_, _) => ValidateConfiguration(configStatus));
         var updateConfig = CommandButton("更新配置", async (_, _) => await UpdateConfigurationAsync(configStatus));
         var importModules = CommandButton("导入旧模块", async (_, _) => await ImportLegacyModulesAsync());
+        var localModuleSourceStatus = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(_uiState.LocalModuleSourceDirectory)
+                ? "使用 APP 内置模块"
+                : _uiState.LocalModuleSourceDirectory,
+            Classes = { "muted" },
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var selectLocalModuleSource = CommandButton(
+            "选择本地模块源",
+            async (_, _) => await SelectLocalModuleSourceAsync(localModuleSourceStatus));
+        var clearLocalModuleSource = CommandButton("清除本地模块源", async (_, _) =>
+        {
+            _uiState.LocalModuleSourceDirectory = null;
+            SaveUiState();
+            localModuleSourceStatus.Text = "使用 APP 内置模块";
+            AppendLocalLog("已清除本地模块源，后续启动将使用 APP 内置模块");
+            await Task.CompletedTask;
+        });
 
         return ScrollPage(
             Section("输入与运行", "修改后运行会话应以最新设置重启",
@@ -1096,7 +1116,9 @@ public sealed partial class MainWindow : Window
                     CommandButton("打开模块目录", async (_, _) => await OpenDirectoryAsync(
                         _moduleStore.ModuleDirectory,
                         "模块目录",
-                        createIfMissing: true)))),
+                        createIfMissing: true))),
+                SettingRow("本地模块源", localModuleSourceStatus),
+                CommandRow(selectLocalModuleSource, clearLocalModuleSource)),
             Section("浮动条", "布局切换会保留横向和纵向各自的位置与大小",
                 SettingRow("布局", overlayLayout),
                 CommandRow(CommandButton("显示浮动条", (_, _) => ShowOverlay()))),
@@ -2159,6 +2181,61 @@ public sealed partial class MainWindow : Window
                     await ShowMessageAsync("运行时恢复失败", exception.Message);
                 }
             }
+        }
+    }
+
+    private async Task SelectLocalModuleSourceAsync(TextBlock status)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "选择本地模块源目录",
+            AllowMultiple = false
+        });
+        if (folders.Count == 0)
+        {
+            return;
+        }
+
+        var sourcePath = folders[0].TryGetLocalPath();
+        if (string.IsNullOrWhiteSpace(sourcePath) || !Directory.Exists(sourcePath))
+        {
+            await ShowMessageAsync("无法设置本地模块源", "所选目录不是可访问的本地目录。");
+            return;
+        }
+
+        try
+        {
+            var normalizedPath = Path.GetFullPath(sourcePath);
+            if (!Directory.EnumerateFiles(normalizedPath, "*.json", SearchOption.TopDirectoryOnly).Any())
+            {
+                await ShowMessageAsync("无法设置本地模块源", "所选目录中没有模块 JSON 文件。");
+                return;
+            }
+
+            _uiState.LocalModuleSourceDirectory = normalizedPath;
+            SaveUiState();
+            var result = await Task.Run(() => new BundledModuleInstaller().Install(
+                normalizedPath,
+                _moduleStore.ModuleDirectory,
+                sourceIsAuthoritative: true));
+            _moduleStore.Reload();
+            RefreshModuleNames();
+            PageHost.Content = BuildGeneralPage();
+            status.Text = normalizedPath;
+            AppendLocalLog(
+                $"本地模块源已同步：新增 {result.InstalledModules.Count}，升级 {result.UpdatedModules.Count}，保留 {result.PreservedModules.Count}，失败 {result.Failures.Count}");
+            foreach (var failure in result.Failures)
+            {
+                AppendLocalLog($"本地模块源同步失败：{failure}");
+            }
+
+            await RestartRuntimeAfterSettingChangeAsync("本地模块源已更新");
+        }
+        catch (Exception exception)
+        {
+            status.Text = "本地模块源不可用";
+            AppendLocalLog($"本地模块源设置失败：{exception.GetType().Name}");
+            await ShowMessageAsync("本地模块源设置失败", exception.Message);
         }
     }
 

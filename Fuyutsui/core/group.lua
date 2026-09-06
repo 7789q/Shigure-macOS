@@ -1,11 +1,37 @@
 local addon, ns = ...
 
-local EvaluateColorFromBoolean = C_CurveUtil.EvaluateColorFromBoolean
-
 local state = Fuyutsui.state
 local roleMap = Fuyutsui.roleMap
-local ColorValue0 = CreateColor(0, 0, 0, 1)
 local updateIndex = 1
+
+local function IsSecret(value)
+    return issecretvalue and issecretvalue(value)
+end
+
+local function Clamp(value, low, high)
+    return math.max(low, math.min(high, value))
+end
+
+local function HasVirtueAura(unit)
+    if C_UnitAuras and C_UnitAuras.GetAuraDataBySpellId then
+        local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellId, unit, 200025)
+        return ok and aura ~= nil
+    end
+    if UnitAura then
+        for index = 1, 40 do
+            local ok, _, _, _, _, _, _, _, _, _, _, spellId = pcall(
+                UnitAura,
+                unit,
+                index,
+                "HELPFUL"
+            )
+            if ok and not IsSecret(spellId) and spellId == 200025 then
+                return true
+            end
+        end
+    end
+    return false
+end
 
 -- 施法治疗预估偏移（近似秒数/权重，写入生命曲线）
 local helpfulSpells = {
@@ -19,8 +45,9 @@ local helpfulSpells = {
 }
 
 function Fuyutsui:IterateGroupMembers(reversed, forceParty)
-    local unit = (not forceParty and IsInRaid()) and 'raid' or 'party'
-    local numGroupMembers = unit == 'party' and GetNumSubgroupMembers() or GetNumGroupMembers()
+    local inRaid = not forceParty and self:IsRaidGroup()
+    local unit = inRaid and 'raid' or 'party'
+    local numGroupMembers = inRaid and GetNumGroupMembers() or GetNumSubgroupMembers()
     local i = reversed and numGroupMembers or (unit == 'party' and 0 or 1)
     return function()
         local ret
@@ -42,10 +69,94 @@ function Fuyutsui:UpdateUnitHealthInfo(unit)
     local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.healthPercent
     obj.curve = self:CreateColorCurveScaling(100 + (obj.inComingHeals or 0))
     local healthPercent = UnitHealthPercent(unit, false, obj.curve)
+    if not healthPercent or type(healthPercent.GetRGB) ~= "function" then
+        return
+    end
     ---@diagnostic disable-next-line: param-type-mismatch
-    local _, _, b = healthPercent:GetRGB()
+    local ok, _, _, b = pcall(healthPercent.GetRGB, healthPercent)
+    if not ok then
+        return
+    end
     obj.healthPercent = b
-    self:CreateTexture(index, obj.healthPercent)
+    obj.healthPercentValue = IsSecret(b) and 1 or b
+    self:CreateTexture(index, b)
+end
+
+function Fuyutsui:UpdateHolyPaladinForecast()
+    local blocks = self.blocks
+    if not blocks or not blocks.groups then return end
+
+    local now = GetTime()
+    local singleNeed, burstNeed, sustainNeed, spreadCount = 0, 0, 0, 0
+    local virtueCoverageCount, virtueTransferNeed = 0, 0
+    local virtueMainTarget = state.virtueMainTargetIndex or 0
+
+    local eventType = state.aoeEventType or 0
+    local eventStage = state.aoeEventStage or 0
+    local eventBoost = 0
+    if eventType ~= 0 and eventStage ~= 0 then
+        eventBoost = eventStage == 2 and 32 or eventStage == 3 and 24 or eventStage == 5 and 12 or 18
+    end
+
+    for _, unit in ipairs(self.groupList or {}) do
+        local obj = self.group[unit]
+        if obj then
+            local health = Clamp((obj.healthPercentValue or 1) * 100, 0, 100)
+            local deficit = math.max(0, 100 - health)
+            local elapsed = math.max(0.1, now - (obj.forecastAt or now))
+            local previous = obj.forecastHealth or health
+            local observedDamage = math.max(0, previous - health)
+            local observedRate = observedDamage / elapsed
+            obj.damageRate = Clamp((obj.damageRate or 0) * 0.65 + observedRate * 0.35, 0, 18)
+            obj.forecastAt = now
+            obj.forecastHealth = health
+
+            local safety = obj.role == "TANK" and 8 or 5
+            local shortPrediction = Clamp(obj.damageRate * 2 + eventBoost, 0, 80)
+            local longPrediction = Clamp(obj.damageRate * 9 + eventBoost * 2, 0, 140)
+            local expected = Clamp(deficit + longPrediction + safety, 0, 255)
+            local burst = Clamp(deficit + shortPrediction, 0, 255)
+            local sustain = Clamp(deficit + longPrediction, 0, 255)
+            local single = Clamp(deficit + shortPrediction + safety, 0, 255)
+
+            obj.expectedNeed, obj.burstNeed = expected, burst
+            obj.sustainNeed, obj.singleNeed = sustain, single
+
+            local base = blocks.groups.start + (obj.index - 1) * blocks.groups.num
+            if blocks.groups.expectedNeed then self:CreateTexture(base + blocks.groups.expectedNeed, expected / 255) end
+            if blocks.groups.burstNeed then self:CreateTexture(base + blocks.groups.burstNeed, burst / 255) end
+            if blocks.groups.sustainNeed then self:CreateTexture(base + blocks.groups.sustainNeed, sustain / 255) end
+
+            singleNeed = math.max(singleNeed, single)
+            burstNeed = burstNeed + (burst >= 15 and burst or 0)
+            sustainNeed = sustainNeed + (sustain >= 15 and sustain or 0)
+            if expected >= 15 then spreadCount = spreadCount + 1 end
+
+            local hasVirtue = HasVirtueAura(unit)
+            if hasVirtue then
+                virtueCoverageCount = virtueCoverageCount + 1
+                if obj.index ~= virtueMainTarget then
+                    virtueTransferNeed = virtueTransferNeed + math.floor(expected * 0.15 + 0.5)
+                end
+            end
+        end
+    end
+
+    state.singleNeed = Clamp(singleNeed, 0, 255)
+    state.burstGroupNeed = Clamp(burstNeed, 0, 255)
+    state.sustainGroupNeed = Clamp(sustainNeed, 0, 255)
+    state.spreadCount = Clamp(spreadCount, 0, 255)
+    state.virtueCoverageCount = Clamp(virtueCoverageCount, 0, 255)
+    state.virtueTransferNeed = Clamp(virtueTransferNeed, 0, 255)
+    state.virtueCoverageOverflow = math.max(0, virtueCoverageCount - 5)
+
+    local fields = {
+        "单目标需求", "多人爆发需求", "多人持续需求", "预计治疗人数",
+        "美德主目标", "美德覆盖人数", "美德转移需求", "美德覆盖溢出",
+    }
+    for _, field in ipairs(fields) do
+        self:UpdateStateBlock("状态", field)
+    end
 end
 
 function Fuyutsui:UpdateUnitValid(unit)
@@ -61,6 +172,9 @@ function Fuyutsui:UpdateGroupInRangeAndHealth()
     if not blocks or not blocks.groups then return end
     local numUnits = #groupList
     if numUnits >= 1 then
+        if updateIndex > numUnits then
+            updateIndex = 1
+        end
         local unit = groupList[updateIndex]
         local obj = group[unit]
         if not obj then return end
@@ -70,12 +184,12 @@ function Fuyutsui:UpdateGroupInRangeAndHealth()
         obj.canAssist = UnitCanAssist("player", unit)
         obj.valid = not obj.isDead and obj.canAssist and obj.inSight
         if obj.valid then
-            local inRange = UnitIsUnit(unit, "player") and true or UnitInRange(unit)
-            local roleValue = roleMap[obj.role] and roleMap[obj.role] / 255 or 5 / 255
-            local trueValue = CreateColor(0, 0, roleValue, 1)
-            local booleanValue = EvaluateColorFromBoolean(inRange, trueValue, ColorValue0)
-            local _, _, b = booleanValue:GetRGB()
-            self:CreateTexture(index, b)
+            -- 职责色块同时作为运行时的成员存在标记，不能再用超出距离表示为 0。
+            local roleValue = roleMap[obj.role]
+            if not roleValue or roleValue == 0 then
+                roleValue = 5
+            end
+            self:CreateTexture(index, roleValue / 255)
         else
             self:CreateTexture(index, 0)
         end
@@ -140,9 +254,10 @@ end
 
 function Fuyutsui:ClearGroupBlocks()
     local blocks = self.blocks
-    if blocks.groups and blocks.groups.start then
+    if blocks.groups and blocks.groups.start and blocks.groups.num then
         local startIndex = blocks.groups.start
-        for index = startIndex, 255 do
+        local endIndex = startIndex + 30 * blocks.groups.num - 1
+        for index = startIndex, endIndex do
             self:CreateTexture(index, 0)
         end
     end
@@ -151,6 +266,7 @@ end
 function Fuyutsui:UpdateGroup()
     self.group = {}
     self.groupList = {}
+    updateIndex = 1
     local group = self.group
     local groupList = self.groupList
     local i = 1
@@ -173,9 +289,13 @@ function Fuyutsui:UpdateGroup()
             inSightTimer = nil,
             curve = self.curve100,
             inComingHeals = 0,
+            forecastAt = GetTime(),
+            forecastHealth = 100,
+            damageRate = 0,
         }
         self:UpdateUnitValid(unit)
         self:UpdateUnitHealthInfo(unit)
+        group[unit].forecastHealth = (group[unit].healthPercentValue or 1) * 100
         i = i + 1
     end
     if self.RefreshGroupAuraContainers then
@@ -184,4 +304,5 @@ function Fuyutsui:UpdateGroup()
     if self.RefreshGroupHealAbsorbBars then
         self:RefreshGroupHealAbsorbBars()
     end
+    self:UpdateHolyPaladinForecast()
 end

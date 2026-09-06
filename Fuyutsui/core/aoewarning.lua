@@ -189,6 +189,7 @@ local function NewEvent(id, eventType, impactAt, source, options)
         eventType = eventType,
         impactAt = impactAt,
         source = source,
+        unitKey = options.unitKey,
         impactAnchor = options.impactAnchor
             or (source == "diguabar" and "diguabar" or nil),
         spellID = spellID,
@@ -263,6 +264,21 @@ local function GetEstimatedVirtueAt(event)
     return event.cast and event.cast.endsAt or event.impactAt
 end
 
+local function GetAbsorbAnchorCode(event)
+    if not event or event.eventType ~= 2 then return 0 end
+    if event.impactAnchor == "actual" then return 1 end
+    if event.impactAnchor == "diguabar" then return 2 end
+    if event.castOutcome == "missing_end_anchor" then return 4 end
+    return 3
+end
+
+local function GetAbsorbVirtueRemaining(event, now)
+    if not event or event.eventType ~= 2 then return 0 end
+    local virtueAt = GetEstimatedVirtueAt(event)
+    if not virtueAt then return 0 end
+    return math.min(255, math.max(0, math.floor((virtueAt - now) * 100 + 0.5)))
+end
+
 local function DivineTollExpectedReady(event, now)
     local virtueAt = GetEstimatedVirtueAt(event)
     local cooldownRemaining = GetSpellRemainingSeconds(375576)
@@ -288,6 +304,8 @@ local function SetOutput(eventType, stage, event)
     end
 
     local cast = event and event.cast or nil
+    local absorbAnchor = GetAbsorbAnchorCode(event)
+    local absorbVirtueRemaining = GetAbsorbVirtueRemaining(event, GetTime())
     state.aoeProtectedCastActive = cast
         and (cast.protectedTiming == true or cast.protectedSpellID == true)
         or false
@@ -296,6 +314,10 @@ local function SetOutput(eventType, stage, event)
     state.divineTollExpectedReady = DivineTollExpectedReady(event, GetTime())
     Fuyutsui:UpdateStateBlock("状态", "AOE受保护读条")
     Fuyutsui:UpdateStateBlock("状态", "AOE读条剩余")
+    state.aoeAbsorbAnchor = absorbAnchor
+    state.aoeAbsorbVirtueRemaining = absorbVirtueRemaining
+    Fuyutsui:UpdateStateBlock("状态", "AOE吸奶盾锚点")
+    Fuyutsui:UpdateStateBlock("状态", "AOE吸奶盾预计剩余")
     Fuyutsui:UpdateStateBlock("状态", "圣洁鸣钟预计可用")
 end
 
@@ -499,7 +521,15 @@ local function ReadCastTiming(unit, isChannel)
     return startMS / 1000, endMS / 1000
 end
 
-local function FindMatchingEvent(now, spellID, endsAt)
+local function EventMatchesUnit(event, unit)
+    if not unit then return true end
+    local eventUnit = event.unitKey or event.diguaUnit
+    if eventUnit then return eventUnit == unit end
+    if event.cast and event.cast.unit then return event.cast.unit == unit end
+    return true
+end
+
+local function FindMatchingEvent(now, spellID, endsAt, unit)
     local selected, selectedDistance
     for _, event in pairs(warning.events) do
         if event.spellID == spellID
@@ -507,6 +537,7 @@ local function FindMatchingEvent(now, spellID, endsAt)
             and now <= event.expiresAt
             and not event.cast
             and not event.completed
+            and EventMatchesUnit(event, unit)
             and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked) then
             local distance = endsAt and math.abs(event.impactAt - endsAt) or 0
             if not selected or distance < selectedDistance
@@ -526,12 +557,13 @@ local function DirectCastEventType(spellID)
     return nil
 end
 
-local function FindDirectCastEvent(eventType, spellID, impactAt)
+local function FindDirectCastEvent(eventType, spellID, impactAt, unit)
     for _, event in pairs(warning.events) do
         if event.source == "cast"
             and event.eventType == eventType
             and event.spellID == spellID
             and not event.completed
+            and EventMatchesUnit(event, unit)
             and (not impactAt or not event.cast or not event.cast.endsAt
                 or math.abs(event.cast.endsAt - impactAt)
                     <= Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds) then
@@ -599,7 +631,7 @@ local function ReadProtectedCastDuration(unit, isChannel)
     if type(reader) ~= "function" then return nil end
     local ok, duration = pcall(reader, unit)
     if not ok or not duration then return nil end
-    if type(duration) == "number" then return duration end
+    if not IsSecret(duration) and type(duration) == "number" then return duration end
 
     -- 12.1 can protect the raw start/end milliseconds while still exposing
     -- the DurationObject used by Fuyutsui's pixel protocol. Decode its blue
@@ -609,7 +641,7 @@ local function ReadProtectedCastDuration(unit, isChannel)
     local colorOK, color = pcall(duration.EvaluateRemainingDuration, duration, curve)
     if not colorOK or not color or type(color.GetRGB) ~= "function" then return nil end
     local rgbOK, _, _, blue = pcall(color.GetRGB, color)
-    if not rgbOK or type(blue) ~= "number" then return nil end
+    if not rgbOK or IsSecret(blue) or type(blue) ~= "number" then return nil end
     return math.max(0, blue * 25.5)
 end
 
@@ -682,7 +714,7 @@ local function PrunePendingCasts(now)
     end
 end
 
-local function FindRecentSemanticEvent(now)
+local function FindRecentSemanticEvent(now, unit)
     local threshold = Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds
     local selected
     for _, event in pairs(warning.events) do
@@ -690,6 +722,7 @@ local function FindRecentSemanticEvent(now)
             and not event.reservationOnly
             and not event.cast
             and not event.completed
+            and EventMatchesUnit(event, unit)
             and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked)
             and math.abs(now - event.createdAt) <= threshold
             and (not selected or event.createdAt > selected.createdAt
@@ -747,7 +780,9 @@ function Fuyutsui:TryBindPendingAOECast(event)
     for index, candidate in ipairs(warning.pendingCasts) do
         local distance = math.abs(event.createdAt - candidate.observedAt)
         local spellMatches = not candidate.spellID or candidate.spellID == event.spellID
-        if spellMatches and distance <= threshold and (not selectedIndex or distance < selectedDistance) then
+        local unitMatches = not event.unitKey or not candidate.unit or event.unitKey == candidate.unit
+        if spellMatches and unitMatches and distance <= threshold
+            and (not selectedIndex or distance < selectedDistance) then
             selectedIndex, selectedDistance = index, distance
         end
     end
@@ -814,10 +849,10 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
         return true
     end
 
-    local event = FindRecentSemanticEvent(now)
+    local event = FindRecentSemanticEvent(now, unit)
     if not event or event.eventType ~= 2 then event = nil end
     if not event and readableSpellID then
-        event = FindMatchingEvent(now, readableSpellID, impactAt)
+        event = FindMatchingEvent(now, readableSpellID, impactAt, unit)
     end
     if not event then
         for _, candidate in pairs(warning.events) do
@@ -825,6 +860,7 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
                 and not candidate.cast
                 and not candidate.completed
                 and not candidate.timelineFallbackBlocked
+                and EventMatchesUnit(candidate, unit)
                 and math.abs(candidate.impactAt - impactAt)
                     <= Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds then
                 event = candidate
@@ -840,20 +876,21 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
             if candidate.eventType == 2
                 and candidate.source == "timeline"
                 and candidate.timelineFallbackBlocked
+                and EventMatchesUnit(candidate, unit)
                 and math.abs(candidate.impactAt - impactAt)
                     <= Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds then
                 return true
             end
         end
     end
-    if not event then event = FindDirectCastEvent(2, 1306517, impactAt) end
+    if not event then event = FindDirectCastEvent(2, 1306517, impactAt, unit) end
     if not event then
         event = NewEvent(
             "cast:diguastart:" .. tostring(castGUID or unit .. ":" .. tostring(now)),
             2,
             impactAt,
             "cast",
-            { spellID = 1306517, impactAnchor = "diguabar" })
+            { spellID = 1306517, impactAnchor = "diguabar", unitKey = unit })
     end
     if not event then return true end
 
@@ -907,7 +944,7 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
         if diagnosticEvent then
             PublishProtectedCastDiagnostics(candidate, diagnosticEvent)
         end
-        local event = FindRecentSemanticEvent(now)
+        local event = FindRecentSemanticEvent(now, unit)
         if not event and self.state.diGuaBridgeReady == true
             and not isChannel
             and IsLikelyAbsorbCastUnit(unit) then
@@ -918,7 +955,7 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
                 2,
                 impactAt,
                 "cast",
-                { spellID = 1306517, impactAnchor = "diguabar" })
+                { spellID = 1306517, impactAnchor = "diguabar", unitKey = unit })
             if event then
                 Fuyutsui:PublishAOEDiagnostic("enemyCast", event.spellID)
                 TraceLog(
@@ -974,7 +1011,7 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
         return
     end
 
-    local event = FindMatchingEvent(now, spellID, endsAt)
+    local event = FindMatchingEvent(now, spellID, endsAt, unit)
     local directEvent = false
     if not event and self.state.diGuaBridgeReady == true then
         local eventType = DirectCastEventType(spellID)
@@ -983,7 +1020,7 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
         -- AOE still requires its DiGua timeline semantic event so unrelated
         -- enemy casts cannot alter the existing priority chain.
         if eventType == 2 and impactAt then
-            event = FindDirectCastEvent(eventType, spellID, impactAt)
+            event = FindDirectCastEvent(eventType, spellID, impactAt, unit)
             if not event then
                 event = NewEvent(
                     "cast:" .. tostring(castGUID or unit .. ":" .. tostring(now)),
@@ -991,7 +1028,8 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
                     impactAt,
                     "cast",
                     { spellID = spellID,
-                        impactAnchor = eventType == 2 and "diguabar" or nil })
+                        impactAnchor = eventType == 2 and "diguabar" or nil,
+                        unitKey = unit })
                 directEvent = event ~= nil
             end
             if event then
@@ -1308,18 +1346,49 @@ function Fuyutsui:ObserveAOEDiGuaBar(iconID, duration, name, unitKey)
     local impactAt = now + duration
     for _, event in pairs(warning.events) do
         if event.eventType == 2
-            and event.source == "diguabar"
+            and event.source == "timeline"
             and not event.completed
             and math.abs(event.impactAt - impactAt) <= 0.5 then
+            -- DiGua is the verified fallback anchor for a timeline row whose
+            -- protected cast may not expose a readable end timestamp. Upgrade
+            -- the existing row so an already-bound cast keeps its identity.
+            event.source = "diguabar"
+            event.diguaUnit = unitKey
+            event.unitKey = unitKey
+            event.impactAnchor = "diguabar"
+            event.impactAt = impactAt
+            event.virtueReadyAt = impactAt + Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds
+            event.expiresAt = event.virtueReadyAt + Fuyutsui.AOEWarningConfig.impactActiveSeconds
+            event.timelineFallbackBlocked = false
+            event.timelineFallbackPending = false
+            event.timelineFallbackAt = nil
+            TraceLog(
+                "DiGua倒计时接管时间轴事件 event=%s unit=%s duration=%.2f",
+                tostring(event.runtimeID or event.id),
+                tostring(unitKey or "-"),
+                duration)
+            return
+        end
+        if event.eventType == 2
+            and event.source == "diguabar"
+            and event.diguaUnit == unitKey
+            and math.abs(event.impactAt - impactAt) <= 0.5 then
+            TraceLog(
+                "DiGua倒计时重复事件已忽略 event=%s completed=%s unit=%s duration=%.2f",
+                tostring(event.runtimeID or event.id),
+                event.completed and "true" or "false",
+                tostring(unitKey or "-"),
+                duration)
             return
         end
     end
     local event = NewEvent(
-        "diguabar:" .. tostring(unitKey or now),
+        "diguabar:" .. tostring(unitKey or "anonymous") .. ":"
+            .. tostring(impactAt) .. ":" .. tostring(warning.nextSequence + 1),
         2,
         impactAt,
         "diguabar",
-        { spellID = 1306517 })
+        { spellID = 1306517, unitKey = unitKey })
     if event then
         event.diguaUnit = unitKey
         TraceLog(
@@ -1365,6 +1434,21 @@ function Fuyutsui:ObserveAOETimelineEvent(eventInfo)
     local predictedImpact = GetTime() + remaining
     local timelineSpellID = SafeNumber(eventInfo.spellID)
     for _, existing in pairs(warning.events) do
+        if existing.source == "diguabar"
+            and existing.eventType == eventType
+            and not existing.completed
+            and math.abs(existing.impactAt - predictedImpact)
+                <= Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds then
+            existing.runtimeID = runtimeID
+            existing.timelineRuntimeID = runtimeID
+            TraceLog(
+                "时间轴合并已有DiGua事件 event=%s runtime=%s type=%d spell=%s",
+                tostring(existing.id),
+                tostring(runtimeID),
+                eventType,
+                tostring(existing.spellID or timelineSpellID or 0))
+            return
+        end
         if existing.source == "cast"
             and existing.eventType == eventType
             and not existing.completed
@@ -1486,6 +1570,8 @@ function Fuyutsui:InitializeAOEWarning()
     warning.initialized = true
     self.state.aoeEventType = 0
     self.state.aoeEventStage = 0
+    self.state.aoeAbsorbAnchor = 0
+    self.state.aoeAbsorbVirtueRemaining = 0
     self.state.aoeProtectedCastActive = false
     self.state.divineTollExpectedReady = false
     if CreateUnitHealPredictionCalculator then

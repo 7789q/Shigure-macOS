@@ -56,6 +56,7 @@ internal static class CastPreemptionPolicy
             "治疗石",
             "治疗药水",
             "银月城生命药水",
+            "浓缩银月城生命药水",
             "美德道标",
             "心灵冰冻"
         };

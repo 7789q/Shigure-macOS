@@ -7,7 +7,7 @@ Fuyutsui.MacroBodies = {
     ["银月城生命药水"] = "item:241304\n/cast item:241305\n/cast item:271884\n/cast item:271885",
     ["浓缩银月城生命药水"] = "item:271884\n/cast item:271885\n/cast item:241304\n/cast item:241305",
     ["治疗药水"] = "item:271884\n/cast item:271884\n/cast item:271885",
-    ["治疗石"] = "item:5512\n/use item:5512\n/use item:224464",
+    ["治疗石"] = "/use item:5512\n/use item:224464",
     ["圣言祭礼"] = "/cast 圣言祭礼\n/use 16",
     ["收割者战刃"] = "/cast 投掷利刃",
 }
@@ -18,6 +18,7 @@ Fuyutsui.CastPreemptingSpells = {
     ["治疗石"] = true,
     ["治疗药水"] = true,
     ["银月城生命药水"] = true,
+    ["浓缩银月城生命药水"] = true,
     ["美德道标"] = true,
     ["心灵冰冻"] = true,
 }
@@ -360,6 +361,7 @@ Fuyutsui.ClassMacros = {
             "反魔法护罩",
             "死亡脚步",
             "治疗石",
+            "浓缩银月城生命药水",
         },
         specialSpells = {
             "/castsequence reset=1 死亡之握,x",

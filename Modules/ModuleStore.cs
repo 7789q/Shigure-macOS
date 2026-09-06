@@ -666,7 +666,8 @@ public static class ModuleLogic
     {
         "精髓分裂",
         "心脏打击",
-        "符文分流"
+        "符文分流",
+        "死神的抚摩"
     };
 
     private static readonly HashSet<string> BloodRunicPowerSpenders = new(StringComparer.Ordinal)
@@ -692,6 +693,15 @@ public static class ModuleLogic
         var unitSlots = ResolveDynamicFields(module, state);
         var failedSpells = keymap.GetCurrentFailedSpells();
         var oneKeySpells = keymap.GetCurrentOneKeySpells();
+        if (module.Match.ClassId == 2 && module.Match.SpecId == 1)
+        {
+            var forecastFields = new[] { "多人爆发需求", "多人持续需求", "预计治疗人数" };
+            info["奶骑预测字段诊断"] = string.Join("；", forecastFields.Select(field =>
+            {
+                var present = state.Values.ContainsKey(field);
+                return $"{field}:存在={present},值={(present ? state.GetInt(field).ToString(CultureInfo.InvariantCulture) : "-")}";
+            })) + $"；团队槽位={state.Group.Count}；动态单位={unitSlots.Count}";
+        }
         AddShieldDiagnostics(module, state, keymap, info, failedSpells);
         var missingBindings = new List<string>();
         var suppressed = new List<string>();
@@ -879,6 +889,10 @@ public static class ModuleLogic
                 : $"{rule.UnitName} → {resolvedUnit.GetValueOrDefault()}";
             info["动作单位槽位"] = resolvedUnit.GetValueOrDefault();
             info["自身生命值"] = state.GetInt("生命值");
+            if (state.Values.ContainsKey("目标死亡"))
+            {
+                info["目标死亡"] = state.GetInt("目标死亡");
+            }
             if (resolvedUnit is > 0
                 && state.Group.TryGetValue(resolvedUnit.Value.ToString(), out var actionUnit))
             {
@@ -1006,7 +1020,14 @@ public static class ModuleLogic
             return LogicActionIntent.Unknown;
         }
 
-        if (spell is "圣盾术" or "治疗石" or "治疗药水" or "银月城生命药水")
+        if (spell is "圣盾术" or "治疗石" or "治疗药水" or "银月城生命药水" or "浓缩银月城生命药水")
+        {
+            return LogicActionIntent.EmergencySelfDefense;
+        }
+
+        if (spell == "灵界打击"
+            && state.GetInt("生命值") <= 60
+            && state.GetInt("符文能量") >= 40)
         {
             return LogicActionIntent.EmergencySelfDefense;
         }
@@ -1453,6 +1474,9 @@ public static class ModuleLogic
                 ("目标类型", "目标类型"),
                 ("目标距离", "目标距离"),
                 ("目标生命值", "目标生命值"),
+                ("目标死亡", "目标死亡"),
+                ("治疗石", "治疗石状态"),
+                ("浓缩银月城生命药水", "浓缩银月城生命药水状态"),
                 ("站定时长", "站定时长"),
                 ("auras.白骨之盾层数", "白骨之盾层数"),
                 ("auras.血债层数", "血债层数"),
@@ -1476,7 +1500,7 @@ public static class ModuleLogic
                 ("血沸循环心打次数", "血沸循环心打次数")
             })
             {
-                info[label] = state.GetInt(key);
+                info[label] = state.GetValue(key) ?? 0;
             }
         }
 

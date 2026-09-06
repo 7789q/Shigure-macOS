@@ -44,6 +44,7 @@ function Fuyutsui:UpdatePlayerBlocks()
     self:UpdateGroup()
     self:GetItemCount()
     self:UpdatePlayerPowerType()
+    self:RefreshBloodBoilOverlayState()
     C_Timer.After(1, function()
         self:UpdatePlayerConfig()
         self.isInitialized = true

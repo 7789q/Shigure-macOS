@@ -7,7 +7,7 @@ Shigure for macOS 由四层组成：
 3. `Platforms/Shigure.Platform.Mac` 使用 CoreGraphics、ApplicationServices 和 macOS 进程/窗口 API 实现平台合同。
 4. `Apps/Shigure.MacUI` 通过 `Apps/Shigure.MacApp` 与 `Presentation` 组合业务能力和 Avalonia UI。
 
-`Fuyutsui/`、`FuyutsuiDiGuaBridge/`、`config/`、`keymap`、`wow_process.txt` 与 `BundledModules/` 随版本作为只读基线进入应用包。运行时会在 `~/Library/Application Support/Shigure/runtime` 建立可升级工作副本，并在 `~/Library/Application Support/Shigure/module` 管理用户模块；同一内置模块 ID 发现包内版本更高时先备份再自动升级，跨 ID 的历史模块仍需命中已知官方旧哈希才升级，同版本或更高版本的用户模块保留。
+`Fuyutsui/`、`FuyutsuiDiGuaBridge/`、`config/`、`keymap`、`wow_process.txt` 与 `BundledModules/` 随版本作为只读基线进入应用包。运行时会在 `~/Library/Application Support/Shigure/runtime` 建立可升级工作副本，并在 `~/Library/Application Support/Shigure/module` 管理用户模块；同一内置模块 ID 发现包内版本更高时先备份再自动升级，跨 ID 的历史模块仍需命中已知官方旧哈希才升级，同版本或更高版本的用户模块保留。用户也可以在 APP 设置中指定本地模块源目录；指定后 APP 启动时优先从该目录同步，同模块版本更高或同版本内容变化时先备份再原子替换，无需重新打包 APP。
 
 ## Fuyutsui 协议升级
 
@@ -23,7 +23,7 @@ Shigure for macOS 由四层组成：
 - 吸奶盾成功后最多保留 10 秒本地窗口；治疗吸收可读时，首次观察到正值后连续两个零值更新结束。若 WoW 将吸收值标记为受保护值，则保守保留到本地窗口超时。
 - AOE 诊断日志默认关闭，可用 `/fu aoedebug` 切换；日志记录事件 ID、Spell ID、`unitGUID`、`castGUID`、匹配、终态和结束原因。
 - 大秘境战斗中敌方 Spell ID 或施法时间受保护时，Fuyutsui 只把 0.5 秒内与新 DiGua 预警同帧出现的姓名板读条作为候选；剩余时间通过 DurationObject 色块交给 App 推导最后安全 GCD 和美德窗口。App 日志会区分原始读条、受保护字段和受保护匹配，并在协议失效或 `/reload` 后重新建立静默基线。
-- 组员职责像素为 `0` 同时表示死亡、不可协助、超距或暂时不在视野；动态治疗、驱散、人数和吸收统计必须排除这些槽位。玩家槽位使用独立自身生命值与队伍位置校正，避免组队像素暂时滞后。
+- 团队识别统一使用 `UnitInRaid("player")`：团本读取 `raid1..raidN`，小队读取 `player + party1..partyN`。协议固定按成员步长最多解析 30 个槽位；职责色块为 `0` 只表示死亡、不可协助或暂时不在视野，超距成员仍保留在团队统计中，距离状态单独保存。
 - 友方非玩家目标使用目标类型 `152`，供模块在队伍安全时单独治疗当前 NPC。
 - 用户职业配置和生成配置可以保留本地差异；若 `Fuyutsui/main.lua` 或协议核心 Lua 存在本地冲突，Mac UI 与命令行都会禁止插件同步和运行时启动，并报告具体路径，避免混用新旧协议。
 - Mac 快捷控件固定忽略游戏 UI 缩放，位置按默认缩放基准迁移；鼠标中键通过全局 `GLOBAL_MOUSE_UP` 切换无限爆发，不能在局部按钮事件中重复触发。

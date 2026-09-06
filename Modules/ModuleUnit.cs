@@ -60,7 +60,16 @@ public enum UnitSelectorKind
     HighestHealingAbsorbWithAuraCount,
 
     /// <summary>总治疗缺口高于阈值且缺口最高的存活单位。</summary>
-    HighestHealingDeficit
+    HighestHealingDeficit,
+
+    /// <summary>按预计需求取最高的存活单位。</summary>
+    HighestExpectedNeed,
+
+    /// <summary>按预计需求取最高且实际带美德道标的单位。</summary>
+    HighestExpectedNeedWithAura,
+
+    /// <summary>按预计需求取最高且未带美德道标的单位。</summary>
+    HighestExpectedNeedWithoutAura
 }
 
 /// <summary>最低生命值选择器使用的职责筛选方式。</summary>
@@ -148,11 +157,32 @@ public enum CountKind
     /// <summary>治疗负荷大于等于阈值的存活可用单位数。</summary>
     UnitsAtOrAboveHealingDeficit,
 
+    /// <summary>实际生命缺口大于等于阈值的存活可用单位数，不包含治疗吸收。</summary>
+    UnitsAtOrAboveHealthDeficit,
+
     /// <summary>全部存活可用单位的治疗负荷总和，单个单位封顶 100。</summary>
     TotalHealingDeficit,
 
     /// <summary>全部存活可用单位的实际生命缺口总和，不包含治疗吸收。</summary>
-    TotalHealthDeficit
+    TotalHealthDeficit,
+
+    /// <summary>预计需求达到阈值的存活可用单位数。</summary>
+    UnitsAtOrAboveExpectedNeed,
+
+    /// <summary>预计需求总和。</summary>
+    TotalExpectedNeed,
+
+    /// <summary>爆发需求达到阈值的存活可用单位数。</summary>
+    UnitsAtOrAboveBurstNeed,
+
+    /// <summary>爆发需求总和。</summary>
+    TotalBurstNeed,
+
+    /// <summary>持续需求达到阈值的存活可用单位数。</summary>
+    UnitsAtOrAboveSustainNeed,
+
+    /// <summary>持续需求总和。</summary>
+    TotalSustainNeed
 }
 
 /// <summary>

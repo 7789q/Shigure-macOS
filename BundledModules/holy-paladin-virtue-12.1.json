@@ -3,7 +3,7 @@
   "Name": "烈日奶骑大秘境-美德爆发 12.1",
   "Author": "Shigure",
   "RecommendedTalent": "CEEAzbn3egSOtoSwvPw1U1vTLAAAALAwMAAD2GzMzMjZmZBmZYZsZmFjmYYMzMMmtMAMAsB2YZmZmlZbmZ2aAAAAWAGsZgZMDzAAYmhZMGNA",
-  "Version": "1.2.1.23",
+  "Version": "1.2.1.25",
   "UnitMappingVersion": 3,
   "Enabled": true,
   "Match": { "ClassId": 2, "SpecId": 1 },
@@ -19,6 +19,8 @@
     { "Name": "重伤目标", "HealthName": "重伤目标血量", "Kind": "LowestHealth", "HealthThreshold": 70 },
     { "Name": "轻伤目标", "HealthName": "轻伤目标血量", "Kind": "LowestHealth", "HealthThreshold": 90 },
     { "Name": "治疗目标", "HealthName": "治疗目标血量", "Kind": "HighestHealingDeficit", "HealthThreshold": 0 },
+    { "Name": "最高预期需求目标", "HealthName": "最高预期需求", "Kind": "HighestExpectedNeed", "HealthThreshold": 0 },
+    { "Name": "最高预期美德目标", "HealthName": "最高预期美德目标血量", "Kind": "HighestExpectedNeedWithAura", "HealthThreshold": 0, "AuraNames": [ "美德道标" ] },
     { "Name": "驱散目标", "Kind": "UnitWithAnyDispelType" }
   ],
   "Counts": [
@@ -28,6 +30,10 @@
     { "Name": "D30AtLeast", "Kind": "UnitsAtOrAboveHealingDeficit", "HealthThreshold": 30 },
     { "Name": "DTotal", "Kind": "TotalHealingDeficit" },
     { "Name": "HTotal", "Kind": "TotalHealthDeficit" },
+    { "Name": "H30AtLeast", "Kind": "UnitsAtOrAboveHealthDeficit", "HealthThreshold": 30 },
+    { "Name": "Expected15AtLeast", "Kind": "UnitsAtOrAboveExpectedNeed", "HealthThreshold": 15 },
+    { "Name": "BurstNeedTotal", "Kind": "TotalBurstNeed" },
+    { "Name": "SustainNeedTotal", "Kind": "TotalSustainNeed" },
     { "Name": "H51", "Kind": "UnitsBelowHealth", "HealthThreshold": 51 },
     { "Name": "H70", "Kind": "UnitsBelowHealth", "HealthThreshold": 70 },
     { "Name": "H85", "Kind": "UnitsBelowHealth", "HealthThreshold": 85 },
@@ -40,6 +46,36 @@
       "Enabled": true,
       "Name": "真实群伤",
       "Condition": "H85 >= 3 && HTotal >= 50",
+      "HoldMs": 2000
+    },
+    {
+      "Enabled": true,
+      "Name": "多人爆发高压",
+      "Condition": "H30AtLeast >= 3 && HTotal >= 90",
+      "HoldMs": 2000
+    },
+    {
+      "Enabled": true,
+      "Name": "多人持续高压",
+      "Condition": "D15AtLeast >= 3 && DTotal >= 50",
+      "HoldMs": 2000
+    },
+    {
+      "Enabled": true,
+      "Name": "低压确认",
+      "Condition": "D15AtLeast <= 1 && DTotal < 15 && HTotal < 15 && AOE事件类型 == 0",
+      "HoldMs": 3000
+    },
+    {
+      "Enabled": true,
+      "Name": "多人爆发预测",
+      "Condition": "多人爆发需求 >= 90 && 预计治疗人数 >= 3",
+      "HoldMs": 1500
+    },
+    {
+      "Enabled": true,
+      "Name": "多人持续预测",
+      "Condition": "多人持续需求 >= 95 && 预计治疗人数 >= 3",
       "HoldMs": 2000
     }
   ],
@@ -97,15 +133,15 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal >= 30 && H85 >= 2 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+      "Condition": "预计治疗人数 >= 3 && 多人爆发预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 预计治疗人数 >= 3 && 多人持续预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
       "SubConditions": [ "AOE事件类型 != 2 && AOE事件阶段 == 0", "AOE事件类型 != 2 && AOE事件阶段 == 4", "AOE事件类型 == 2 && AOE事件阶段 == 1" ],
       "Unit": 1,
       "Spell": "美德道标",
-      "Comment": "实时群体治疗缺口开启美德；普通 AOE 的非执行阶段和吸奶盾阶段 1 均允许提前释放，不等待吸奶盾执行窗口"
+      "Comment": "按未来 1-2 个 GCD 和 9 秒窗口预测多人压力，至少 3 个目标有预期需求时开启美德；普通 AOE 与吸奶盾仍受原有可信事件门禁"
     },
     {
       "Enabled": true,
-      "Condition": "真实群伤 > 0 && DTotal >= 30 && H85 >= 2 && AOE事件类型 != 2 && auras.美德道标 > 0 && 战斗时间 > 0",
+      "Condition": "多人持续高压 > 0 && DTotal >= 30 && DTotal < 50 && H70 == 0 && AbsorbAny == 0 && AOE事件类型 != 2 && auras.美德道标 > 0 && 战斗时间 > 0",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "Unit": 0,
       "Spell": "黎明之光",
@@ -113,29 +149,29 @@
     },
     {
       "Enabled": true,
-      "Condition": "H70 == 0 && DTotal > 0 && auras.美德道标 > 0",
-      "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
-      "UnitName": "轻伤目标",
-      "Spell": "荣耀圣令",
-      "Comment": "美德窗口内当前仍有治疗缺口时，优先治疗真实血量最低的轻伤目标"
-    },
-    {
-      "Enabled": true,
-      "Condition": "D15AtLeast >= 3 && DTotal > 50 && auras.美德道标 > 0 && spells.圣洁鸣钟 == 0 && 战斗时间 > 0",
+      "Condition": "D15AtLeast >= 2 && DTotal > 50 && auras.美德道标 > 0 && spells.圣洁鸣钟 == 0 && 神圣能量 <= 3 && 战斗时间 > 0",
       "Unit": 0,
       "Spell": "圣洁鸣钟",
-      "Comment": "美德窗口内至少 3 人治疗缺口达到 15%，且当前总缺口大于 50 时使用圣洁鸣钟"
+      "Comment": "美德窗口内至少 2 人治疗缺口达到 15%，且当前总缺口大于 50 时使用圣洁鸣钟"
     },
     {
       "Enabled": true,
-      "Condition": "D30AtLeast >= 3 && DTotal >= 120 && H51 == 0 && auras.美德道标 > 0 && spells.光环掌握 == 0 && 战斗时间 > 0",
+      "Condition": "H70 == 0 && DTotal > 0 && 美德覆盖人数 >= 2 && 美德转移需求 >= 10 && auras.美德道标 > 0",
+      "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
+      "UnitName": "最高预期美德目标",
+      "Spell": "荣耀圣令",
+      "Comment": "美德窗口内按实际获得美德的目标和未来预期需求选择治疗，确保直接治疗产生真实转移收益"
+    },
+    {
+      "Enabled": true,
+      "Condition": "多人爆发高压 > 0 && H30AtLeast >= 3 && DTotal >= 110 && H51 == 0 && auras.美德道标 > 0 && spells.光环掌握 == 0 && 神圣能量 <= 3 && 战斗时间 > 0",
       "Unit": 0,
       "Spell": "光环掌握",
-      "Comment": "美德窗口内持续群体压力时补光环掌握"
+      "Comment": "美德窗口内至少 3 人真实生命缺口达到 30% 且总治疗缺口达到 110 时补光环掌握"
     },
     {
       "Enabled": true,
-      "Condition": "H70 == 0 && spells.清洁术 == 0",
+      "Condition": "H70 == 0 && 移动 == false && spells.清洁术 == 0",
       "UnitName": "驱散目标",
       "Spell": "清洁术",
       "Comment": "全员真实血量至少 70% 时，AOE 爆发链之后优先驱散"
@@ -196,14 +232,14 @@
     },
     {
       "Enabled": true,
-      "Condition": "重伤目标 && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28 || AbsorbAny > 0 && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "重伤目标 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28 || AbsorbAny > 0 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
       "Unit": 0,
       "Spell": "审判",
       "Comment": "重伤或治疗吸收且即时治疗不可用、没有灌注时用审判补充圣能；目标无效时不发送"
     },
     {
       "Enabled": true,
-      "Condition": "移动 == false && 重伤目标 && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
+      "Condition": "移动 == false && 重伤目标 && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
       "UnitName": "重伤目标",
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -211,7 +247,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "移动 == false && AbsorbAny > 0 && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
+      "Condition": "移动 == false && AbsorbAny > 0 && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
       "UnitName": "治疗目标",
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -263,7 +299,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
+      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
       "Unit": 32,
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -294,14 +330,14 @@
     },
     {
       "Enabled": true,
-      "Condition": "轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "移动 == true && 轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
       "Unit": 0,
       "Spell": "审判",
       "Comment": "轻伤时震击不可用且没有灌注时用审判补充圣能；有效目标覆盖普通 AOE 阶段"
     },
     {
       "Enabled": true,
-      "Condition": "轻伤目标 && 移动 == false && spells.神圣震击层数 == 0 && spells.审判 != 0 && auras.圣光灌注 == 0",
+      "Condition": "轻伤目标 && 移动 == false && AOE事件阶段 != 5 && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
       "UnitName": "轻伤目标",
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -325,7 +361,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5",
+      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 40",
       "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
       "Unit": 0,
       "Spell": "神圣震击",

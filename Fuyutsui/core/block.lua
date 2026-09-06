@@ -586,18 +586,54 @@ local function AuraBlockXOffset(index)
     return (index - 1) * BLOCK_FIX_CONFIG.blockWidth
 end
 
+local function GetFrameMethod(frame, method)
+    local ok, fn = pcall(function()
+        return frame and frame[method]
+    end)
+    if not ok or type(fn) ~= "function" then
+        return nil
+    end
+    return fn
+end
+
+local function SafeFrameCall(frame, method, ...)
+    local fn = GetFrameMethod(frame, method)
+    if not fn then return false end
+    local ok = pcall(fn, frame, ...)
+    return ok
+end
+
+local function SafeFrameValue(frame, method, ...)
+    local fn = GetFrameMethod(frame, method)
+    if not fn then return nil end
+    local ok, value = pcall(fn, frame, ...)
+    return ok and value or nil
+end
+
+local function SafeFrameCreate(frame, method, ...)
+    local fn = GetFrameMethod(frame, method)
+    if not fn then return nil end
+    local ok, value = pcall(fn, frame, ...)
+    return ok and value or nil
+end
+
 local function ConfigureAuraButtonMouse(button)
-    button:SetMouseMotionEnabled(AURA_ENABLE_MOUSE)
+    SafeFrameCall(button, "SetMouseMotionEnabled", AURA_ENABLE_MOUSE)
     if AURA_ENABLE_MOUSE then
-        button:SetHideTooltipInCombat(true)
+        SafeFrameCall(button, "SetHideTooltipInCombat", true)
     end
 end
 
 local function AnchorAuraPixelButton(button, index)
-    button:SetSize(AURA_BLOCK_W, AURA_BLOCK_H)
-    button:SetClipsChildren(true)
+    if not SafeFrameCall(button, "SetSize", AURA_BLOCK_W, AURA_BLOCK_H) then
+        return false
+    end
+    SafeFrameCall(button, "SetClipsChildren", true)
     ConfigureAuraButtonMouse(button)
-    button:SetPoint("TOPLEFT", UIParent, "TOPLEFT", AuraBlockXOffset(index), 0)
+    local ok = pcall(function()
+        button:SetPoint("TOPLEFT", UIParent, "TOPLEFT", AuraBlockXOffset(index), 0)
+    end)
+    return ok
 end
 
 --- 对齐 CreateTexture(i, b)：绿通道编码索引，蓝通道将不足 1 秒钳为 1，其余编码到 255
@@ -613,28 +649,34 @@ end
 
 --- 永久光环槽：整格底层 b=1（无 DurationText）
 local function SetupPermanentAuraPixel(button, index)
-    AnchorAuraPixelButton(button, index)
-    local bg = button:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(button)
+    if not AnchorAuraPixelButton(button, index) then return end
+    local bg = SafeFrameCreate(button, "CreateTexture", nil, "BACKGROUND")
+    if not bg then return end
+    SafeFrameCall(bg, "SetAllPoints", button)
     local r, g = EncodeBlockChannels(index)
-    bg:SetColorTexture(r, g, 1, 1)
+    SafeFrameCall(bg, "SetColorTexture", r, g, 1, 1)
 end
 
 --- 限时光环槽：底层 b=0，█ 用剩余时间曲线；叠在永久槽之上
 local function SetupTimedAuraDuration(button, index)
-    AnchorAuraPixelButton(button, index)
-    button:SetFrameLevel((button:GetFrameLevel() or 0) + 2)
+    if not AnchorAuraPixelButton(button, index) then return end
+    local frameLevel = SafeFrameValue(button, "GetFrameLevel")
+    if frameLevel then
+        SafeFrameCall(button, "SetFrameLevel", frameLevel + 2)
+    end
 
-    local bg = button:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(button)
+    local bg = SafeFrameCreate(button, "CreateTexture", nil, "BACKGROUND")
+    if not bg then return end
+    SafeFrameCall(bg, "SetAllPoints", button)
     local r, g = EncodeBlockChannels(index)
-    bg:SetColorTexture(r, g, 0, 1)
+    SafeFrameCall(bg, "SetColorTexture", r, g, 0, 1)
 
-    local duration = button:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    duration:SetPoint("CENTER", button, "CENTER", 0, 0)
-    duration:SetJustifyH("CENTER")
-    duration:SetJustifyV("MIDDLE")
-    button:SetDurationText(duration, {
+    local duration = SafeFrameCreate(button, "CreateFontString", nil, "ARTWORK", "GameFontNormal")
+    if not duration then return end
+    SafeFrameCall(duration, "SetPoint", "CENTER", button, "CENTER", 0, 0)
+    SafeFrameCall(duration, "SetJustifyH", "CENTER")
+    SafeFrameCall(duration, "SetJustifyV", "MIDDLE")
+    SafeFrameCall(button, "SetDurationText", duration, {
         textFormat = {
             formatString = AURA_DURATION_CHAR,
             components = {},
@@ -807,17 +849,20 @@ local function MakeDispelColorMap(index)
 end
 
 local function SetupDispelTypePixel(button, index, showWhenHarmful, showWhenHelpful)
-    button:SetSize(AURA_BLOCK_W, AURA_BLOCK_H)
-    button:SetClipsChildren(true)
+    if not SafeFrameCall(button, "SetSize", AURA_BLOCK_W, AURA_BLOCK_H) then
+        return
+    end
+    SafeFrameCall(button, "SetClipsChildren", true)
     ConfigureAuraButtonMouse(button)
-    button:SetPoint("TOPLEFT", UIParent, "TOPLEFT", AuraBlockXOffset(index), 0)
+    SafeFrameCall(button, "SetPoint", "TOPLEFT", UIParent, "TOPLEFT", AuraBlockXOffset(index), 0)
 
-    local tex = button:CreateTexture(nil, "ARTWORK")
-    tex:SetAllPoints(button)
-    tex:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
-    tex:SetVertexColor(1, 1, 1, 1)
+    local tex = SafeFrameCreate(button, "CreateTexture", nil, "ARTWORK")
+    if not tex then return end
+    SafeFrameCall(tex, "SetAllPoints", button)
+    SafeFrameCall(tex, "SetTexture", "Interface\\ChatFrame\\ChatFrameBackground")
+    SafeFrameCall(tex, "SetVertexColor", 1, 1, 1, 1)
 
-    button:AddDispelTypeTexture(tex, {
+    SafeFrameCall(button, "AddDispelTypeTexture", tex, {
         showWhenHarmful = showWhenHarmful ~= false,
         showWhenHelpful = showWhenHelpful == true,
         showWithoutDispelType = false,
@@ -834,22 +879,32 @@ end
 
 --- 层数条：与计数条同一套坐标/背景编码，StatusBar 由 AuraContainer 驱动
 local function AnchorApplicationBarButton(button, maxApps, startIndex)
-    button:SetSize(maxApps * BAR_CONFIG.width, BAR_CONFIG.height)
+    if not SafeFrameCall(button, "SetSize", maxApps * BAR_CONFIG.width, BAR_CONFIG.height) then
+        return false
+    end
     ConfigureAuraButtonMouse(button)
     -- 右移 1px，避免白色填充未完全盖住背后背景色
-    button:ClearAllPoints()
-    button:SetPoint("TOPLEFT", countBars, "TOPLEFT", (startIndex - 1) * BAR_CONFIG.width + 1, 0)
+    SafeFrameCall(button, "ClearAllPoints")
+    SafeFrameCall(button, "SetPoint", "TOPLEFT", countBars, "TOPLEFT", (startIndex - 1) * BAR_CONFIG.width + 1, 0)
+    return true
 end
 
 local function SetupApplicationBarOnly(button, maxApps, startIndex)
-    AnchorApplicationBarButton(button, maxApps, startIndex)
+    if not AnchorApplicationBarButton(button, maxApps, startIndex) then
+        return
+    end
 
-    local bar = CreateFrame("StatusBar", nil, button)
-    bar:SetAllPoints(button)
-    StyleHorizontalStatusBar(bar)
-    bar:SetFrameLevel((button:GetFrameLevel() or 0) + 1)
+    local ok, bar = pcall(CreateFrame, "StatusBar", nil, button)
+    if not ok or not bar then return end
+    SafeFrameCall(bar, "SetAllPoints", button)
+    local styled = pcall(StyleHorizontalStatusBar, bar)
+    if not styled then return end
+    local frameLevel = SafeFrameValue(button, "GetFrameLevel")
+    if frameLevel then
+        SafeFrameCall(bar, "SetFrameLevel", frameLevel + 1)
+    end
 
-    button:SetApplicationBar(bar, {
+    SafeFrameCall(button, "SetApplicationBar", bar, {
         maxApplications = maxApps,
     })
 end

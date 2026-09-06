@@ -70,6 +70,8 @@ function Fuyutsui:PLAYER_REGEN_DISABLED()
     self:MacroTrace("PLAYER_REGEN_DISABLED：进入战斗，macrosPending=%s", tostring(self.macrosPending))
     self:UpdateTargetCanAttack()
     self:ResetBloodBoilCycleCount()
+    self:ResetBloodBoilAutomation()
+    self:ResetDeathbringerBurstWindow()
     state.combat = true
     state.combatStartTime = GetTime()
     self:UpdatePlayerCombatTime()
@@ -79,6 +81,8 @@ function Fuyutsui:PLAYER_REGEN_ENABLED()
     self:MacroTrace("PLAYER_REGEN_ENABLED：脱离战斗，macrosPending=%s", tostring(self.macrosPending))
     self:UpdateTargetCanAttack()
     self:ResetBloodBoilCycleCount()
+    self:ResetBloodBoilAutomation()
+    self:ResetDeathbringerBurstWindow()
     state.combat = false
     self:UpdatePlayerCombatTime()
     if self.macrosPending then
@@ -240,8 +244,22 @@ function Fuyutsui:UNIT_SPELLCAST_SUCCEEDED(_, unitTarget, castGUID, spellID, cas
         self:FinishAOEEnemyCast(unitTarget, castGUID, spellID, "succeeded")
     end
     if unitTarget ~= "player" then return end
+    self:ConfirmBloodBoilSpellcast(spellID)
     self:PublishPlayerAction(spellID, 2)
+    self:UpdateSpellCooldown()
     if isSec(spellID) then return end
+    if spellID == 200025 then
+        local targetUnit = state.castTargetUnit
+        local targetData = targetUnit and self.group[targetUnit]
+        state.virtueMainTargetIndex = targetData and targetData.index or 0
+        self:UpdateStateBlock("状态", "美德主目标")
+        if self.UpdateHolyPaladinForecast then
+            self:UpdateHolyPaladinForecast()
+        end
+    end
+    if self.IsDeathbringerBurstSpell and self:IsDeathbringerBurstSpell(spellID) then
+        self:MarkDeathbringerBurstWindow()
+    end
     if self.ConfirmAOEVirtue then
         self:ConfirmAOEVirtue(spellID)
     end
@@ -260,6 +278,14 @@ function Fuyutsui:UNIT_SPELLCAST_SUCCEEDED(_, unitTarget, castGUID, spellID, cas
             self:UpdatePlayerSpecInfo()
         end)
     end
+end
+
+function Fuyutsui:SPELL_ACTIVATION_OVERLAY_GLOW_SHOW(_, spellID)
+    self:HandleBloodBoilOverlay(true, spellID)
+end
+
+function Fuyutsui:SPELL_ACTIVATION_OVERLAY_GLOW_HIDE(_, spellID)
+    self:HandleBloodBoilOverlay(false, spellID)
 end
 
 function Fuyutsui:SPELL_UPDATE_COOLDOWN(_, spellID, baseSpellID)
@@ -306,6 +332,7 @@ function Fuyutsui:UNIT_HEALTH(_, unit)
         self:UpdatePlayerStagger()
     end
     if unit == "target" then
+        self:UpdateTargetDeath()
         self:UpdateTargetHealth()
     end
     if unit == "focus" then
@@ -322,12 +349,21 @@ function Fuyutsui:UNIT_HEALTH(_, unit)
     end
 end
 
+function Fuyutsui:UNIT_FLAGS(_, unit)
+    if unit == "target" then
+        self:UpdateTargetDeath()
+    end
+end
+
 function Fuyutsui:UNIT_MAXHEALTH(_, unit)
     if unit == "player" then
         self:UpdatePlayerHealth()
     end
     if unit == "mouseover" then
         self:UpdateMouseoverHealth()
+    end
+    if unit == "target" then
+        self:UpdateTargetDeath()
     end
     if unit and unit:match("^boss[1-5]$") then
         self:UpdateUnitHealthBlock(unit)
@@ -408,6 +444,11 @@ end
 
 function Fuyutsui:UNIT_DIED(_, unitGUID)
     if not isSec(unitGUID) then
+        if target and target.guid == unitGUID then
+            self:UpdateTargetDeath()
+        elseif UnitGUID("target") == unitGUID then
+            self:UpdateTargetDeath()
+        end
         self:UpdateUnitDeath(unitGUID, "guid")
         if self.CancelAOEEventsForUnitGUID then
             self:CancelAOEEventsForUnitGUID(unitGUID)
@@ -451,6 +492,10 @@ end
 function Fuyutsui:PLAYER_FOCUS_CHANGED()
     self:UpdateFocusFullInfo()
     self:UpdateUnitAuraContainer("focus")
+end
+
+function Fuyutsui:UNIT_AURA(_, unitTarget)
+    -- 沸点光环仍由职业光环容器记录；血沸自动链改由技能高亮事件驱动。
 end
 
 function Fuyutsui:UPDATE_MOUSEOVER_UNIT()
@@ -557,6 +602,7 @@ function Fuyutsui:OnUpdate(elapsed)
     if self.UpdateAOEWarningState then
         self:UpdateAOEWarningState()
     end
+    self:UpdateBloodBoilAutomationState()
     self:UpdatePlayerCastBlocks()
     self:UpdatePlayerStationaryDuration()
     self:UpdateUnitCastingOrChannelingInfo("target")
@@ -566,6 +612,9 @@ function Fuyutsui:OnUpdate(elapsed)
         self:UpdateUnitCastingOrChannelingInfo("boss" .. index)
     end
     self:UpdateGroupInRangeAndHealth()
+    if self.UpdateHolyPaladinForecast then
+        self:UpdateHolyPaladinForecast()
+    end
     self:UpdateStateBlock("状态", "公共冷却剩余")
 
     self.timeElapsed = self.timeElapsed + elapsed
@@ -575,6 +624,7 @@ function Fuyutsui:OnUpdate(elapsed)
         self:UpdatePlayerAssistant()
         self:UpdateRune()
         self:UpdateTargetRangeBlock()
+        self:UpdateTargetDeath()
         self:UpdateFocusRangeBlock()
         self:UpdateMouseoverRangeBlock()
 

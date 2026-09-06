@@ -546,6 +546,32 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             }
         }
 
+        if (snapshot.State is not null
+            && snapshot.ClassId == 2
+            && snapshot.SpecId == 1)
+        {
+            var forecastFields = new (string Key, string Label)[]
+            {
+                ("AOE事件类型", "压力事件类型"),
+                ("AOE事件阶段", "压力事件阶段"),
+                ("单目标需求", "单目标需求"),
+                ("多人爆发需求", "多人爆发需求"),
+                ("多人持续需求", "多人持续需求"),
+                ("预计治疗人数", "预计治疗人数"),
+                ("美德主目标", "美德主目标"),
+                ("美德覆盖人数", "美德覆盖人数"),
+                ("美德转移需求", "美德转移需求"),
+                ("美德覆盖溢出", "美德覆盖溢出")
+            };
+            foreach (var (key, label) in forecastFields)
+            {
+                if (snapshot.State.GetValue(key) is { } value)
+                {
+                    details.Add($"{label}: {RuntimeMonitorProjection.FormatValue(value)}");
+                }
+            }
+        }
+
         return details.Count == 0 ? string.Empty : $"，{string.Join("，", details)}";
     }
 

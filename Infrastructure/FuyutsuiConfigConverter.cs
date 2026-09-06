@@ -23,7 +23,7 @@ public static class FuyutsuiConfigConverter
 
     private static readonly HashSet<string> BoolFieldNames = new(StringComparer.Ordinal)
     {
-        "锚点", "有效性", "移动", "DiGua桥接就绪", "AOE受保护读条", "圣洁鸣钟预计可用"
+        "锚点", "有效性", "移动", "死亡", "血沸自动链", "血沸高亮", "DiGua桥接就绪", "AOE受保护读条", "圣洁鸣钟预计可用"
     };
 
     private static readonly string[] StateCategoryOrder =
@@ -369,6 +369,9 @@ public static class FuyutsuiConfigConverter
             AddGroupOffset(groupJson, group.GetNumber("healthPercent"), "生命值");
             AddGroupOffset(groupJson, group.GetNumber("role"), "职责");
             AddGroupOffset(groupJson, group.GetNumber("dispel"), "驱散");
+            AddGroupOffset(groupJson, group.GetNumber("expectedNeed"), "预期需求");
+            AddGroupOffset(groupJson, group.GetNumber("burstNeed"), "爆发需求");
+            AddGroupOffset(groupJson, group.GetNumber("sustainNeed"), "持续需求");
 
             if (group.GetTable("aura") is { } auraOffsets)
             {
@@ -467,7 +470,10 @@ public static class FuyutsuiConfigConverter
             return;
         }
 
-        result[name] = Field(step, BoolFieldNames.Contains(name) ? "bool" : "int", classification);
+        result[name] = Field(
+            step,
+            BoolFieldNames.Contains(name) || name.EndsWith("死亡", StringComparison.Ordinal) ? "bool" : "int",
+            classification);
     }
 
     private static void AddGroupOffset(JsonObject groupJson, double? offset, string name)

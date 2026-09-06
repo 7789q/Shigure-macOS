@@ -6,7 +6,19 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 当前版本的用户可见变化见 [更新日志](CHANGELOG.md)。
 
-血DK死亡使者模块的实施范围、插件与运行时边界、阶段计划和实战反馈模板见[实施与维护计划](Documentation/blood-deathbringer-12.1-implementation-plan.md)。
+## 文档导航
+
+- 使用、构建和权限：本文档。
+- macOS 架构与发行边界：[Documentation/macOS/README.md](Documentation/macOS/README.md)。
+- 版本变化：[CHANGELOG.md](CHANGELOG.md)。
+- 模块与协议实现：[Documentation/](Documentation/)。
+
+## 快速开始
+
+1. 确认 macOS 13+、`.NET 10 SDK` 和 Xcode Command Line Tools 已安装。
+2. 在“系统设置 → 隐私与安全性”中，为实际运行的 Shigure 应用授予屏幕录制和辅助功能权限。
+3. 启动应用，按提示同步游戏插件；同步完成后在 WoW 中执行一次 `/reload`。
+4. 首次构建或权限主体变化时，按[本地构建](#本地构建)流程生成并启动固定路径的应用。
 
 ## 主要功能
 
@@ -22,21 +34,9 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 - 长时间运行日志使用虚拟化逐行显示，保留最近 2000 行及完整复制能力。
 - 独立的 macOS 数据目录、窗口状态、诊断、签名、公证和 Sparkle 更新流程。
 
-## Fuyutsui 1.2.1.15 同步内容
+## Fuyutsui 同步
 
-- 同步新版像素协议：施法状态拆分为正计时与倒计时，时间编码调整为 `1 秒 = 10`，并增加鼠标指向、首领 1-5 等单位状态。
-- 自动迁移工作副本中的旧 `施法` 字段并重新生成职业配置；协议核心文件存在本地冲突时会阻止同步和运行，避免新旧协议混用。
-- 补齐模块依赖的法术合并、规则备注和新增单位选择器，并在 Mac 模块编辑器中提供对应字段。
-- 圣骑士治疗宏使用安全的技能选择键与共享目标键序列；路由模式随模块依赖保存并参与冲突检查。
-- 治疗吸收使用独立像素条传输，不覆盖真实生命值；Retina 缩放下按物理像素对齐解码。
-- 键盘与鼠标侧键同时使用实时按下状态和短按脉冲，减少点击落在扫描间隔之间而漏触发的情况。
-- 保留 Mac 专属行为：快捷控件固定忽略 WoW UI 缩放，全局鼠标中键继续切换无限爆发。
-- 奶骑增加 DiGua 桥接握手、玩家动作确认和真实 GCD 剩余字段；桥接由既有 Fuyutsui 本体加载，运行时只在握手成功后发键，并以 WoW 施法事件确认动作。
-- 奶骑模块事实来源为 `BundledModules/holy-paladin-virtue-12.1.json`（当前 `1.2.1.22`、41 条规则）。玩家低于 30% 时先圣盾术，再进入圣疗和治疗链；非玩家队友低于 40% 时，在玩家高于 95% 或圣盾术剩余超过 6 秒的条件下优先施放牺牲祝福。治疗石优先于浓缩银月城生命药水，且圣盾术可用或已激活时两者都不消耗。正义盾击只对 5 码内的当前敌对目标释放，不依赖副本内受限的正面 API。真实群伤要求至少 3 人低于 85% 且总生命缺口至少 50，并保持 2 秒；无美德黎明之光使用严格 H95 边界。美德窗口内技能按当前优先级逐级判断，不再依赖单独的“群疗爆发保持”状态。圣洁鸣钟要求至少 3 人治疗缺口达到 15% 且当前总缺口大于 50，光环掌握要求至少 3 人达到 30% 且总缺口至少 120。轻伤阈值为 90%，灌注和神圣震击不可用时由 3 圣能或神圣意志荣耀圣令兜底；重伤和治疗吸收分支分别选择对应的最低血量/最高治疗缺口目标。脱战灌注转换使用圣光闪现，AOE 日志同时记录“鸣钟预计可用”状态。
-- 奶骑动作确认按技能建立单飞行窗口：同一技能在确认期间不能换目标或重复发送，首次明确失败使用短重试退避，确认成功后保留短暂重复保护；审判发送前要求有效敌对目标在 28 码内，只有神圣震击、审判和灌注条件都不可用时才允许裸读圣光术兜底。
-- 吸奶盾美德优先按匹配真实读条的实际结束时点加 2 秒进入执行窗口；受保护字段使真实时点不可用时，回退到 DiGua 实时姓名板信号的 `11.7 秒倒计时 + 2 秒后置延迟`。执行前的最后 GCD 由运行时统一保护，避免普通技能占用美德时点；实现约束与回归验收见[美德道标与吸奶盾现役实现](Documentation/holy-paladin-virtue-implementation.md)。
-
-升级后应确认 Shigure 日志显示“游戏插件已同步”，并按应用提示执行一次 `/reload`。桥接已经内置于 Fuyutsui，不依赖 WoW 在启动时发现新的插件目录；如果启动 Shigure 时 WoW 尚未运行，启动运行时前会再次同步。旧模块中依赖原施法时间尺度的阈值仍需人工复核。
+当前基线为 Fuyutsui 1.2.1.15。应用会迁移工作副本、生成配置并检查协议冲突；协议、模块和奶骑美德的详细变更见[架构与发行说明](Documentation/macOS/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
 
 ## 环境要求
 
@@ -64,12 +64,6 @@ SHIGURE_RUNTIME_IDENTIFIER=osx-arm64 Packaging/macOS/build-app.sh artifacts/maco
 SHIGURE_RUNTIME_IDENTIFIER=osx-x64 Packaging/macOS/build-app.sh artifacts/macos/Shigure-x64.app
 ```
 
-首次运行签名身份脚本后，证书指纹会固定在 `~/Library/Application Support/Shigure/local-signing-identity.sha1`。后续打包若发现证书丢失、替换或存在多个同名身份会直接停止，且正式打包入口拒绝 ad-hoc 签名，避免静默更换 TCC 主体。日常使用应始终替换并启动 `/Applications/Shigure.app`，不要从不同名称的临时候选包运行。
-
-本地 TCC 主体由签名证书根和 designated requirement 共同决定：外层应用与 `Shigure.MacUI` 使用 `com.arasaka.shigure.mac`，运行时子进程 `Shigure.MacApp` 必须保持 `Identifier=Shigure`。`build-app.sh` 会为三者固定证书根、拒绝 `cdhash` 绑定并在打包末尾验证嵌套签名；不要把运行时标识改成 Bundle ID，也不要用临时或 ad-hoc 签名替代固定身份。
-
-本地签名身份不是 Apple Developer ID，不能替代正式分发签名和公证。`Packaging/macOS/` 中的发行脚本不会保存 Apple 密码、私钥或公证凭据；这些信息必须由钥匙串和显式环境变量提供。
-
 ## 构建与测试
 
 ```bash
@@ -81,8 +75,6 @@ dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --r
 bash -n Packaging/macOS/*.sh
 ```
 
-生成应用后，应确认签名主体和嵌套运行时仍符合上述合同：
-
 ```bash
 codesign --verify --deep --strict artifacts/macos/Shigure.app
 codesign --display --requirements - artifacts/macos/Shigure.app
@@ -91,13 +83,11 @@ codesign --display --verbose=4 artifacts/macos/Shigure.app/Contents/MacOS/Shigur
 
 ## 数据位置
 
-版本内置的 `Fuyutsui/FuyutsuiDiGuaBridge/config/keymap/wow_process.txt` 只作为只读基线。首次运行会将工作副本初始化到：
-
 ```text
-~/Library/Application Support/Shigure/runtime
+artifacts/macos/*.app
+~/Library/Application Support/Shigure/logs/runtime-detailed.log
+~/Library/Application Support/Shigure/logs/runtime-ui-errors.log
 ```
-
-模块、日志和界面状态位于同一 `Application Support/Shigure` 数据根。启动时 APP 从包内 `BundledModules/` 补装模块；同一内置模块 ID 发现包内版本更高时会先备份再自动升级，跨 ID 的历史模块仍需命中已知官方旧哈希才升级，同版本或更高版本的用户模块保留。仓库中的 `module/`、`cache/`、日志、屏幕导出、签名材料和构建产物均被忽略，不应提交。
 
 ## 目录结构
 
@@ -108,7 +98,7 @@ Platforms/                    平台抽象与 macOS 原生实现
 Presentation/                 UI 无关的会话与展示投影
 App/ Infrastructure/         Core 编译使用的共享源文件
 Input/ Modules/ Runtime/      Keymap、模块规则和运行时共享源文件
-Fuyutsui/ FuyutsuiDiGuaBridge/ config/ keymap/  插件权威源、DiGua 兼容桥及生成数据
+Fuyutsui/ FuyutsuiDiGuaBridge/ config/ keymap/ 插件权威源、DiGua 兼容桥及生成数据
 Packaging/macOS/              构建、签名、公证和发布脚本
 Tests/                        macOS 与共享核心契约测试
 Tools/Shigure.MacDiagnostics/ 低副作用诊断入口

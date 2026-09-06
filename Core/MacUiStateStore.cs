@@ -31,6 +31,7 @@ public sealed class MacUiState
     public MacUiBounds? VerticalOverlayBounds { get; set; }
     public string TriggerKey { get; set; } = "XBUTTON2";
     public SendMode SendMode { get; set; } = SendMode.Switch;
+    public string? LocalModuleSourceDirectory { get; set; }
 }
 
 public sealed record MacUiStateLoadResult(MacUiState State, string? Warning);
@@ -124,7 +125,8 @@ public sealed class MacUiStateStore
             HorizontalOverlayBounds = NormalizeBounds(state.HorizontalOverlayBounds),
             VerticalOverlayBounds = NormalizeBounds(state.VerticalOverlayBounds),
             TriggerKey = NormalizeTriggerKey(state.TriggerKey),
-            SendMode = Enum.IsDefined(state.SendMode) ? state.SendMode : SendMode.Switch
+            SendMode = Enum.IsDefined(state.SendMode) ? state.SendMode : SendMode.Switch,
+            LocalModuleSourceDirectory = NormalizeDirectoryPath(state.LocalModuleSourceDirectory)
         };
     }
 
@@ -161,5 +163,27 @@ public sealed class MacUiStateStore
     {
         var value = triggerKey?.Trim();
         return !string.IsNullOrEmpty(value) && value.Length <= 64 ? value : "XBUTTON2";
+    }
+
+    private static string? NormalizeDirectoryPath(string? path)
+    {
+        var value = path?.Trim();
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 4096)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.GetFullPath(value);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
     }
 }

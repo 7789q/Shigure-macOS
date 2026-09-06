@@ -6,6 +6,7 @@ namespace Shigure;
 /// - 只考虑职责 != 0 的可用单位，玩家槽位由独立玩家状态校正;
 /// - 生命值 0 视为死亡跳过;
 /// - 阈值表示只考虑 0 &lt; 生命值 &lt; 阈值;
+/// - 实际生命缺口计数使用生命缺口 &gt;= 阈值，治疗吸收不计入该人数;
 /// - 按 "1".."30" 升序遍历, 保证首/末语义稳定。
 /// </summary>
 public static class UnitSelector
@@ -102,6 +103,25 @@ public static class UnitSelector
                 group,
                 threshold,
                 data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role)),
+            UnitSelectorKind.HighestExpectedNeed => HighestForecastNeed(
+                group,
+                threshold,
+                "预期需求",
+                data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role)),
+            UnitSelectorKind.HighestExpectedNeedWithAura => aura is null
+                ? null
+                : HighestForecastNeed(
+                    group,
+                    threshold,
+                    "预期需求",
+                    data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role) && HasAura(data, aura)),
+            UnitSelectorKind.HighestExpectedNeedWithoutAura => aura is null
+                ? null
+                : HighestForecastNeed(
+                    group,
+                    threshold,
+                    "预期需求",
+                    data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role) && !HasAura(data, aura)),
             _ => null
         };
     }
@@ -152,8 +172,17 @@ public static class UnitSelector
             CountKind.UnitsAtOrAboveHealingDeficit => CountUnits(
                 group,
                 data => TryHealingLoad(data, out var load) && load >= threshold),
+            CountKind.UnitsAtOrAboveHealthDeficit => CountUnits(
+                group,
+                data => TryHealthDeficit(data, out var deficit) && deficit >= threshold),
             CountKind.TotalHealingDeficit => SumHealingLoad(group),
             CountKind.TotalHealthDeficit => SumHealthDeficit(group),
+            CountKind.UnitsAtOrAboveExpectedNeed => CountForecastUnits(group, "预期需求", threshold),
+            CountKind.TotalExpectedNeed => SumForecastNeed(group, "预期需求"),
+            CountKind.UnitsAtOrAboveBurstNeed => CountForecastUnits(group, "爆发需求", threshold),
+            CountKind.TotalBurstNeed => SumForecastNeed(group, "爆发需求"),
+            CountKind.UnitsAtOrAboveSustainNeed => CountForecastUnits(group, "持续需求", threshold),
+            CountKind.TotalSustainNeed => SumForecastNeed(group, "持续需求"),
             _ => 0
         };
     }
@@ -399,6 +428,67 @@ public static class UnitSelector
         return bestUnit;
     }
 
+    private static string? HighestForecastNeed(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group,
+        int threshold,
+        string field,
+        Func<IReadOnlyDictionary<string, object?>, bool> predicate)
+    {
+        string? bestUnit = null;
+        var highestNeed = threshold;
+        for (var i = 1; i <= 30; i++)
+        {
+            var key = i.ToString();
+            if (!group.TryGetValue(key, out var data)
+                || !RoleNotZero(data)
+                || !predicate(data)
+                || !TryInt(GetField(data, "生命值"), out var health)
+                || health <= 0
+                || !TryInt(GetField(data, field), out var need)
+                || need <= highestNeed)
+            {
+                continue;
+            }
+
+            bestUnit = key;
+            highestNeed = need;
+        }
+
+        return bestUnit;
+    }
+
+    private static int CountForecastUnits(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group,
+        string field,
+        int threshold)
+    {
+        return CountUnits(group, data =>
+            TryInt(GetField(data, "生命值"), out var health)
+            && health > 0
+            && TryInt(GetField(data, field), out var need)
+            && need >= threshold);
+    }
+
+    private static int SumForecastNeed(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group,
+        string field)
+    {
+        var total = 0;
+        for (var i = 1; i <= 30; i++)
+        {
+            if (group.TryGetValue(i.ToString(), out var data)
+                && RoleNotZero(data)
+                && TryInt(GetField(data, "生命值"), out var health)
+                && health > 0
+                && TryInt(GetField(data, field), out var need))
+            {
+                total += Math.Max(0, need);
+            }
+        }
+
+        return total;
+    }
+
     /// <summary>统计可用且满足 predicate 的单位数量。</summary>
     private static int CountUnits(
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group,
@@ -444,6 +534,20 @@ public static class UnitSelector
         return true;
     }
 
+    private static bool TryHealthDeficit(
+        IReadOnlyDictionary<string, object?> data,
+        out int deficit)
+    {
+        deficit = 0;
+        if (!TryInt(GetField(data, "生命值"), out var health) || health <= 0)
+        {
+            return false;
+        }
+
+        deficit = Math.Max(0, 100 - health);
+        return true;
+    }
+
     private static bool TryHealingLoad(
         IReadOnlyDictionary<string, object?> data,
         out int load)
@@ -483,10 +587,9 @@ public static class UnitSelector
         {
             if (group.TryGetValue(i.ToString(), out var data)
                 && RoleNotZero(data)
-                && TryInt(GetField(data, "生命值"), out var health)
-                && health > 0)
+                && TryHealthDeficit(data, out var deficit))
             {
-                total += Math.Max(0, 100 - health);
+                total += deficit;
             }
         }
 
@@ -578,7 +681,10 @@ public static class UnitSelector
             or UnitSelectorKind.HighestHealingAbsorbWithoutAura
             or UnitSelectorKind.HighestHealingAbsorbWithAura
             or UnitSelectorKind.HighestHealingAbsorbWithAuraCount
-            or UnitSelectorKind.HighestHealingDeficit;
+            or UnitSelectorKind.HighestHealingDeficit
+            or UnitSelectorKind.HighestExpectedNeed
+            or UnitSelectorKind.HighestExpectedNeedWithAura
+            or UnitSelectorKind.HighestExpectedNeedWithoutAura;
 
     private static bool UsesZeroDefaultThreshold(CountKind kind)
         => kind is CountKind.UnitsAboveHealingAbsorb
@@ -586,8 +692,15 @@ public static class UnitSelector
             or CountKind.UnitsWithAuraAboveHealingAbsorb
             or CountKind.UnitsAboveHealingDeficit
             or CountKind.UnitsAtOrAboveHealingDeficit
+            or CountKind.UnitsAtOrAboveHealthDeficit
             or CountKind.TotalHealingDeficit
-            or CountKind.TotalHealthDeficit;
+            or CountKind.TotalHealthDeficit
+            or CountKind.UnitsAtOrAboveExpectedNeed
+            or CountKind.TotalExpectedNeed
+            or CountKind.UnitsAtOrAboveBurstNeed
+            or CountKind.TotalBurstNeed
+            or CountKind.UnitsAtOrAboveSustainNeed
+            or CountKind.TotalSustainNeed;
 
     private static bool AuraEquals(IReadOnlyDictionary<string, object?> data, string auraName, int target)
     {

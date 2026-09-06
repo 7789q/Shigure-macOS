@@ -19,12 +19,18 @@ public sealed class RuntimeResourceWorkspaceService
             ["Fuyutsui/class/DeathKnight.lua"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 // 用户运行目录中的旧血 DK 职业表：缺少动作确认、心打循环和血色之地字段。
-                "afd78d333fe811574ceee27b56bb5ec3a808acb7f10fd11a0cc68c464d6c4849"
+                "afd78d333fe811574ceee27b56bb5ec3a808acb7f10fd11a0cc68c464d6c4849",
+                // 1.2.1.47 已更新 manifest，但旧职业表实际仍未落盘；允许本次协议资源修复。
+                "6d31ab0b3dffb095de7971b3341d1f966d2a3d2da5c6dbf964acdf07732566ca",
+                // 当前运行副本缺少目标死亡状态块，导致血 DK 目标技能条件读到“实际 缺失”。
+                "5afeb5d6170652eaa8ea4fa748d643241969cceb4c5a32f4b02cfbfc74773f59"
             }
         };
     private static readonly string[] HolyPaladinRuntimeStates =
     [
         "公共冷却剩余",
+        "AOE吸奶盾锚点",
+        "AOE吸奶盾预计剩余",
         "DiGua桥接就绪",
         "宏绑定状态",
         "宏绑定数量",

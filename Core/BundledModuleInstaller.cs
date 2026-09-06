@@ -109,7 +109,10 @@ public sealed class BundledModuleInstaller
             }
         };
 
-    public BundledModuleInstallResult Install(string sourceDirectory, string targetDirectory)
+    public BundledModuleInstallResult Install(
+        string sourceDirectory,
+        string targetDirectory,
+        bool sourceIsAuthoritative = false)
     {
         if (!Directory.Exists(sourceDirectory))
         {
@@ -130,6 +133,7 @@ public sealed class BundledModuleInstaller
             {
                 var json = File.ReadAllText(sourcePath, Encoding.UTF8);
                 var module = ModuleStore.Parse(Encoding.UTF8.GetBytes(json));
+                var sourceHash = ComputeHash(sourcePath);
                 if (string.IsNullOrWhiteSpace(module.Id))
                 {
                     throw new InvalidDataException("内置模块缺少 ID。");
@@ -140,7 +144,7 @@ public sealed class BundledModuleInstaller
                     || string.Equals(candidate.Module.Name, module.Name, StringComparison.CurrentCultureIgnoreCase));
                 if (existing is not null)
                 {
-                    if (CanUpgrade(module, existing))
+                    if (CanUpgrade(module, existing, sourceHash, sourceIsAuthoritative))
                     {
                         Backup(targetDirectory, existing);
                         AtomicFile.WriteAllText(existing.FilePath, json,
@@ -186,9 +190,27 @@ public sealed class BundledModuleInstaller
         return identityMatches && IsKnownUpgradeableHash(sourceModuleId, hash);
     }
 
-    private static bool CanUpgrade(ModuleDefinition source, InstalledModule existing) =>
+    private static bool CanUpgrade(
+        ModuleDefinition source,
+        InstalledModule existing,
+        string sourceHash,
+        bool sourceIsAuthoritative) =>
         IsKnownUpgradeableModule(source.Id, existing.Module.Id, existing.Hash)
-        || IsNewerBundledVersion(source, existing.Module);
+        || IsNewerBundledVersion(source, existing.Module)
+        || sourceIsAuthoritative
+            && string.Equals(source.Id, existing.Module.Id, StringComparison.OrdinalIgnoreCase)
+            && IsSameOrNewerVersionWithDifferentContent(source, existing, sourceHash);
+
+    private static bool IsSameOrNewerVersionWithDifferentContent(
+        ModuleDefinition source,
+        InstalledModule existing,
+        string sourceHash)
+    {
+        return Version.TryParse(source.Version, out var sourceVersion)
+            && Version.TryParse(existing.Module.Version, out var existingVersion)
+            && sourceVersion >= existingVersion
+            && !string.Equals(sourceHash, existing.Hash, StringComparison.OrdinalIgnoreCase);
+    }
 
     internal static bool IsNewerBundledVersion(ModuleDefinition source, ModuleDefinition existing)
     {

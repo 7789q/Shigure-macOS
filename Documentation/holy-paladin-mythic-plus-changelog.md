@@ -2,11 +2,15 @@
 
 ## 文档定位
 
-本文只记录奶骑模块、DiGua/Fuyutsui 桥接、运行时和交付流程的历史变更，不承载现行需求、优先级规则或验收标准。
+本文只记录奶骑模块、DiGua/Fuyutsui 桥接、运行时和交付流程的历史变更，不承载当前治疗设计、优先级规则或验收标准。
 
-- 现行需求与验收：[`holy-paladin-mythic-plus-prd.md`](holy-paladin-mythic-plus-prd.md)
-- 实施步骤与门禁：[`holy-paladin-mythic-plus-implementation-plan.md`](holy-paladin-mythic-plus-implementation-plan.md)
-- 当前优先级审查：[`holy-paladin-priority-update-2026-09-02.md`](holy-paladin-priority-update-2026-09-02.md)
+- 当前治疗设计：[`holy-paladin-healing-optimization-design-2026-09-06.md`](holy-paladin-healing-optimization-design-2026-09-06.md)
+- 当前可执行规则：[`holy-paladin-virtue-12.1.json`](../BundledModules/holy-paladin-virtue-12.1.json)
+- 当前 AOE/吸奶盾实现契约：[`holy-paladin-virtue-implementation.md`](holy-paladin-virtue-implementation.md)
+- 历史需求与验收：[`holy-paladin-mythic-plus-prd.md`](holy-paladin-mythic-plus-prd.md)
+- 历史实施计划：[`holy-paladin-mythic-plus-implementation-plan.md`](holy-paladin-mythic-plus-implementation-plan.md)
+- 历史优先级审查：[`holy-paladin-priority-update-2026-09-02.md`](holy-paladin-priority-update-2026-09-02.md)
+- 历史 AOE/状态机清单：[`aoe-cast-monitoring-implementation-checklist.md`](aoe-cast-monitoring-implementation-checklist.md)
 
 ## 历史记录
 
