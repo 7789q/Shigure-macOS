@@ -1,5 +1,13 @@
 # macOS 架构与发行边界
 
+## 当前状态（2026-09-07）
+
+- 仓库版本：`1.2.1.22`，由 `Directory.Build.props` 生成；当前只确认源码和本地验证状态，不代表已发布二进制。
+- 插件基线：Fuyutsui `1.2.1.15`。
+- 随包模块：血DK `1.2.1.59`，奶骑 `1.2.1.25`。
+- 实战状态：奶骑和血DK近期策略均仍有 WoW 客户端实战验收项；本地契约测试、Lua 回放和构建证据必须以本次命令输出为准。
+- 文档层级：当前事实见本文、[文档索引](../README.md)和各现役实现契约；需求、计划和变更记录仅作历史追溯。
+
 Shigure for macOS 由四层组成：
 
 1. `Core` 保存配置、模块、协议解码、运行循环和用户数据规则。
@@ -70,8 +78,8 @@ Shigure for macOS 由四层组成：
 
 当前公共仓库只发布源码，没有 Developer ID 签名、公证或 Apple 审核的二进制版本。
 
-## 需求文档
+## 模块与诊断
 
-- [烈日奶骑大秘境模块更新 PRD](../holy-paladin-mythic-plus-prd.md)：记录已进入候选验证的 AOE 预警、资源预留、吸奶盾时序及闭环验收标准。
-- `BundledModules/` 是官方随包模块的事实来源；启动时补装缺失模块。同一内置模块 ID 按语义版本比较，包内版本更高时先备份再升级，避免旧策略因哈希未登记而继续生效；跨 ID 的历史模块仍只对 SHA-256 精确匹配的已知官方缺陷版本升级，其他同版本或更高版本用户模块保持不变。
+- `BundledModules/` 是官方随包模块的事实来源；启动时补装缺失模块。同一内置模块 ID 按语义版本比较，包内版本更高时先备份再升级，跨 ID 的历史模块只对 SHA-256 精确匹配的已知官方缺陷版本升级。
+- 奶骑治疗策略见[`holy-paladin-healing-optimization-design-2026-09-06.md`](../holy-paladin-healing-optimization-design-2026-09-06.md)，AOE/吸奶盾状态机见[`holy-paladin-virtue-implementation.md`](../holy-paladin-virtue-implementation.md)。
 - 扫描失败提示使用跨 Space、全屏辅助窗口，并在持续故障时补显；浮动条同时显示具体失败原因。

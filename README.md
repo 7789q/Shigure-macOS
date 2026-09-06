@@ -10,8 +10,9 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 - 使用、构建和权限：本文档。
 - macOS 架构与发行边界：[Documentation/macOS/README.md](Documentation/macOS/README.md)。
+- 全部文档及维护边界：[Documentation/README.md](Documentation/README.md)。
 - 版本变化：[CHANGELOG.md](CHANGELOG.md)。
-- 模块与协议实现：[Documentation/](Documentation/)。
+- 模块与协议实现：见[文档索引](Documentation/README.md)。
 
 ## 快速开始
 
@@ -36,7 +37,7 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 ## Fuyutsui 同步
 
-当前基线为 Fuyutsui 1.2.1.15。应用会迁移工作副本、生成配置并检查协议冲突；协议、模块和奶骑美德的详细变更见[架构与发行说明](Documentation/macOS/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
+当前基线为 Fuyutsui 1.2.1.15；随包模块当前为血DK 1.2.1.59、奶骑 1.2.1.25。应用会迁移工作副本、生成配置并检查协议冲突；协议、模块和奶骑美德的详细边界见[架构与发行说明](Documentation/macOS/README.md)、[文档索引](Documentation/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
 
 ## 环境要求
 
