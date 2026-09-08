@@ -23,7 +23,7 @@ public static class FuyutsuiConfigConverter
 
     private static readonly HashSet<string> BoolFieldNames = new(StringComparer.Ordinal)
     {
-        "锚点", "有效性", "移动", "死亡", "血沸自动链", "血沸高亮", "DiGua桥接就绪", "AOE受保护读条", "圣洁鸣钟预计可用"
+        "锚点", "有效性", "移动", "死亡", "血沸手动触发", "血沸自动链", "血沸高亮", "副本内", "DiGua桥接就绪", "AOE受保护读条", "圣洁鸣钟预计可用"
     };
 
     private static readonly string[] StateCategoryOrder =

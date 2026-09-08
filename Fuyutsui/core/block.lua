@@ -6,7 +6,7 @@ local screenWidth = GetScreenWidth()
 ============================================================================]]
 
 -- 主色条（FuyutsuiColorBars / CreateTexture）
-local BLOCK_FIX_COUNT = 510        -- 总色块数量
+local BLOCK_FIX_COUNT = 515        -- 总色块数量
 local BLOCK_FIRST_SCHEME_MAX = 255 -- 第一套索引方案上限（其后用 r=1/255）
 local BLOCK_HEIGHT = 1             -- 色块高度
 local BLOCK_SPACING = 0            -- 色块间距
@@ -78,12 +78,12 @@ local HEAL_ABSORB_UNIT_WIDTH =
 local AURA_BLOCK_W = BLOCK_FIX_CONFIG.blockWidth
 local AURA_BLOCK_H = AURA_BLOCK_HEIGHT
 
---- 索引 1..255 → r=0, g=i/255；256..510 → r=1/255, g=(i-255)/255
+--- 索引按每 255 个一组编码到 r/g 通道，支持超过 510 的固定协议块。
 local function EncodeBlockChannels(index)
-    if index > BLOCK_FIRST_SCHEME_MAX then
-        return 1 / 255, (index - BLOCK_FIRST_SCHEME_MAX) / 255
-    end
-    return 0, index / 255
+    local zeroBased = index - 1
+    local group = math.floor(zeroBased / BLOCK_FIRST_SCHEME_MAX)
+    local offset = (zeroBased % BLOCK_FIRST_SCHEME_MAX) + 1
+    return group / 255, offset / 255
 end
 
 local function EnsureAuraContainerLoaded()
@@ -120,7 +120,7 @@ local function createTextureByIndex(i)
     return pixelTextures[i]
 end
 
--- 索引 1..255: (0, i/255, b, 1)；索引 256..510: (1/255, (i-255)/255, b, 1)
+-- 索引每 255 个一组编码到 r/g 通道，b 通道保存值。
 function Fuyutsui:CreateTexture(i, b)
     local tex = createTextureByIndex(i)
     if tex then

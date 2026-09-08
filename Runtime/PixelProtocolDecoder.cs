@@ -2,7 +2,7 @@ namespace Shigure;
 
 public static class PixelProtocolDecoder
 {
-    private const int TopRowBlockCount = 510;
+    private const int TopRowBlockCount = 515;
     private const int TopRowFirstSchemeMax = 255;
     private const int HealAbsorbMaxUnits = 30;
 
@@ -247,18 +247,14 @@ public static class PixelProtocolDecoder
         step = 0;
         value = 0;
 
+        var red = Red(color);
         var green = Green(color);
         if (green is < 1 or > TopRowFirstSchemeMax)
         {
             return false;
         }
 
-        step = Red(color) switch
-        {
-            0 => green,
-            1 => TopRowFirstSchemeMax + green,
-            _ => 0
-        };
+        step = red * TopRowFirstSchemeMax + green;
 
         if (step is < 1 or > TopRowBlockCount)
         {

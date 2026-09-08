@@ -1912,7 +1912,8 @@ public sealed partial class MainWindow : Window
         {
             if (string.IsNullOrWhiteSpace(_activeScanFailureReason))
             {
-                if (!string.IsNullOrWhiteSpace(previousScanFailure))
+                if (!string.IsNullOrWhiteSpace(previousScanFailure)
+                    && snapshot.State?.GetInt("有效性") == 1)
                 {
                     ShowRuntimeToast("色块识别已恢复", "#6EE7B7", autoHide: true);
                 }

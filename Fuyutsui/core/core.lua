@@ -97,6 +97,7 @@ function Fuyutsui:OnEnable()
 
     self:RegisterEvent("ZONE_CHANGED")
     self:RegisterEvent("ZONE_CHANGED_INDOORS")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
     self:RegisterEvent("PLAYER_TALENT_UPDATE")
     self:RegisterEvent("PLAYER_DEAD")

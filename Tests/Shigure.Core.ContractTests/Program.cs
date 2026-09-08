@@ -72,6 +72,7 @@ var tests = new (string Name, Action Run)[]
     ("runtime short trigger pulse contract", RuntimeShortTriggerPulseContract),
     ("runtime cooldown confirmation contract", RuntimeCooldownConfirmationContract),
     ("runtime macro binding gate contract", RuntimeMacroBindingGateContract),
+    ("runtime protocol health contract", RuntimeProtocolHealthContract),
     ("runtime failure snapshot contract", RuntimeFailureSnapshotContract),
     ("runtime startup failure ownership contract", RuntimeStartupFailureOwnershipContract),
     ("runtime session ownership contract", RuntimeSessionOwnershipContract),
@@ -161,11 +162,11 @@ static void BundledBloodDeathbringerModuleContract()
 
     Equal("shigure-blood-deathbringer-12-1", module.Id, "blood deathbringer module identity");
     Equal("血DK大秘境-死亡使者 12.1", module.Name, "blood deathbringer module name");
-    Equal("1.2.1.59", module.Version, "blood deathbringer module version");
+    Equal("1.2.1.61", module.Version, "blood deathbringer module version");
     Equal(6, module.Match.ClassId, "blood deathbringer module matches death knight");
     Equal(1, module.Match.SpecId, "blood deathbringer module matches blood specialization");
     Equal(1, module.Match.HeroTalent, "blood deathbringer module matches deathbringer hero talent");
-    Equal(47, module.Rules.Count, "blood deathbringer module keeps the full priority matrix");
+    Equal(49, module.Rules.Count, "blood deathbringer module keeps the full priority matrix");
     Equal(false, module.DerivedStates.Any(state => state.Name == "血色之地维护窗口"),
         "Blood DK no longer keeps the retired Sanguine Ground maintenance strategy");
     Equal("心灵冰冻", module.Rules[0].Spell, "target interrupt is the highest-priority action");
@@ -199,6 +200,16 @@ static void BundledBloodDeathbringerModuleContract()
         && !rule.Condition.Contains("目标生命值 > 0", StringComparison.Ordinal)
         && !rule.Condition.Contains("目标生命值 >= 20", StringComparison.Ordinal)),
         "Deathbringer Reaper's Mark independently accepts level-over-ninety or boss targets");
+    Equal(true, module.Rules.Any(rule => rule.Spell == "死神印记"
+        && rule.Condition.Contains("副本内 == false", StringComparison.Ordinal)
+        && rule.Condition.Contains("目标类型 > 0", StringComparison.Ordinal)
+        && rule.Condition.Contains("目标类型 < 100", StringComparison.Ordinal)
+        && !rule.Condition.Contains("目标类型 > 90", StringComparison.Ordinal)),
+        "Reaper's Mark accepts any valid target outside an instance");
+    Equal(true, module.Rules.Any(rule => rule.Spell == "死神印记"
+        && rule.Condition.Contains("副本内 == true", StringComparison.Ordinal)
+        && rule.Condition.Contains("目标类型 > 90", StringComparison.Ordinal)),
+        "Reaper's Mark keeps the high-value target gate inside an instance");
     Equal(true, module.Rules.Where(rule => rule.Spell == "死神印记" && rule.Enabled)
         .All(rule => rule.Condition.Contains("符文能量 < 80", StringComparison.Ordinal)),
         "Reaper's Mark yields to Death Strike before runic power overflow");
@@ -215,11 +226,13 @@ static void BundledBloodDeathbringerModuleContract()
         && !rule.Condition.Contains("auras.符文刃舞 > 0", StringComparison.Ordinal)),
         "Lichborne follows the confirmed Dancing Rune Weapon burst window");
     Equal(true, module.Rules.Any(rule => rule.Spell == "血液沸腾"
-        && rule.Condition.Contains("血沸自动链 == true", StringComparison.Ordinal)),
-        "SeUI-style Blood Boil overlay state makes Blood Boil the first highlighted spender");
+        && rule.Condition.Contains("血沸手动触发 == true", StringComparison.Ordinal)
+        && rule.Condition.Contains("血沸自动链 == false", StringComparison.Ordinal)),
+        "Blood Boil only sends the first key for a pending highlighted trigger");
     Equal(true, module.Rules.Where(rule => rule.Spell == "血液沸腾" && rule.Enabled)
-            .Where(rule => rule.Condition.Contains("符文 == 0", StringComparison.Ordinal))
-            .All(rule => rule.Condition.Contains("血沸自动链 == false", StringComparison.Ordinal)),
+            .Where(rule => rule.Condition.Contains("血沸高亮 == false", StringComparison.Ordinal))
+            .All(rule => rule.Condition.Contains("血沸手动触发 == false", StringComparison.Ordinal)
+                && rule.Condition.Contains("血沸自动链 == false", StringComparison.Ordinal)),
         "normal Blood Boil is blocked while the SeUI-style highlight state is active");
     Equal(2, module.Rules.Count(rule => rule.Spell == "血液沸腾" && rule.Enabled && rule.Condition != "false"),
         "Blood Boil has only highlighted and normal independent branches");
@@ -248,7 +261,7 @@ static void BundledBloodDeathbringerModuleContract()
         && rule.Condition.Contains("治疗药水 > 0", StringComparison.Ordinal)),
         "generic health potion follows the concentrated potion fallback");
     var highlightedBloodBoilIndex = module.Rules.FindIndex(rule =>
-        rule.Spell == "血液沸腾" && rule.Condition.Contains("血沸自动链 == true", StringComparison.Ordinal));
+        rule.Spell == "血液沸腾" && rule.Condition.Contains("血沸手动触发 == true", StringComparison.Ordinal));
     var highRunicPowerDeathStrikeIndex = module.Rules.FindIndex(rule =>
         rule.Spell == "灵界打击"
         && rule.Condition.Contains("生命值 > 60", StringComparison.Ordinal)
@@ -359,11 +372,13 @@ static void BundledBloodDeathbringerModuleContract()
         "Death and Decay uses the player-position macro");
     Equal(true, module.Rules.Any(rule => rule.Spell == "血液沸腾"
             && rule.Enabled
+            && rule.Condition.Contains("生命值 > 40", StringComparison.Ordinal)
             && rule.Condition.Contains("血沸自动链 == false", StringComparison.Ordinal)
-            && rule.Condition.Contains("符文 == 0", StringComparison.Ordinal)
             && rule.Condition.Contains("spells.血液沸腾层数 >= 2", StringComparison.Ordinal)
+            && !rule.Condition.Contains("符文 == 0", StringComparison.Ordinal)
+            && !rule.Condition.Contains("符文能量 < 40", StringComparison.Ordinal)
             && !rule.Condition.Contains("血沸循环心打次数", StringComparison.Ordinal)),
-        "normal Blood Boil only runs at two charges after all runes are consumed");
+        "normal Blood Boil uses two charges above forty percent health without resource gates");
     Equal(false, module.Rules.Any(rule => rule.Spell == "心脏打击"
         && rule.Enabled
         && !rule.Condition.Contains("auras.午夜舞步", StringComparison.Ordinal)
@@ -379,12 +394,13 @@ static void BundledBloodDeathbringerModuleContract()
             && !rule.Condition.Contains("血沸循环心打次数", StringComparison.Ordinal)),
         "highlighted and normal Heart Strike are mutually exclusive independent branches");
     Equal(true, module.Rules
-            .Where(rule => rule.Spell is "血液沸腾" or "心脏打击"
+            .Where(rule => (rule.Spell is "血液沸腾" or "心脏打击")
                 && (rule.Condition.Contains("auras.沸点", StringComparison.Ordinal)
-                    || rule.Condition.Contains("血沸自动链", StringComparison.Ordinal)
+                    || rule.Condition.Contains("血沸高亮 == true", StringComparison.Ordinal)
                     || rule.Condition.Contains("auras.午夜舞步", StringComparison.Ordinal)
                     || rule.Condition.Contains("血沸循环心打次数", StringComparison.Ordinal)))
-            .All(rule => rule.Condition.Contains("符文能量 < 80", StringComparison.Ordinal)),
+            .All(rule => rule.Condition.Contains("符文能量 < 80", StringComparison.Ordinal)
+                || rule.Condition.Contains("符文能量 < 40", StringComparison.Ordinal)),
         "highlighted and normal Blood Boil/Heart Strike output stays below the Death Strike line");
     Equal(false, module.Rules.Any(rule => rule.Spell == "精髓分裂"
         && rule.Enabled
@@ -456,12 +472,15 @@ static void BundledBloodDeathbringerModuleContract()
         && !rule.Condition.Contains("spells.心脏打击", StringComparison.Ordinal)),
         "Heart Strike has a resource-only fallback when optional state fields are unavailable");
     Equal(true, module.Rules.Any(rule => rule.Spell == "血液沸腾"
-        && rule.Condition.Contains("符文 == 0", StringComparison.Ordinal)
-        && rule.Condition.Contains("符文能量 < 40", StringComparison.Ordinal)
+        && rule.Condition.Contains("生命值 > 40", StringComparison.Ordinal)
         && rule.Condition.Contains("spells.血液沸腾层数 >= 2", StringComparison.Ordinal)
+        && rule.Condition.Contains("血沸高亮 == false", StringComparison.Ordinal)
+        && rule.Condition.Contains("血沸手动触发 == false", StringComparison.Ordinal)
         && !rule.Condition.Contains("血沸循环心打次数", StringComparison.Ordinal)
+        && !rule.Condition.Contains("符文 == 0", StringComparison.Ordinal)
+        && !rule.Condition.Contains("符文能量 < 40", StringComparison.Ordinal)
         && rule.Condition.Contains("血沸自动链 == false", StringComparison.Ordinal)),
-        "Blood Boil has a rune-empty two-charge fallback without a cycle-count gate");
+        "Blood Boil has a two-charge health-based fallback without resource gates");
     Equal("反魔法护罩", module.Rules[^2].Spell, "anti-magic shell remains manual-only");
     Equal("暂停", module.Rules[^1].Spell, "module ends with a pause fallback");
 
@@ -483,6 +502,7 @@ static void BundledBloodDeathbringerModuleContract()
         ["敌人数-有仇恨"] = 1,
         ["爆发开关"] = 0,
         ["目标类型"] = 1,
+        ["副本内"] = true,
         ["目标距离"] = 3,
         ["目标生命值"] = 100,
         ["目标死亡"] = false,
@@ -626,7 +646,8 @@ static void BundledBloodDeathbringerModuleContract()
         int stationaryDuration = 3,
         int raiseDeadCooldown = 1,
         int lichborneCooldown = 1,
-        int combatTime = 1) =>
+        int combatTime = 1,
+        bool inInstance = true) =>
         new(new Dictionary<string, object?>
         {
             ["战斗时间"] = combatTime,
@@ -641,6 +662,7 @@ static void BundledBloodDeathbringerModuleContract()
             ["符文刃舞爆发窗口"] = 0,
             ["首领战"] = 0,
             ["难度"] = 0,
+            ["副本内"] = inInstance,
             ["目标类型"] = targetType,
             ["目标距离"] = targetRange,
             ["目标生命值"] = 100,
@@ -699,7 +721,9 @@ static void BundledBloodDeathbringerModuleContract()
         int focusCastRemaining = 0,
         int focusCastInterruptible = 0,
         int focusRange = 3,
+        bool bloodBoilManualTrigger = false,
         bool bloodBoilAutoChain = false,
+        bool inInstance = true,
         int health = 100) =>
         new(new Dictionary<string, object?>
         {
@@ -720,8 +744,10 @@ static void BundledBloodDeathbringerModuleContract()
             ["焦点施法(倒计时)"] = focusCastRemaining,
             ["焦点施法可打断"] = focusCastInterruptible,
             ["焦点距离"] = focusRange,
+            ["血沸手动触发"] = bloodBoilManualTrigger,
             ["血沸自动链"] = bloodBoilAutoChain,
-            ["血沸高亮"] = bloodBoilAutoChain,
+            ["血沸高亮"] = bloodBoilManualTrigger || bloodBoilAutoChain,
+            ["副本内"] = inInstance,
             ["符文刃舞爆发窗口"] = 0,
             ["血沸循环心打次数"] = bloodBoilHeartStrikes,
             ["auras"] = new Dictionary<string, object?>
@@ -759,27 +785,27 @@ static void BundledBloodDeathbringerModuleContract()
 
     Equal("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
-        BloodRotationState(runes: 2, bloodBoilCharges: 1, boilingPoint: 1, boneShield: 12, bloodBoilAutoChain: true),
+        BloodRotationState(runes: 2, bloodBoilCharges: 1, boilingPoint: 1, boneShield: 12, bloodBoilManualTrigger: true),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         "highlighted Blood Boil outranks other highlighted spenders");
     Equal("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
-        BloodRotationState(runes: 2, bloodBoilCharges: 1, boilingPoint: 1, targetDisease: 1, boneShield: 12, bloodBoilAutoChain: true),
+        BloodRotationState(runes: 2, bloodBoilCharges: 1, boilingPoint: 1, targetDisease: 1, boneShield: 12, bloodBoilManualTrigger: true),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         "highlighted Blood Boil is not delayed by an existing disease aura or cycle count");
     Equal("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
-        BloodRotationState(runes: 2, bloodBoilCharges: 1, boilingPoint: 1, targetDisease: 1, boneShield: 12, bloodBoilHeartStrikes: 2, bloodBoilAutoChain: true),
+        BloodRotationState(runes: 2, bloodBoilCharges: 1, boilingPoint: 1, targetDisease: 1, boneShield: 12, bloodBoilHeartStrikes: 2, bloodBoilManualTrigger: true),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         "highlighted Blood Boil is independent of the Heart Strike count state");
     Equal("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
-        BloodRotationState(runes: 2, bloodBoilCharges: 1, bloodBoilHeartStrikes: 2, boneShield: 12, bloodBoilAutoChain: true),
+        BloodRotationState(runes: 2, bloodBoilCharges: 1, bloodBoilHeartStrikes: 2, boneShield: 12, bloodBoilManualTrigger: true),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         "active SeUI-style highlight state keeps Blood Boil available after repeated Heart Strikes");
     Equal("灵界打击", ModuleLogic.Run(
         diagnosticModule,
-        BloodRotationState(runes: 2, runicPower: 85, bloodBoilCharges: 1, boilingPoint: 1, boneShield: 12, bloodBoilAutoChain: true),
+        BloodRotationState(runes: 2, runicPower: 85, bloodBoilCharges: 1, boilingPoint: 1, boneShield: 12, bloodBoilManualTrigger: true),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         "Death Strike prevents a highlighted Blood Boil from pushing runic power into overflow");
     Equal("灵界打击", ModuleLogic.Run(
@@ -792,13 +818,18 @@ static void BundledBloodDeathbringerModuleContract()
         runicPower: 70,
         bloodBoilCharges: 1,
         boilingPoint: 1,
-        bloodBoilAutoChain: true);
+        bloodBoilManualTrigger: true);
     lowHealthHighlightedState.Values["生命值"] = 45;
     Equal("灵界打击", ModuleLogic.Run(
         diagnosticModule,
         lowHealthHighlightedState,
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         "survival priority must outrank highlighted output when health is low");
+    Equal(false, Equals("血液沸腾", ModuleLogic.Run(
+        diagnosticModule,
+        BloodRotationState(runes: 2, runicPower: 30, bloodBoilCharges: 1, boneShield: 12, bloodBoilAutoChain: true),
+        new ContractKeymapResolver()).UnitInfo["动作技能"]),
+        "automatic Blood Boil chain never sends another manual Blood Boil key");
     var lowHealthDecision = ModuleLogic.Run(
         diagnosticModule,
         lowHealthHighlightedState,
@@ -833,14 +864,14 @@ static void BundledBloodDeathbringerModuleContract()
         "normal Blood Boil waits until its two-charge cap instead of being manually repeated");
     Equal("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
-        BloodRotationState(runes: 0, runicPower: 30, bloodBoilCharges: 2, targetDisease: 1, bloodBoilHeartStrikes: 2, boneShield: 12),
+        BloodRotationState(runes: 2, runicPower: 70, bloodBoilCharges: 2, targetDisease: 1, bloodBoilHeartStrikes: 2, boneShield: 12),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
-        "normal Blood Boil is manually consumed only at two charges");
+        "normal Blood Boil is manually consumed at two charges despite available runes and high runic power");
     Equal(false, Equals("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
-        BloodRotationState(runes: 0, runicPower: 30, bloodBoilCharges: 2, health: 20, targetDisease: 1, boneShield: 12),
+        BloodRotationState(runes: 2, runicPower: 70, bloodBoilCharges: 2, health: 40, targetDisease: 1, boneShield: 12),
         new ContractKeymapResolver()).UnitInfo["动作技能"]),
-        "normal Blood Boil does not preempt emergency survival at twenty percent health");
+        "normal Blood Boil does not run at forty percent health or below");
 
     Equal("心脏打击", ModuleLogic.Run(
         diagnosticModule,
@@ -852,18 +883,18 @@ static void BundledBloodDeathbringerModuleContract()
         BloodRotationState(runes: 2, runicPower: 60, bloodBoilHeartStrikes: 3, boneShield: 12),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         "normal Heart Strike remains available with a high Heart Strike count");
-    Equal("心脏打击", ModuleLogic.Run(
+    Equal("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
         BloodRotationState(runes: 2, runicPower: 60, bloodBoilCharges: 2, targetDisease: 1,
             heartStrikeCooldown: 1, bloodBoilCooldown: 1, boneShield: 12),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
-        "captured combat replay still selects Heart Strike when optional cooldown fields are stale");
-    Equal("心脏打击", ModuleLogic.Run(
+        "captured combat replay selects normal Blood Boil at two charges when optional cooldown fields are stale");
+    Equal("血液沸腾", ModuleLogic.Run(
         diagnosticModule,
         BloodRotationState(runes: 2, runicPower: 60, bloodBoilCharges: 2, targetDisease: 1,
             bloodBoilHeartStrikes: 2, heartStrikeCooldown: 1, bloodBoilCooldown: 1, boneShield: 12),
         new ContractKeymapResolver()).UnitInfo["动作技能"],
-        "captured combat replay still selects Heart Strike when runes remain and cycle counters are stale");
+        "captured combat replay selects normal Blood Boil when runes and cycle counters are stale");
     var caressPriorityState = BloodRotationState(
         runes: 2, runicPower: 70, boneShield: 4, bloodDebt: 10);
     Equal("精髓分裂", ModuleLogic.Run(
@@ -1067,6 +1098,32 @@ static void BundledBloodDeathbringerModuleContract()
         normalTargetMarkState,
         new ContractKeymapResolver()).UnitInfo["动作技能"],
         $"Reaper's Mark replenishes Bone Shield on a normal target at {enemyCount} target(s)");
+    var outsideNormalMarkState = BurstState(
+        enemyCount,
+        burstEnabled: 0,
+        deathAndDecayCharges: 1,
+        targetType: 1,
+        inInstance: false);
+    ((Dictionary<string, object?>)outsideNormalMarkState.Values["auras"]!)["白骨之盾层数"] = 8;
+    ((Dictionary<string, object?>)outsideNormalMarkState.Values["auras"]!)["血色之地"] = 1;
+    Equal("死神印记", ModuleLogic.Run(
+        diagnosticModule,
+        outsideNormalMarkState,
+        new ContractKeymapResolver()).UnitInfo["动作技能"],
+        "Reaper's Mark accepts a normal target outside an instance without the low-Bone-Shield fallback");
+    var insideNormalMarkState = BurstState(
+        enemyCount,
+        burstEnabled: 0,
+        deathAndDecayCharges: 1,
+        targetType: 1,
+        inInstance: true);
+    ((Dictionary<string, object?>)insideNormalMarkState.Values["auras"]!)["白骨之盾层数"] = 8;
+    ((Dictionary<string, object?>)insideNormalMarkState.Values["auras"]!)["血色之地"] = 1;
+    Equal(false, Equals("死神印记", ModuleLogic.Run(
+        diagnosticModule,
+        insideNormalMarkState,
+        new ContractKeymapResolver()).UnitInfo["动作技能"]),
+        "Reaper's Mark keeps the high-value target gate for normal targets inside an instance");
     var burstAfterMark = BurstState(enemyCount, burstEnabled: 1, deathAndDecayCharges: 1);
     ((Dictionary<string, object?>)burstAfterMark.Values["auras"]!)["血色之地"] = 1;
     ((Dictionary<string, object?>)burstAfterMark.Values["spells"]!)["死神印记"] = 1;
@@ -1314,6 +1371,7 @@ static void BloodDeathTargetGateContract()
         ["敌人数-有仇恨"] = 1,
         ["爆发开关"] = 0,
         ["目标类型"] = 91,
+        ["副本内"] = true,
         ["目标距离"] = 3,
         ["目标生命值"] = 0,
         ["目标死亡"] = false,
@@ -1479,7 +1537,7 @@ static void BundledModuleInstallationContract()
             bloodSourcePath);
         var currentBloodModule = File.ReadAllText(bloodSourcePath);
         var oldBloodModule = currentBloodModule.Replace(
-            "\"Version\": \"1.2.1.59\"",
+            "\"Version\": \"1.2.1.61\"",
             "\"Version\": \"1.2.1.35\"",
             StringComparison.Ordinal);
         File.WriteAllText(bloodTargetPath, oldBloodModule, new UTF8Encoding(false));
@@ -1538,9 +1596,9 @@ static int ValidateHolyPaladinModule(string path)
         Equal(CountKind.UnitsAtOrAboveExpectedNeed,
             module.Counts.Single(count => count.Name == "Expected15AtLeast").Kind,
             "holy paladin module exposes forecast spread count");
-        Equal(UnitSelectorKind.HighestExpectedNeedWithAura,
-            module.Units.Single(unit => unit.Name == "最高预期美德目标").Kind,
-            "holy paladin module selects actual Virtue-covered forecast targets");
+        Equal(UnitSelectorKind.HighestHealingDeficitWithAura,
+            module.Units.Single(unit => unit.Name == "最高实际美德目标").Kind,
+            "holy paladin module selects actual Virtue-covered healing deficits");
         var realGroupDamage = module.DerivedStates.Single(state => state.Name == "真实群伤");
         Equal(2000, realGroupDamage.HoldMs,
             "reactive Virtue remains selected across one complete GCD after real group damage briefly recovers");
@@ -1685,9 +1743,9 @@ static int ValidateHolyPaladinModule(string path)
         Equal("AOE事件类型 == 2 && AOE事件阶段 == 3 && spells.美德道标 == 0 && auras.美德道标 == 0",
             module.Rules[6].Condition,
             "heal absorb cast completion has an explicit Virtue timing rule");
-        Equal("预计治疗人数 >= 3 && 多人爆发预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 预计治疗人数 >= 3 && 多人持续预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+        Equal("真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发高压 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人持续高压 > 0 && AbsorbAny == 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
             module.Rules[7].Condition,
-            "reactive group Virtue requires distributed healing load and real missing health, not absorb alone");
+            "reactive group Virtue uses real group pressure and does not require forecast fields");
         Equal("AOE事件类型 != 2 && AOE事件阶段 == 0|AOE事件类型 != 2 && AOE事件阶段 == 4|AOE事件类型 == 2 && AOE事件阶段 == 1", string.Join('|', module.Rules[7].SubConditions ?? []),
             "reactive Virtue is allowed in the absorb reserve stage when group healing is needed");
         var lightOfDawnRules = module.Rules.Where(rule => rule.Spell == "黎明之光").ToArray();
@@ -1850,7 +1908,8 @@ static int ValidateHolyPaladinModule(string path)
             int targetInFront = 1,
             int healthstoneAvailable = 0,
             int healthPotionAvailable = 0,
-            int divineShieldAura = 0)
+            int divineShieldAura = 0,
+            bool forecastAvailable = true)
         {
             absorb ??= new int[health.Length];
             var group = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal);
@@ -1886,6 +1945,22 @@ static int ValidateHolyPaladinModule(string path)
                     ["持续需求"] = sustainNeed,
                     ["美德道标"] = virtueAura
                 };
+            }
+
+            if (!forecastAvailable)
+            {
+                burstGroupNeed = 0;
+                sustainGroupNeed = 0;
+                spreadCount = 0;
+                foreach (var data in group.Values)
+                {
+                    if (data is Dictionary<string, object?> mutable)
+                    {
+                        mutable["预期需求"] = 0;
+                        mutable["爆发需求"] = 0;
+                        mutable["持续需求"] = 0;
+                    }
+                }
             }
 
             return new GameState(new Dictionary<string, object?>
@@ -2062,6 +2137,14 @@ static int ValidateHolyPaladinModule(string path)
             "MOD-06 three fifteen-percent deficits with only forty-eight total deficit do not open Virtue");
         Equal("美德道标", Action(Evaluate(State([83, 83, 83, 100, 100], virtueCooldown: 0))),
             "MOD-06 three fifteen-percent deficits with fifty-one total deficit open Virtue");
+        Equal("美德道标", Action(Evaluate(State([83, 83, 83, 100, 100], virtueCooldown: 0, forecastAvailable: false))),
+            "MOD-06 real group deficit opens Virtue when forecast fields are unavailable");
+        Equal(false, Action(Evaluate(State(
+            [100, 100, 100, 100, 100],
+            absorb: [20, 20, 20, 0, 0],
+            virtueCooldown: 0,
+            forecastAvailable: false))) == "美德道标",
+            "MOD-06 absorb-only pressure does not enter the ordinary real-damage Virtue path");
         var groupDawnDecision = Evaluate(State(
             [80, 80, 80, 80, 100],
             holyPower: 3,
@@ -2643,7 +2726,7 @@ static void TopRowBoundaries()
         EncodeStep(1, 11),
         EncodeStep(255, 22),
         EncodeStep(256, 33),
-        EncodeStep(510, 44),
+        EncodeStep(515, 44),
         EncodeStep(2, 99)
     };
 
@@ -2653,16 +2736,16 @@ static void TopRowBoundaries()
     Equal(11, decoded[1], "step 1");
     Equal(22, decoded[255], "step 255");
     Equal(33, decoded[256], "step 256");
-    Equal(44, decoded[510], "step 510");
+    Equal(44, decoded[515], "step 515");
 }
 
 static void TopRowRequiresStartMarker()
 {
     var decoded = PixelProtocolDecoder.DecodeTopRow(
-        new[] { EncodeStep(2, 10), EncodeStep(255, 20), EncodeStep(510, 30) });
+        new[] { EncodeStep(2, 10), EncodeStep(255, 20), EncodeStep(515, 30) });
 
     Equal(-1, PixelProtocolDecoder.FindTopRowStart(
-        new[] { EncodeStep(2, 10), EncodeStep(255, 20), EncodeStep(510, 30) }), "missing start marker index");
+        new[] { EncodeStep(2, 10), EncodeStep(255, 20), EncodeStep(515, 30) }), "missing start marker index");
     Equal(0, decoded.Count, "row without step 1 must be ignored");
 }
 
@@ -4116,7 +4199,7 @@ static void ModuleDependencyCaptureAndImportContract()
         Equal(true, repairedGroupImport.ConfigUpdated > 0, "group dependency compacts duplicate spell identities");
         var repairedGroup = ClassBlocksStore.Load(paladinPath).Specs[1].Group!;
         Equal(1, repairedGroup.Auras.Count(aura => aura.SpellId == 27827), "group aura spell is unique across offsets");
-        Equal(7, repairedGroup.Num, "group stride shrinks to its highest retained occupied offset");
+        Equal(10, repairedGroup.Num, "group stride preserves the retained Virtue coverage slot");
         Equal(false, repairedGroup.Auras.Any(aura => aura.SpellId == 25771),
             "group dependency import cannot restore the unsupported Forbearance slot");
         Equal(false, service.Import([paladinModule]).HasChanges, "repaired group import remains idempotent");
@@ -4334,13 +4417,20 @@ static void CooldownConfirmationTrackerContract()
             ["动作单位槽位"] = 2
         }
     };
-    Equal(true, tracker.CanAttempt(
+    Equal(false, tracker.CanAttempt(
             sacrificeDecision,
             GcdState(80),
             now.AddMilliseconds(10),
             allowPreemption: false,
             out _),
-        "Sacrifice Blessing is treated as an off-GCD action");
+        "Sacrifice Blessing cannot race a pending confirmation without explicit preemption");
+    Equal(true, tracker.CanAttempt(
+            emergencyDecision,
+            GcdState(80),
+            now.AddMilliseconds(10),
+            allowPreemption: true,
+            out _),
+        "a higher-priority emergency action can replace a pending confirmation only with explicit preemption");
 
     var failedCooldownTracker = new CooldownConfirmationTracker();
     var confirmedActionDecision = decision with { PlayerActionCode = 24 };
@@ -5000,6 +5090,133 @@ static void CooldownConfirmationTrackerContract()
     Equal(true, resourceFailure.DefinitiveFailure,
         "a failed resource-only Death Strike confirmation is retained as definitive failure");
 
+    var interleavedActionTracker = new CooldownConfirmationTracker();
+    interleavedActionTracker.RecordSent(
+        resourceFailureDecision,
+        now,
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 85,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+            ["玩家动作序号"] = 20
+        }));
+    var interleavedConflict = interleavedActionTracker.Observe(
+            new GameState(new Dictionary<string, object?>
+            {
+                ["符文能量"] = 40,
+                ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 1 },
+                ["玩家动作序号"] = 21,
+                ["玩家动作技能"] = 11,
+                ["玩家动作状态"] = 2
+            }),
+            now.AddMilliseconds(100)).Single();
+    Equal(false, interleavedConflict.Confirmed,
+        "a different successful action cannot confirm Death Strike from a resource or cooldown change");
+    Equal(false, interleavedConflict.DefinitiveFailure,
+        "an interleaved action is ambiguous rather than a definitive Death Strike failure");
+    Equal(true, interleavedConflict.ConflictingActionObserved,
+        "the confirmation records that another action interrupted attribution");
+    Equal(false, interleavedActionTracker.CanAttempt(
+            runicPowerDecision,
+            now.AddMilliseconds(100),
+            allowPreemption: false,
+            out _),
+        "an interleaved action holds the same decision briefly to avoid an immediate duplicate");
+    Equal(true, interleavedActionTracker.CanAttempt(
+            runicPowerDecision,
+            now.AddMilliseconds(301),
+            allowPreemption: false,
+            out _),
+        "an interleaved action becomes retryable on the next short request cadence");
+
+    var queuedResourceConflictTracker = new CooldownConfirmationTracker();
+    queuedResourceConflictTracker.RecordSent(
+        resourceFailureDecision,
+        now,
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 85,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+            ["玩家动作序号"] = 20,
+            ["玩家动作事件1序号"] = 20,
+            ["玩家动作事件1技能"] = 0,
+            ["玩家动作事件1状态"] = 0
+        }));
+    var queuedResourceConflict = queuedResourceConflictTracker.Observe(
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 40,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+            ["玩家动作序号"] = 21,
+            ["玩家动作事件1序号"] = 21,
+            ["玩家动作事件1技能"] = 11,
+            ["玩家动作事件1状态"] = 2
+        }),
+        now.AddMilliseconds(100)).Single();
+    Equal(false, queuedResourceConflict.Confirmed,
+        "a mismatched queued success cannot confirm a resource-only action");
+    Equal(true, queuedResourceConflict.ConflictingActionObserved,
+        "a mismatched queued success is retained as an attribution conflict");
+
+    var failedInterleavedActionTracker = new CooldownConfirmationTracker();
+    failedInterleavedActionTracker.RecordSent(
+        resourceFailureDecision,
+        now,
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 85,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+            ["玩家动作序号"] = 22
+        }));
+    var failedInterleavedConflict = failedInterleavedActionTracker.Observe(
+            new GameState(new Dictionary<string, object?>
+            {
+                ["符文能量"] = 40,
+                ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+                ["玩家动作序号"] = 23,
+                ["玩家动作技能"] = 11,
+                ["玩家动作状态"] = 4
+            }),
+            now.AddMilliseconds(100)).Single();
+    Equal(false, failedInterleavedConflict.Confirmed,
+        "a different failed action cannot be attributed as a Death Strike failure");
+    Equal(false, failedInterleavedConflict.DefinitiveFailure,
+        "a different failed action does not create a definitive Death Strike failure");
+
+    var offGcdInterleavedTracker = new CooldownConfirmationTracker();
+    var raiseDeadDecision = new LogicDecision(
+        "ALT-R",
+        "施放 亡者复生",
+        new Dictionary<string, object?> { ["动作技能"] = "亡者复生", ["动作单位槽位"] = 0 },
+        CooldownConfirmationSpell: "亡者复生");
+    offGcdInterleavedTracker.RecordSent(
+        raiseDeadDecision,
+        now,
+        new GameState(new Dictionary<string, object?>
+        {
+            ["spells"] = new Dictionary<string, object?> { ["亡者复生"] = 0 },
+            ["玩家动作序号"] = 30
+        }));
+    var offGcdInterleavedConflict = offGcdInterleavedTracker.Observe(
+            new GameState(new Dictionary<string, object?>
+            {
+                ["spells"] = new Dictionary<string, object?> { ["亡者复生"] = 90 },
+                ["玩家动作序号"] = 31,
+                ["玩家动作技能"] = 6,
+                ["玩家动作状态"] = 4
+            }),
+            now.AddMilliseconds(100)).Single();
+    Equal(false, offGcdInterleavedConflict.Confirmed,
+        "a mismatched failed action cannot confirm an off-GCD cooldown change");
+    Equal(false, offGcdInterleavedConflict.DefinitiveFailure,
+        "a mismatched off-GCD action remains ambiguous rather than a hard failure");
+    Equal(true, offGcdInterleavedTracker.CanAttempt(
+            raiseDeadDecision,
+            now.AddMilliseconds(301),
+            allowPreemption: false,
+            out _),
+        "a mismatched off-GCD confirmation becomes retryable after the short hold");
+
     var protectedActionTracker = new CooldownConfirmationTracker();
     protectedActionTracker.RecordSent(castDecision, now, ActionState(0));
     Equal(0, protectedActionTracker.Observe(
@@ -5049,6 +5266,75 @@ static void CooldownConfirmationTrackerContract()
             ActionState(0, serial: 11, actionCode: 0, actionStatus: 4),
             now.AddMilliseconds(100)).Count,
         "an unattributed failed action cannot release the pending confirmation");
+
+    var queuedActionTracker = new CooldownConfirmationTracker();
+    queuedActionTracker.RecordSent(
+        resourceFailureDecision,
+        now,
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 85,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+            ["玩家动作序号"] = 20,
+            ["玩家动作事件1序号"] = 20,
+            ["玩家动作事件1技能"] = 0,
+            ["玩家动作事件1状态"] = 0
+        }));
+    var queuedActionConfirmation = queuedActionTracker.Observe(
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 40,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+            ["玩家动作序号"] = 22,
+            ["玩家动作技能"] = 11,
+            ["玩家动作状态"] = 2,
+            ["玩家动作事件1序号"] = 21,
+            ["玩家动作事件1技能"] = 11,
+            ["玩家动作事件1状态"] = 2,
+            ["玩家动作事件2序号"] = 22,
+            ["玩家动作事件2技能"] = 8,
+            ["玩家动作事件2状态"] = 2,
+            ["玩家动作事件3序号"] = 19,
+            ["玩家动作事件3技能"] = 11,
+            ["玩家动作事件3状态"] = 2
+        }),
+        now.AddMilliseconds(100)).Single();
+    Equal(true, queuedActionConfirmation.Confirmed,
+        "the action queue uses the newest matching event instead of a stale interleaved event");
+    Equal(8, queuedActionConfirmation.ObservedActionCode,
+        "queued confirmation reports the event that was actually consumed");
+
+    var queuedNewestConflictTracker = new CooldownConfirmationTracker();
+    queuedNewestConflictTracker.RecordSent(
+        resourceFailureDecision,
+        now,
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 85,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 0 },
+            ["玩家动作序号"] = 20,
+            ["玩家动作事件1序号"] = 20,
+            ["玩家动作事件1技能"] = 0,
+            ["玩家动作事件1状态"] = 0
+        }));
+    var queuedNewestConflict = queuedNewestConflictTracker.Observe(
+        new GameState(new Dictionary<string, object?>
+        {
+            ["符文能量"] = 40,
+            ["spells"] = new Dictionary<string, object?> { ["灵界打击"] = 1 },
+            ["玩家动作序号"] = 22,
+            ["玩家动作事件1序号"] = 21,
+            ["玩家动作事件1技能"] = 8,
+            ["玩家动作事件1状态"] = 2,
+            ["玩家动作事件2序号"] = 22,
+            ["玩家动作事件2技能"] = 11,
+            ["玩家动作事件2状态"] = 2
+        }),
+        now.AddMilliseconds(100)).Single();
+    Equal(false, queuedNewestConflict.Confirmed,
+        "a newer unrelated queued event cannot overwrite attribution");
+    Equal(true, queuedNewestConflict.ConflictingActionObserved,
+        "the newer unrelated queued event is reported as a conflict");
 }
 
 static void AnonymousFallbackConfirmationContract()
@@ -6221,6 +6507,51 @@ static void RuntimeMacroBindingGateContract()
         "Death Knight macro binding gate reports a wait state while preserving the user toggle");
 }
 
+static void RuntimeProtocolHealthContract()
+{
+    var now = DateTimeOffset.UtcNow;
+    var health = new RuntimeProtocolHealth();
+
+    Equal(false, health.Observe(
+            new GameState(new Dictionary<string, object?>()),
+            now,
+            out var missingReason)
+        && missingReason.Contains("字段缺失", StringComparison.Ordinal),
+        "runtime protocol health rejects missing handshake fields");
+
+    Equal(false, health.Observe(
+            new GameState(new Dictionary<string, object?>
+            {
+                ["Fuyutsui协议版本"] = RuntimeProtocolHealth.CurrentProtocolVersion + 1,
+                ["Fuyutsui状态心跳"] = 1
+            }),
+            now,
+            out var versionReason)
+        && versionReason.Contains("协议匹配", StringComparison.Ordinal),
+        "runtime protocol health rejects incompatible protocol versions");
+
+    health.Reset();
+    var healthy = new GameState(new Dictionary<string, object?>
+    {
+        ["Fuyutsui协议版本"] = RuntimeProtocolHealth.CurrentProtocolVersion,
+        ["Fuyutsui状态心跳"] = 1
+    });
+    Equal(true, health.Observe(healthy, now, out _), "runtime protocol health accepts the first heartbeat");
+    Equal(true, health.Observe(healthy, now.AddMilliseconds(900), out _), "runtime protocol health tolerates a short unchanged interval");
+    Equal(false, health.Observe(healthy, now.AddMilliseconds(1101), out var frozenReason)
+        && frozenReason.Contains("心跳已冻结", StringComparison.Ordinal),
+        "runtime protocol health rejects a frozen heartbeat");
+    Equal(true, health.Observe(
+            new GameState(new Dictionary<string, object?>
+            {
+                ["Fuyutsui协议版本"] = RuntimeProtocolHealth.CurrentProtocolVersion,
+                ["Fuyutsui状态心跳"] = 2
+            }),
+            now.AddMilliseconds(1102),
+            out _),
+        "runtime protocol health recovers when the heartbeat resumes");
+}
+
 static async Task RuntimeCooldownConfirmationContractAsync()
 {
     using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -7236,6 +7567,13 @@ static void HealthstoneUseMacroContract()
         "healthstone macro uses explicit /use commands for both healthstone item candidates");
     Equal(false, classMacros.Contains("[\"治疗石\"] = \"item:5512", StringComparison.Ordinal),
         "healthstone macro does not rely on implicit /cast expansion");
+    Equal(true, classMacros.Contains("[\"治疗药水\"] = \"/use item:241304\\n/use item:241305\"", StringComparison.Ordinal)
+        && classMacros.Contains("[\"浓缩银月城生命药水\"] = \"/use item:271884\\n/use item:271885\"", StringComparison.Ordinal),
+        "health potion macros use explicit /use commands and keep item types separate");
+    Equal(true, classMacros.Contains("[\"光注法力药水\"] = \"/use item:241300\\n/use item:241301\"", StringComparison.Ordinal)
+        && classMacros.Contains("[\"鲁莽药水\"] = \"/use item:241288\\n/use item:241289\"", StringComparison.Ordinal)
+        && classMacros.Contains("[\"圣光潜力\"] = \"/use item:241308\\n/use item:241309\"", StringComparison.Ordinal),
+        "all item macros use /use instead of the skill /cast command");
     Equal(true, macro.Contains("if body:sub(1, 1) == \"/\"", StringComparison.Ordinal)
         && macro.Contains("return AddCastPreemption(spell, \"/cast \" .. body)", StringComparison.Ordinal),
         "macro resolver only prepends /cast to non-command bodies");
@@ -7282,6 +7620,13 @@ static void FuyutsuiProtocolContract()
         && deathKnightConfig.Contains("\"step\": 51", StringComparison.Ordinal)
         && deathKnightConfig.Contains("\"type\": \"bool\"", StringComparison.Ordinal),
         "Blood DK runtime config carries the independent target death pixel");
+    Equal(true, deathKnight.Contains("\"副本内\"", StringComparison.Ordinal)
+        && player.Contains("function Fuyutsui:UpdateInstanceState()", StringComparison.Ordinal)
+        && stateBlocks.Contains("[\"副本内\"] = function() return state.inInstance and 1 / 255 or 0 end", StringComparison.Ordinal)
+        && events.Contains("self:UpdateInstanceState()", StringComparison.Ordinal)
+        && core.Contains("self:RegisterEvent(\"ZONE_CHANGED_NEW_AREA\")", StringComparison.Ordinal)
+        && deathKnightConfig.Contains("\"副本内\"", StringComparison.Ordinal),
+        "Blood DK publishes reliable instance state for target-specific Reaper's Mark rules");
 
     Equal(true, curves.Contains("CreateColorCurve(25.5, 255)", StringComparison.Ordinal),
         "cast protocol encodes one second as ten units");
@@ -7302,11 +7647,21 @@ static void FuyutsuiProtocolContract()
         "addon block loader includes mouseover and boss categories");
     Equal(true, main.Contains("FALLBACK_MACRO_STATUS_BLOCK = 500", StringComparison.Ordinal)
         && main.Contains("FALLBACK_MACRO_COUNT_BLOCK = 501", StringComparison.Ordinal)
+        && main.Contains("FALLBACK_PROTOCOL_VERSION_BLOCK = 502", StringComparison.Ordinal)
+        && main.Contains("FALLBACK_PROTOCOL_HEARTBEAT_BLOCK = 503", StringComparison.Ordinal)
         && main.Contains("if not blocks.state[\"宏绑定状态\"] then", StringComparison.Ordinal)
         && main.Contains("if not blocks.state[\"宏绑定数量\"] then", StringComparison.Ordinal)
         && commonConfig.Contains("\"宏绑定状态\"", StringComparison.Ordinal)
         && commonConfig.Contains("\"宏绑定数量\"", StringComparison.Ordinal),
         "macro readiness has a stable fallback block for legacy class resources");
+    Equal(true, stateBlocks.Contains("FUYUTSUI_PROTOCOL_VERSION = 3", StringComparison.Ordinal)
+        && stateBlocks.Contains("[\"Fuyutsui协议版本\"]", StringComparison.Ordinal)
+        && stateBlocks.Contains("[\"Fuyutsui状态心跳\"]", StringComparison.Ordinal)
+        && events.Contains("function Fuyutsui:UpdateProtocolHealth()", StringComparison.Ordinal)
+        && events.Contains("self:UpdateProtocolHealth()", StringComparison.Ordinal)
+        && commonConfig.Contains("\"Fuyutsui协议版本\"", StringComparison.Ordinal)
+        && commonConfig.Contains("\"Fuyutsui状态心跳\"", StringComparison.Ordinal),
+        "Fuyutsui publishes a stable protocol version and changing heartbeat");
     Equal(true, main.Contains("self:UpdateStateBlock(\"状态\", \"DiGua桥接就绪\")", StringComparison.Ordinal),
         "player block initialization republishes bridge readiness after state pixels exist");
     Equal(true, main.Contains("AppendAuraList(t.auras.player, \"player\", \"HELPFUL\")", StringComparison.Ordinal)
@@ -7318,6 +7673,11 @@ static void FuyutsuiProtocolContract()
     Equal(true, player.Contains("reason = 6", StringComparison.Ordinal)
         && player.Contains("state.valid = reason / 255", StringComparison.Ordinal),
         "validity keeps pause reasons in its existing protocol byte");
+    Equal(true, player.Contains("local inCombat = UnitAffectingCombat(\"player\")", StringComparison.Ordinal)
+        && player.Contains("state.combatStartTime = GetTime()", StringComparison.Ordinal)
+        && events.Contains("self:UpdatePlayerCombat()", StringComparison.Ordinal)
+        && events.Contains("self:UpdateTargetFullInfo()", StringComparison.Ordinal),
+        "combat and target state refresh has an OnUpdate fallback when unit events are missed");
     Equal(true, player.Contains("function Fuyutsui:IsRaidGroup()", StringComparison.Ordinal)
         && player.Contains("return UnitInRaid(\"player\") ~= nil", StringComparison.Ordinal)
         && player.Contains("if self:IsRaidGroup() then", StringComparison.Ordinal)
@@ -7328,7 +7688,7 @@ static void FuyutsuiProtocolContract()
         && group.Contains("local endIndex = startIndex + 30 * blocks.groups.num - 1", StringComparison.Ordinal)
         && !group.Contains("EvaluateColorFromBoolean(inRange, trueValue, ColorValue0)", StringComparison.Ordinal),
         "raid group enumeration uses the shared raid predicate, resets after roster size changes and keeps all configured slots addressable");
-    Equal(true, block.Contains("local BLOCK_FIX_COUNT = 510", StringComparison.Ordinal)
+    Equal(true, block.Contains("local BLOCK_FIX_COUNT = 515", StringComparison.Ordinal)
         && block.Contains("local HEAL_ABSORB_MAX_SLOTS = 30", StringComparison.Ordinal)
         && paladinConfig.Contains("\"start\": 123", StringComparison.Ordinal)
         && paladinConfig.Contains("\"num\": 10", StringComparison.Ordinal)
@@ -7369,7 +7729,7 @@ static void FuyutsuiProtocolContract()
         "tank-target macros fall back through the current friendly target and current hostile target");
     Equal(true, classMacros.Contains("[@target,harm,nodead]正义盾击", StringComparison.Ordinal)
         && classMacros.Contains("[\"治疗石\"]", StringComparison.Ordinal)
-        && classMacros.Contains("[\"治疗药水\"] = \"item:271884", StringComparison.Ordinal)
+        && classMacros.Contains("[\"治疗药水\"] = \"/use item:241304\\n/use item:241305\"", StringComparison.Ordinal)
         && classMacros.Contains("[\"美德道标\"] = true", StringComparison.Ordinal)
         && !classMacros.Contains("[\"神圣震击\"] = true", StringComparison.Ordinal)
         && classMacros.Contains("牺牲祝福", StringComparison.Ordinal),
@@ -7433,11 +7793,18 @@ static void FuyutsuiProtocolContract()
     Equal(true, deathKnight.Contains("\"公共冷却时长\"", StringComparison.Ordinal)
         && deathKnight.Contains("\"公共冷却剩余\"", StringComparison.Ordinal)
         && deathKnight.Contains("\"浓缩银月城生命药水\"", StringComparison.Ordinal)
+        && deathKnight.Contains("\"血沸手动触发\"", StringComparison.Ordinal)
         && deathKnight.Contains("\"血沸高亮\"", StringComparison.Ordinal)
         && deathKnight.Contains("\"符文刃舞爆发窗口\"", StringComparison.Ordinal),
         "Blood DK protocol exposes the same measured GCD state used by runtime pacing");
-    Equal(true, stateBlocks.Contains("[\"浓缩银月城生命药水\"] = function(self) return GetAnyHealthPotionCooldownPixel(self) end", StringComparison.Ordinal),
-        "Blood DK item protocol exposes all health potion IDs through the concentrated potion alias");
+    Equal(true, stateBlocks.Contains("[\"浓缩银月城生命药水\"] = function(self) return GetAnyItemAvailabilityPixel(self, \"ConcentratedHealthPotionCount\", { 271884, 271885 }) end", StringComparison.Ordinal)
+        && stateBlocks.Contains("[\"治疗药水\"] = function(self) return GetAnyItemAvailabilityPixel(self, \"SilvermoonHealthPotionCount\", { 241304, 241305 }) end", StringComparison.Ordinal)
+        && stateBlocks.Contains("C_Item.GetItemCount(itemID) > 0", StringComparison.Ordinal),
+        "Blood DK item protocol separates ordinary and concentrated potion availability");
+    Equal(true, stateBlocks.Contains("[\"血沸手动触发\"]", StringComparison.Ordinal)
+        && player.Contains("state.bloodBoilManualTriggerPending", StringComparison.Ordinal)
+        && player.Contains("StartBloodBoilEchoWindow(now)", StringComparison.Ordinal),
+        "Blood Boil protocol separates the one-shot manual trigger from the automatic chain");
     Equal(true, stateBlocks.Contains("[\"宏绑定状态\"] = function() return (state.macroBindingStatus or 0) / 255 end", StringComparison.Ordinal)
         && stateBlocks.Contains("[\"宏绑定数量\"]", StringComparison.Ordinal)
         && stateBlocks.Contains("self.state[countKey] <= 0", StringComparison.Ordinal),
@@ -8075,6 +8442,14 @@ static void RuntimeResourceWorkspaceContract()
             "Fuyutsui/class/DeathKnight.lua",
             "5afeb5d6170652eaa8ea4fa748d643241969cceb4c5a32f4b02cfbfc74773f59"),
         "stale target-death Blood DK class resource is eligible for managed repair");
+    Equal(true, RuntimeResourceWorkspaceService.IsKnownUpgradeableResource(
+            "Fuyutsui/class/DeathKnight.lua",
+            "443b1214fc405f7321c2b98e26e3d282e33823c42c4f867d1e9dcd324a181c0b"),
+        "stale runtime Blood DK class resource is eligible for managed repair");
+    Equal(true, RuntimeResourceWorkspaceService.IsKnownUpgradeableResource(
+            "Fuyutsui/class/DeathKnight.lua",
+            "d6497131835224cd02cdb5152a4c7f7adb0fcb801830bf09455d03369a9ca171"),
+        "stale Blood DK class resource missing blood boil trigger state is eligible for managed repair");
     Equal(false, RuntimeResourceWorkspaceService.IsKnownUpgradeableResource(
             "Fuyutsui/class/DeathKnight.lua",
             new string('0', 64)),
@@ -9097,6 +9472,7 @@ static void MacUiTechnicalSampleContract()
             .Order(StringComparer.Ordinal)
             .Select(File.ReadAllText));
     var mainWindowText = File.ReadAllText(Path.Combine(sampleRoot, "MainWindow.axaml.cs"));
+    var runtimeText = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "Runtime", "ShigureRuntime.cs"));
     var windowInteractionText = File.ReadAllText(Path.Combine(sampleRoot, "MacWindowInteraction.cs"));
     var compositionText = File.ReadAllText(Path.Combine(sampleRoot, "MacUiComposition.cs"));
     var programText = File.ReadAllText(Path.Combine(sampleRoot, "Program.cs"));
@@ -9231,6 +9607,14 @@ static void MacUiTechnicalSampleContract()
         "Mac UI overlay surfaces the concrete scan failure reason");
     Equal(true, mainWindowText.Contains("色块识别已恢复", StringComparison.Ordinal),
         "Mac UI reports scan recovery on screen");
+    Equal(true, mainWindowText.Contains("snapshot.State?.GetInt(\"有效性\") == 1", StringComparison.Ordinal),
+        "Mac UI only reports scan recovery after a valid state is restored");
+    Equal(true, runtimeText.Contains("3 or 4 or 6 => null", StringComparison.Ordinal),
+        "runtime suppresses mount and chat invalid-state prompts");
+    Equal(false, runtimeText.Contains("角色处于坐骑状态", StringComparison.Ordinal)
+        || runtimeText.Contains("聊天输入框已打开", StringComparison.Ordinal)
+        || runtimeText.Contains("角色正在施放坐骑", StringComparison.Ordinal),
+        "runtime does not expose mount or chat prompt text");
     Equal(true, mainWindowText.Contains("_activeScanFailureReason = null", StringComparison.Ordinal),
         "Mac UI clears persistent scan warnings when runtime stops");
     Equal(true, sourceText.Contains("ShowActivated = false", StringComparison.Ordinal), "Mac logic status toast does not steal focus");
@@ -9682,8 +10066,9 @@ static bool IsSafeRelativePath(string path)
 
 static int EncodeStep(int step, int value)
 {
-    var red = step <= 255 ? 0 : 1;
-    var green = step <= 255 ? step : step - 255;
+    var zeroBased = step - 1;
+    var red = zeroBased / 255;
+    var green = zeroBased % 255 + 1;
     return Argb(red, green, value);
 }
 

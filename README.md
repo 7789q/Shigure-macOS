@@ -37,7 +37,7 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 ## Fuyutsui 同步
 
-当前基线为 Fuyutsui 1.2.1.15；随包模块当前为血DK 1.2.1.59、奶骑 1.2.1.25。应用会迁移工作副本、生成配置并检查协议冲突；协议、模块和奶骑美德的详细边界见[架构与发行说明](Documentation/macOS/README.md)、[文档索引](Documentation/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
+当前基线为 Fuyutsui 1.2.1.15；源码事实源中的随包模块为血DK 1.2.1.61、奶骑 1.2.1.25。源码当前已通过 Release 构建和 89 项契约测试；既有本地验收包 `artifacts/macos/Shigure-20260908-local-4.app` 已通过签名和此前的 Launch Services 启动验收，但未包含本轮最新 Runtime 动作确认修复，需重新打包后再作为当前运行产物。WoW 实战验收仍需单独完成。应用会迁移工作副本、生成配置并检查协议冲突。协议、模块和奶骑美德的详细边界见[架构与发行说明](Documentation/macOS/README.md)、[文档索引](Documentation/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
 
 ## 环境要求
 
@@ -49,23 +49,28 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 ## 本地构建
 
-先创建仅供本机开发使用的持久代码签名身份，再构建应用：
+从能够访问登录钥匙串的 macOS 系统 Terminal 执行一条命令即可。脚本会自动检查签名身份、选择新的输出路径、按改动范围执行验证，并完成启动验收：
 
 ```bash
-Packaging/macOS/ensure-local-signing-identity.sh
-Packaging/macOS/build-app.sh artifacts/macos/Shigure.app
-ditto artifacts/macos/Shigure.app /Applications/Shigure.app
-open -n /Applications/Shigure.app
+Packaging/macOS/repackage-local.sh
+```
+
+只确认打包链路时可跳过完整验证：
+
+```bash
+Packaging/macOS/repackage-local.sh --fast
 ```
 
 构建脚本默认生成当前 Mac 架构的 self-contained 应用。交叉构建时设置：
 
 ```bash
-SHIGURE_RUNTIME_IDENTIFIER=osx-arm64 Packaging/macOS/build-app.sh artifacts/macos/Shigure-arm64.app
-SHIGURE_RUNTIME_IDENTIFIER=osx-x64 Packaging/macOS/build-app.sh artifacts/macos/Shigure-x64.app
+SHIGURE_RUNTIME_IDENTIFIER=osx-arm64 Packaging/macOS/repackage-local.sh --fast artifacts/macos/Shigure-arm64.app
+SHIGURE_RUNTIME_IDENTIFIER=osx-x64 Packaging/macOS/repackage-local.sh --fast artifacts/macos/Shigure-x64.app
 ```
 
-## 构建与测试
+## 构建与测试（调试参考）
+
+日常重新打包使用上面的 `Packaging/macOS/repackage-local.sh`；只有需要单独定位验证失败时才拆分执行以下命令。
 
 ```bash
 dotnet restore Shigure.slnx
@@ -86,7 +91,7 @@ codesign --display --verbose=4 artifacts/macos/Shigure.app/Contents/MacOS/Shigur
 
 ```text
 artifacts/macos/*.app
-~/Library/Application Support/Shigure/logs/runtime-detailed.log
+~/Library/Application Support/Shigure/logs/runtime-detailed.log*
 ~/Library/Application Support/Shigure/logs/runtime-ui-errors.log
 ```
 

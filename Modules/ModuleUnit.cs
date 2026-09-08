@@ -68,6 +68,9 @@ public enum UnitSelectorKind
     /// <summary>按预计需求取最高且实际带美德道标的单位。</summary>
     HighestExpectedNeedWithAura,
 
+    /// <summary>按实际治疗缺口取最高且实际带美德道标的单位。</summary>
+    HighestHealingDeficitWithAura,
+
     /// <summary>按预计需求取最高且未带美德道标的单位。</summary>
     HighestExpectedNeedWithoutAura
 }

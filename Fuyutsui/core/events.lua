@@ -10,6 +10,7 @@ function Fuyutsui:RefreshZoneState()
     state.mapID = C_Map.GetBestMapForUnit("player") or 0
     state.mapInfo = C_Map.GetMapInfo(state.mapID)
     state.subzone = GetSubZoneText()
+    self:UpdateInstanceState()
     if GetBindLocation() == state.subzone then
         self:MacroTrace("欢迎回家")
     end
@@ -23,9 +24,14 @@ function Fuyutsui:ZONE_CHANGED_INDOORS()
     self:RefreshZoneState()
 end
 
+function Fuyutsui:ZONE_CHANGED_NEW_AREA()
+    self:RefreshZoneState()
+end
+
 function Fuyutsui:PLAYER_ENTERING_WORLD()
     self:MacroTrace("PLAYER_ENTERING_WORLD 收到")
     state.mapID = C_Map.GetBestMapForUnit("player") or 0
+    self:UpdateInstanceState()
     self:UpdateHolyArmaments(375576)
     self:UpdateReaverGlaive(204157)
     self:UpdateHeroTalent()
@@ -598,6 +604,12 @@ end
 Fuyutsui.timeElapsed = 0
 Fuyutsui.timeElapsed1 = 0
 
+function Fuyutsui:UpdateProtocolHealth()
+    state.protocolHeartbeat = ((state.protocolHeartbeat or 0) + 1) % 256
+    self:UpdateStateBlock("状态", "Fuyutsui协议版本")
+    self:UpdateStateBlock("状态", "Fuyutsui状态心跳")
+end
+
 function Fuyutsui:OnUpdate(elapsed)
     if self.UpdateAOEWarningState then
         self:UpdateAOEWarningState()
@@ -619,12 +631,15 @@ function Fuyutsui:OnUpdate(elapsed)
 
     self.timeElapsed = self.timeElapsed + elapsed
     if self.timeElapsed > 0.2 then
+        self:UpdateProtocolHealth()
         self:UpdateStateBlock("状态", "公共冷却时长")
+        self:UpdatePlayerCombat()
+        self:UpdatePlayerCombatTime()
         self:UpdateSpellCooldown()
         self:UpdatePlayerAssistant()
         self:UpdateRune()
+        self:UpdateTargetFullInfo()
         self:UpdateTargetRangeBlock()
-        self:UpdateTargetDeath()
         self:UpdateFocusRangeBlock()
         self:UpdateMouseoverRangeBlock()
 
@@ -635,7 +650,6 @@ function Fuyutsui:OnUpdate(elapsed)
 
     self.timeElapsed1 = self.timeElapsed1 + elapsed
     if self.timeElapsed1 >= 1 then
-        self:UpdatePlayerCombatTime()
         self:UpdateKnightStatusCount()
         self.timeElapsed1 = 0
     end

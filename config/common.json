@@ -11,6 +11,16 @@
         "step": 3,
         "type": "int"
     },
+    "Fuyutsui协议版本": {
+        "step": 502,
+        "type": "int",
+        "category": "状态"
+    },
+    "Fuyutsui状态心跳": {
+        "step": 503,
+        "type": "int",
+        "category": "状态"
+    },
     "宏绑定状态": {
         "step": 500,
         "type": "int",

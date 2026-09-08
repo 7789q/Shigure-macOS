@@ -118,6 +118,7 @@ function Fuyutsui:SetBloodBoilHighlightActive(active)
     local changed = state.bloodBoilHighlightActive ~= active
     state.bloodBoilHighlightActive = active
     if changed then
+        self:UpdateStateBlock("状态", "血沸手动触发")
         self:UpdateStateBlock("状态", "血沸高亮")
         self:UpdateStateBlock("状态", "血沸自动链")
     end
@@ -130,19 +131,22 @@ function Fuyutsui:SetBloodBoilAutoChain(active)
 end
 
 function Fuyutsui:StartBloodBoilProcWindow(now)
-    self:SetBloodBoilAutoChain(true)
+    state.bloodBoilManualTriggerPending = true
     state.bloodBoilPhase = "PROC"
     state.bloodBoilProcWindowUntil = now + BLOOD_BOIL_PROC_WINDOW_SECONDS
     state.bloodBoilEchoWindowUntil = nil
     state.bloodBoilPendingTriggers = 0
     state.bloodBoilRepeatHighlight = false
+    self:UpdateStateBlock("状态", "血沸手动触发")
 end
 
 function Fuyutsui:StartBloodBoilEchoWindow(now)
+    state.bloodBoilManualTriggerPending = false
     self:SetBloodBoilAutoChain(true)
     state.bloodBoilPhase = "ECHO"
     state.bloodBoilEchoWindowUntil = now + BLOOD_BOIL_ECHO_WINDOW_SECONDS
     state.bloodBoilRepeatHighlight = false
+    self:UpdateStateBlock("状态", "血沸手动触发")
 end
 
 function Fuyutsui:HandleBloodBoilOverlay(active, spellID)
@@ -156,14 +160,6 @@ function Fuyutsui:HandleBloodBoilOverlay(active, spellID)
         state.bloodBoilOverlayOn = stillActive
         state.bloodBoilLastOverlayHideAt = now
         self:SetBloodBoilHighlightActive(stillActive)
-        if not stillActive then
-            state.bloodBoilPhase = nil
-            state.bloodBoilProcWindowUntil = nil
-            state.bloodBoilEchoWindowUntil = nil
-            state.bloodBoilPendingTriggers = 0
-            state.bloodBoilRepeatHighlight = false
-            self:SetBloodBoilAutoChain(false)
-        end
         return
     end
 
@@ -171,6 +167,7 @@ function Fuyutsui:HandleBloodBoilOverlay(active, spellID)
     state.bloodBoilOverlayOn = true
     self:SetBloodBoilHighlightActive(true)
     if not risingEdge then return end
+    if state.bloodBoilPhase then return end
 
     self:StartBloodBoilProcWindow(now)
 end
@@ -202,13 +199,13 @@ function Fuyutsui:ConfirmBloodBoilSpellcast(spellID)
     end
     state.bloodBoilLastCastAt = now
 
-    if state.bloodBoilPhase == "PROC" or state.bloodBoilPhase == "ECHO" then
-        state.bloodBoilPhase = nil
-        state.bloodBoilProcWindowUntil = nil
-        state.bloodBoilEchoWindowUntil = nil
-        state.bloodBoilPendingTriggers = 0
-        state.bloodBoilRepeatHighlight = false
-        self:SetBloodBoilAutoChain(false)
+    if state.bloodBoilPhase == "PROC" then
+        self:StartBloodBoilEchoWindow(now)
+        self:UpdateStateBlock("状态", "血沸手动触发")
+        return
+    end
+    if state.bloodBoilPhase == "ECHO" then
+        state.bloodBoilEchoWindowUntil = now + BLOOD_BOIL_ECHO_WINDOW_SECONDS
         return
     end
 end
@@ -220,13 +217,25 @@ function Fuyutsui:UpdateBloodBoilAutomationState()
         and now > state.bloodBoilProcWindowUntil then
         state.bloodBoilPhase = nil
         state.bloodBoilProcWindowUntil = nil
+        state.bloodBoilManualTriggerPending = false
+        state.bloodBoilPendingTriggers = 0
+        state.bloodBoilRepeatHighlight = false
+        self:UpdateStateBlock("状态", "血沸手动触发")
+    elseif state.bloodBoilPhase == "ECHO"
+        and state.bloodBoilEchoWindowUntil
+        and now > state.bloodBoilEchoWindowUntil then
+        state.bloodBoilPhase = nil
+        state.bloodBoilEchoWindowUntil = nil
+        state.bloodBoilManualTriggerPending = false
         state.bloodBoilPendingTriggers = 0
         state.bloodBoilRepeatHighlight = false
         self:SetBloodBoilAutoChain(false)
+        self:UpdateStateBlock("状态", "血沸手动触发")
     end
 end
 
 function Fuyutsui:ResetBloodBoilAutomation()
+    state.bloodBoilManualTriggerPending = false
     state.bloodBoilAutoChain = false
     state.bloodBoilHighlightActive = false
     state.bloodBoilOverlayOn = false
@@ -237,6 +246,7 @@ function Fuyutsui:ResetBloodBoilAutomation()
     state.bloodBoilRepeatHighlight = false
     state.bloodBoilLastOverlayHideAt = nil
     state.bloodBoilLastCastAt = nil
+    self:UpdateStateBlock("状态", "血沸手动触发")
     self:UpdateStateBlock("状态", "血沸自动链")
 end
 
@@ -342,7 +352,11 @@ function Fuyutsui:UpdatePlayerValid()
 end
 
 function Fuyutsui:UpdatePlayerCombat()
-    state.combat = UnitAffectingCombat("player")
+    local inCombat = UnitAffectingCombat("player")
+    if inCombat and not state.combat then
+        state.combatStartTime = GetTime()
+    end
+    state.combat = inCombat
 end
 
 function Fuyutsui:UpdatePlayerCombatTime()
@@ -510,6 +524,15 @@ function Fuyutsui:UpdateGroupCount()
     self:UpdateStateBlock("状态", "队伍人数")
 end
 
+function Fuyutsui:UpdateInstanceState()
+    local inInstance = false
+    if type(IsInInstance) == "function" then
+        inInstance = IsInInstance() == true
+    end
+    state.inInstance = inInstance
+    self:UpdateStateBlock("状态", "副本内")
+end
+
 function Fuyutsui:UpdateEncounterID(encounterID, difficultyID)
     state.encounterID = encounterID
     local id = self.bossID and self.bossID[encounterID] or 0
@@ -567,42 +590,52 @@ function Fuyutsui:UpdatePlayerCasting(spellId)
 end
 
 function Fuyutsui:PublishPlayerAction(spellId, status)
-    if issecretvalue(spellId) then
-        state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
-        state.playerActionSpell = 0
-        state.playerActionStatus = status
-        self:UpdateStateBlock("状态", "玩家动作技能")
-        self:UpdateStateBlock("状态", "玩家动作状态")
-        self:UpdateStateBlock("状态", "玩家动作序号")
-        return
-    end
-    if type(spellId) ~= "number" then return end
-    local spell = spellsList[spellId]
-    if not spell or type(spell.index) ~= "number" then
-        -- Do not leave the previous spell code visible for an unknown event.
-        state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
-        state.playerActionSpell = 0
-        state.playerActionStatus = status
-        self:UpdateStateBlock("状态", "玩家动作技能")
-        self:UpdateStateBlock("状态", "玩家动作状态")
-        self:UpdateStateBlock("状态", "玩家动作序号")
-        return
-    end
-    if state.specIndex == 1 and status == 2 then
-        if spell.name == "心脏打击" then
-            state.bloodBoilHeartStrikeCount = math.min(3, (state.bloodBoilHeartStrikeCount or 0) + 1)
-            self:UpdateStateBlock("状态", "血沸循环心打次数")
-        elseif spell.name == "血液沸腾" then
-            state.bloodBoilHeartStrikeCount = 0
-            self:UpdateStateBlock("状态", "血沸循环心打次数")
+    local spellIndex = 0
+    local spell
+    if not issecretvalue(spellId) then
+        if type(spellId) ~= "number" then return end
+        spell = spellsList[spellId]
+        if spell and type(spell.index) == "number" then
+            spellIndex = spell.index
         end
     end
-    state.playerActionSerial = ((state.playerActionSerial or 0) % 255) + 1
-    state.playerActionSpell = spell.index
+
+    -- The queue slot is committed by its serial block after its payload blocks.
+    -- This prevents the screen reader from accepting a half-written tuple.
+    local serial = ((state.playerActionSerial or 0) % 255) + 1
+    local slot = ((serial - 1) % 4) + 1
+    state.playerActionSerial = serial
+    if spellIndex == 0 then
+        state.playerActionSpell = 0
+    else
+        state.playerActionSpell = spellIndex
+    end
     state.playerActionStatus = status
+    state.playerActionEvents = state.playerActionEvents or {}
+    state.playerActionEvents[slot] = {
+        serial = serial,
+        spell = spellIndex,
+        status = status,
+    }
+
+    if spell then
+        if state.specIndex == 1 and status == 2 then
+            if spell.name == "心脏打击" then
+                state.bloodBoilHeartStrikeCount = math.min(3, (state.bloodBoilHeartStrikeCount or 0) + 1)
+                self:UpdateStateBlock("状态", "血沸循环心打次数")
+            elseif spell.name == "血液沸腾" then
+                state.bloodBoilHeartStrikeCount = 0
+                self:UpdateStateBlock("状态", "血沸循环心打次数")
+            end
+        end
+    end
+
     self:UpdateStateBlock("状态", "玩家动作技能")
     self:UpdateStateBlock("状态", "玩家动作状态")
     self:UpdateStateBlock("状态", "玩家动作序号")
+    self:UpdateStateBlock("状态", "玩家动作事件" .. slot .. "技能")
+    self:UpdateStateBlock("状态", "玩家动作事件" .. slot .. "状态")
+    self:UpdateStateBlock("状态", "玩家动作事件" .. slot .. "序号")
 end
 
 function Fuyutsui:ResetBloodBoilCycleCount()

@@ -115,6 +115,12 @@ public static class UnitSelector
                     threshold,
                     "预期需求",
                     data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role) && HasAura(data, aura)),
+            UnitSelectorKind.HighestHealingDeficitWithAura => aura is null
+                ? null
+                : HighestHealingDeficit(
+                    group,
+                    threshold,
+                    data => MatchesRoleFilter(data, unit.RoleFilter, unit.Role) && HasAura(data, aura)),
             UnitSelectorKind.HighestExpectedNeedWithoutAura => aura is null
                 ? null
                 : HighestForecastNeed(

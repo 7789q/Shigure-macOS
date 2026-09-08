@@ -23,7 +23,11 @@ public sealed class RuntimeResourceWorkspaceService
                 // 1.2.1.47 已更新 manifest，但旧职业表实际仍未落盘；允许本次协议资源修复。
                 "6d31ab0b3dffb095de7971b3341d1f966d2a3d2da5c6dbf964acdf07732566ca",
                 // 当前运行副本缺少目标死亡状态块，导致血 DK 目标技能条件读到“实际 缺失”。
-                "5afeb5d6170652eaa8ea4fa748d643241969cceb4c5a32f4b02cfbfc74773f59"
+                "5afeb5d6170652eaa8ea4fa748d643241969cceb4c5a32f4b02cfbfc74773f59",
+                // 旧运行副本同时缺少目标死亡状态及近期血 DK 状态、技能定义。
+                "443b1214fc405f7321c2b98e26e3d282e33823c42c4f867d1e9dcd324a181c0b",
+                // 当前用户运行副本缺少血沸手动触发和副本内状态块。
+                "d6497131835224cd02cdb5152a4c7f7adb0fcb801830bf09455d03369a9ca171"
             }
         };
     private static readonly string[] HolyPaladinRuntimeStates =

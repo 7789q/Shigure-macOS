@@ -4,12 +4,17 @@ namespace Shigure;
 
 public sealed class StateBuilder : IRuntimeStateBuilder
 {
+    private const int PlayerActionQueueFirstBlock = 504;
+    private const int PlayerActionQueueSlotCount = 4;
+    private const int PlayerActionQueueFieldCount = 3;
     private readonly ConfigService _config;
 
     public StateBuilder(ConfigService config)
     {
         _config = config;
     }
+
+    public bool RequiresProtocolHealth => true;
 
     public GameState Build(
         IReadOnlyDictionary<int, int> rowData,
@@ -56,6 +61,8 @@ public sealed class StateBuilder : IRuntimeStateBuilder
                 positiveAbsorbs);
         }
 
+        ApplyPlayerActionEventQueue(result, rowData);
+
         ApplyProtectedAoeStage(result);
 
         return new GameState(result, healAbsorbDiagnostic);
@@ -87,6 +94,37 @@ public sealed class StateBuilder : IRuntimeStateBuilder
         if (remainingDeciseconds <= lastSafeGcdThreshold)
         {
             state["AOE事件阶段"] = 5;
+        }
+    }
+
+    private static void ApplyPlayerActionEventQueue(
+        IDictionary<string, object?> state,
+        IReadOnlyDictionary<int, int> rowData)
+    {
+        var hasQueue = false;
+        for (var slot = 1; slot <= PlayerActionQueueSlotCount; slot++)
+        {
+            var baseStep = PlayerActionQueueFirstBlock + (slot - 1) * PlayerActionQueueFieldCount;
+            if (rowData.ContainsKey(baseStep)
+                || rowData.ContainsKey(baseStep + 1)
+                || rowData.ContainsKey(baseStep + 2))
+            {
+                hasQueue = true;
+                break;
+            }
+        }
+
+        if (!hasQueue)
+        {
+            return;
+        }
+
+        for (var slot = 1; slot <= PlayerActionQueueSlotCount; slot++)
+        {
+            var baseStep = PlayerActionQueueFirstBlock + (slot - 1) * PlayerActionQueueFieldCount;
+            state[$"玩家动作事件{slot}序号"] = rowData.GetValueOrDefault(baseStep);
+            state[$"玩家动作事件{slot}技能"] = rowData.GetValueOrDefault(baseStep + 1);
+            state[$"玩家动作事件{slot}状态"] = rowData.GetValueOrDefault(baseStep + 2);
         }
     }
 

@@ -20,7 +20,7 @@
     { "Name": "轻伤目标", "HealthName": "轻伤目标血量", "Kind": "LowestHealth", "HealthThreshold": 90 },
     { "Name": "治疗目标", "HealthName": "治疗目标血量", "Kind": "HighestHealingDeficit", "HealthThreshold": 0 },
     { "Name": "最高预期需求目标", "HealthName": "最高预期需求", "Kind": "HighestExpectedNeed", "HealthThreshold": 0 },
-    { "Name": "最高预期美德目标", "HealthName": "最高预期美德目标血量", "Kind": "HighestExpectedNeedWithAura", "HealthThreshold": 0, "AuraNames": [ "美德道标" ] },
+    { "Name": "最高实际美德目标", "HealthName": "最高实际美德目标血量", "Kind": "HighestHealingDeficitWithAura", "HealthThreshold": 0, "AuraNames": [ "美德道标" ] },
     { "Name": "驱散目标", "Kind": "UnitWithAnyDispelType" }
   ],
   "Counts": [
@@ -133,7 +133,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "预计治疗人数 >= 3 && 多人爆发预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 预计治疗人数 >= 3 && 多人持续预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+      "Condition": "真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发高压 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人持续高压 > 0 && AbsorbAny == 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
       "SubConditions": [ "AOE事件类型 != 2 && AOE事件阶段 == 0", "AOE事件类型 != 2 && AOE事件阶段 == 4", "AOE事件类型 == 2 && AOE事件阶段 == 1" ],
       "Unit": 1,
       "Spell": "美德道标",
@@ -158,9 +158,9 @@
       "Enabled": true,
       "Condition": "H70 == 0 && DTotal > 0 && 美德覆盖人数 >= 2 && 美德转移需求 >= 10 && auras.美德道标 > 0",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
-      "UnitName": "最高预期美德目标",
+      "UnitName": "最高实际美德目标",
       "Spell": "荣耀圣令",
-      "Comment": "美德窗口内按实际获得美德的目标和未来预期需求选择治疗，确保直接治疗产生真实转移收益"
+      "Comment": "美德窗口内按实际获得美德的目标和当前治疗缺口选择治疗，确保直接治疗产生真实转移收益"
     },
     {
       "Enabled": true,

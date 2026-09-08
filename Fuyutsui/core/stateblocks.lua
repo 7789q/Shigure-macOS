@@ -10,6 +10,7 @@ local boss = Fuyutsui.boss
 
 local ColorValue0 = CreateColor(0, 0, 0, 1)
 local ColorValue1 = CreateColor(0, 0, 1 / 255, 1)
+local FUYUTSUI_PROTOCOL_VERSION = 3
 
 Fuyutsui.powerNameMap = {
     ["MANA"] = "法力值",
@@ -31,35 +32,20 @@ Fuyutsui.powerNameMap = {
     ["CHI"] = "真气",
 }
 
-local function GetItemCooldownPixel(self, countKey, itemID)
+local function GetAnyItemAvailabilityPixel(self, countKey, itemIDs)
     if not self.state[countKey] then
         self:GetItemCount()
     end
     if not self.state[countKey] or self.state[countKey] <= 0 then
         return 0
     end
-    local remainingTime = self:GetItemRemainingTime(itemID)
-    if remainingTime then
-        return math.min(1, remainingTime / 255)
-    end
-    return 1
-end
-
-local function GetAnyHealthPotionCooldownPixel(self)
-    if not self.state.HealthPotionCount then
-        self:GetItemCount()
-    end
-    if not self.state.HealthPotionCount or self.state.HealthPotionCount <= 0 then
-        return 0
-    end
-    local available = 0
-    for _, itemID in ipairs({ 241304, 241305, 271884, 271885 }) do
-        local remainingTime = self:GetItemRemainingTime(itemID)
-        if remainingTime and remainingTime > 0 then
-            available = math.max(available, math.min(1, remainingTime / 255))
+    for _, itemID in ipairs(itemIDs) do
+        if C_Item.GetItemCount(itemID) > 0
+            and self:GetItemRemainingTime(itemID) <= 0 then
+            return 1
         end
     end
-    return available
+    return 0
 end
 
 --- mode: "cast" | "castElapsed" | "channel"
@@ -143,8 +129,10 @@ local stateBlockGetters = {
         ["移动"] = function() return state.moving or 0 end,
         ["站定时长"] = function() return state.stationaryDuration or 0 end,
         ["血沸循环心打次数"] = function() return math.min(3, state.bloodBoilHeartStrikeCount or 0) / 255 end,
+        ["血沸手动触发"] = function() return state.bloodBoilManualTriggerPending and 1 / 255 or 0 end,
         ["血沸自动链"] = function() return state.bloodBoilAutoChain and 1 / 255 or 0 end,
         ["血沸高亮"] = function() return state.bloodBoilHighlightActive and 1 / 255 or 0 end,
+        ["副本内"] = function() return state.inInstance and 1 / 255 or 0 end,
         ["符文刃舞爆发窗口"] = function() return state.deathbringerBurstWindow and 1 / 255 or 0 end,
         ["生命值"] = function() return state.healthPercent or 0 end,
         ["一键辅助"] = function() return state.assistantSpell or 0 end,
@@ -187,6 +175,8 @@ local stateBlockGetters = {
             return centiseconds / 255
         end,
         ["DiGua桥接就绪"] = function() return state.diGuaBridgeReady and 1 or 0 end,
+        ["Fuyutsui协议版本"] = function() return FUYUTSUI_PROTOCOL_VERSION / 255 end,
+        ["Fuyutsui状态心跳"] = function() return (state.protocolHeartbeat or 0) / 255 end,
         ["宏绑定状态"] = function() return (state.macroBindingStatus or 0) / 255 end,
         ["宏绑定数量"] = function() return math.min(255, state.macroBindingCount or 0) / 255 end,
         ["玩家动作序号"] = function() return (state.playerActionSerial or 0) / 255 end,
@@ -235,13 +225,13 @@ local stateBlockGetters = {
         ["爆发药水开关"] = function(self) return GetConfigPixel(self, "potion") end,
         ["延迟"] = function(self) return GetConfigPixel(self, "delay") end,
 
-        ["治疗药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
-        ["魔法药水"] = function(self) return GetItemCooldownPixel(self, "ManaPotionCount", 241301) end,
-        ["治疗石"] = function(self) return GetItemCooldownPixel(self, "HealthstoneCount", 5512) end,
-        ["鲁莽药水"] = function(self) return GetItemCooldownPixel(self, "RecklessnessCount", 241288) end,
-        ["圣光潜力"] = function(self) return GetItemCooldownPixel(self, "LightsPotentialCount", 241308) end,
-        ["银月城生命药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
-        ["浓缩银月城生命药水"] = function(self) return GetAnyHealthPotionCooldownPixel(self) end,
+        ["治疗药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "SilvermoonHealthPotionCount", { 241304, 241305 }) end,
+        ["魔法药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "ManaPotionCount", { 241300, 241301 }) end,
+        ["治疗石"] = function(self) return GetAnyItemAvailabilityPixel(self, "HealthstoneCount", { 5512, 224464 }) end,
+        ["鲁莽药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "RecklessnessCount", { 241288, 241289 }) end,
+        ["圣光潜力"] = function(self) return GetAnyItemAvailabilityPixel(self, "LightsPotentialCount", { 241308, 241309 }) end,
+        ["银月城生命药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "SilvermoonHealthPotionCount", { 241304, 241305 }) end,
+        ["浓缩银月城生命药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "ConcentratedHealthPotionCount", { 271884, 271885 }) end,
 
         ["施法(正计时)"] = function(self) return self:GetUnitCastPixel("player", "castElapsed") end,
         ["施法(倒计时)"] = function(self) return self:GetUnitCastPixel("player", "cast") end,
@@ -304,13 +294,13 @@ local stateBlockGetters = {
         ["增压层数"] = function() return state.chargedComboPoints or 0 end,
     },
     ["物品"] = {
-        ["治疗药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
-        ["魔法药水"] = function(self) return GetItemCooldownPixel(self, "ManaPotionCount", 241301) end,
-        ["治疗石"] = function(self) return GetItemCooldownPixel(self, "HealthstoneCount", 5512) end,
-        ["鲁莽药水"] = function(self) return GetItemCooldownPixel(self, "RecklessnessCount", 241288) end,
-        ["圣光潜力"] = function(self) return GetItemCooldownPixel(self, "LightsPotentialCount", 241308) end,
-        ["银月城生命药水"] = function(self) return GetItemCooldownPixel(self, "HealthPotionCount", 241304) end,
-        ["浓缩银月城生命药水"] = function(self) return GetAnyHealthPotionCooldownPixel(self) end,
+        ["治疗药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "SilvermoonHealthPotionCount", { 241304, 241305 }) end,
+        ["魔法药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "ManaPotionCount", { 241300, 241301 }) end,
+        ["治疗石"] = function(self) return GetAnyItemAvailabilityPixel(self, "HealthstoneCount", { 5512, 224464 }) end,
+        ["鲁莽药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "RecklessnessCount", { 241288, 241289 }) end,
+        ["圣光潜力"] = function(self) return GetAnyItemAvailabilityPixel(self, "LightsPotentialCount", { 241308, 241309 }) end,
+        ["银月城生命药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "SilvermoonHealthPotionCount", { 241304, 241305 }) end,
+        ["浓缩银月城生命药水"] = function(self) return GetAnyItemAvailabilityPixel(self, "ConcentratedHealthPotionCount", { 271884, 271885 }) end,
     },
     ["配置开关"] = {
         ["爆发开关"] = function(self) return GetConfigPixel(self, "cooldowns") end,
@@ -365,6 +355,25 @@ local stateBlockGetters = {
         ["引导可打断"] = function(self) return self:GetUnitInterruptiblePixel("mouseover", "channel") end,
     },
 }
+
+-- 固定高位动作事件队列。每个槽位的序号块最后提交，Runtime 据此判断
+-- 技能码和状态码是否已经属于同一个完整事件。
+for slot = 1, 4 do
+    local slotIndex = slot
+    local function GetPlayerActionEventField(field)
+        local event = state.playerActionEvents and state.playerActionEvents[slotIndex]
+        return event and event[field] or 0
+    end
+    stateBlockGetters["状态"]["玩家动作事件" .. slot .. "序号"] = function()
+        return GetPlayerActionEventField("serial") / 255
+    end
+    stateBlockGetters["状态"]["玩家动作事件" .. slot .. "技能"] = function()
+        return GetPlayerActionEventField("spell") / 255
+    end
+    stateBlockGetters["状态"]["玩家动作事件" .. slot .. "状态"] = function()
+        return GetPlayerActionEventField("status") / 255
+    end
+end
 
 for index = 1, 5 do
     local unit = "boss" .. index

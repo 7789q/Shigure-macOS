@@ -17,6 +17,7 @@ public sealed class ShigureRuntime : IDisposable
     private readonly HealAbsorbStabilizer _healAbsorbStabilizer = new();
     private readonly CooldownConfirmationTracker _cooldownConfirmationTracker = new();
     private readonly ActionFailureBackoff _actionFailureBackoff = new();
+    private readonly RuntimeProtocolHealth _protocolHealth = new();
 
     private GameState? _state;
     private string? _className;
@@ -263,6 +264,7 @@ public sealed class ShigureRuntime : IDisposable
 
         if (scan.RowData is null)
         {
+            _protocolHealth.Reset();
             _emergencyActionGuard.Reset();
             _healAbsorbStabilizer.Reset();
             _state = null;
@@ -295,14 +297,31 @@ public sealed class ShigureRuntime : IDisposable
         var validityCode = _state.GetInt("有效性");
         if (validityCode != 1)
         {
+            _protocolHealth.Reset();
             _healAbsorbStabilizer.Reset();
             _moduleName = null;
             _scanFailureReason = DescribeInvalidState(validityCode);
-            _currentStep =
-                $"等待游戏状态（状态字段 {scan.RowData.Count}，CountBars {scan.BarData.Count}，" +
-                $"治疗吸收 {scan.HealAbsorbData.Count}，职业 {_classId?.ToString() ?? "-"}，" +
-                $"专精 {_specId?.ToString() ?? "-"}，{_scanFailureReason}）";
+            _currentStep = _scanFailureReason is null
+                ? "等待游戏状态"
+                :
+                    $"等待游戏状态（状态字段 {scan.RowData.Count}，CountBars {scan.BarData.Count}，" +
+                    $"治疗吸收 {scan.HealAbsorbData.Count}，职业 {_classId?.ToString() ?? "-"}，" +
+                    $"专精 {_specId?.ToString() ?? "-"}，{_scanFailureReason}）";
             _unitInfo = new Dictionary<string, object?>();
+            return;
+        }
+
+        if (_stateBuilder.RequiresProtocolHealth
+            && !_protocolHealth.Observe(_state, _timeProvider.GetUtcNow(), out var protocolReason))
+        {
+            _ruleRateLimitedUntil.Clear();
+            _logicPausedUntil = DateTimeOffset.MinValue;
+            _emergencyActionGuard.Reset();
+            _cooldownConfirmationTracker.Reset();
+            _actionFailureBackoff.Reset();
+            _moduleName = null;
+            _unitInfo = new Dictionary<string, object?>();
+            _currentStep = protocolReason;
             return;
         }
 
@@ -543,8 +562,116 @@ public sealed class ShigureRuntime : IDisposable
 
         if (CanSend(decision, sendAttemptAt))
         {
-            SendAndPauseLogic(decision, targetIdentity, queueWindowCentiseconds);
+            if (!TryPrepareDispatch(
+                    decision,
+                    targetIdentity,
+                    out var dispatchDecision,
+                    out var dispatchTarget,
+                    out var dispatchState,
+                    out var dispatchFailure))
+            {
+                var guardedInfo = _unitInfo.ToDictionary(
+                    entry => entry.Key,
+                    entry => entry.Value,
+                    StringComparer.Ordinal);
+                guardedInfo["发送拦截"] = "发送前状态预检失败";
+                guardedInfo["发送拦截原因"] = dispatchFailure;
+                _unitInfo = guardedInfo;
+                _currentStep = $"等待发送前状态稳定：{decision.CooldownConfirmationSpell ?? "技能"}";
+                return;
+            }
+
+            SendAndPauseLogic(
+                dispatchDecision,
+                dispatchTarget,
+                queueWindowCentiseconds,
+                dispatchState);
         }
+    }
+
+    private bool TryPrepareDispatch(
+        LogicDecision decision,
+        TargetIdentity? expectedTarget,
+        out LogicDecision dispatchDecision,
+        out TargetIdentity? dispatchTarget,
+        out GameState? dispatchState,
+        out string failureReason)
+    {
+        dispatchDecision = decision;
+        dispatchTarget = expectedTarget;
+        dispatchState = _state;
+        failureReason = string.Empty;
+
+        if (!RequiresCurrentTargetPreflight(decision))
+        {
+            return true;
+        }
+
+        if (!expectedTarget.HasValue)
+        {
+            failureReason = "当前目标窗口身份不可用";
+            return false;
+        }
+
+        var scan = _scanner.ScanScreenData();
+        if (scan.RowData is null)
+        {
+            failureReason = scan.FailureReason ?? "无法重新读取游戏状态";
+            return false;
+        }
+
+        if (scan.Target?.Identity != expectedTarget.Value)
+        {
+            failureReason = "目标窗口已切换";
+            return false;
+        }
+
+        var freshState = _stateBuilder.Build(scan.RowData, scan.BarData, scan.HealAbsorbData);
+        if (!freshState.Values.ContainsKey("目标类型")
+            || !freshState.Values.ContainsKey("目标距离"))
+        {
+            failureReason = "当前目标类型或距离字段不可用";
+            return false;
+        }
+
+        dispatchDecision = OverlayCurrentTargetState(decision, freshState);
+        if (!IsDispatchTargetValid(dispatchDecision))
+        {
+            failureReason = "目标已死亡、超出距离或不满足技能目标条件";
+            return false;
+        }
+
+        dispatchTarget = scan.Target.Identity;
+        dispatchState = freshState;
+        return true;
+    }
+
+    private static bool RequiresCurrentTargetPreflight(LogicDecision decision)
+    {
+        var spell = decision.UnitInfo.TryGetValue("动作技能", out var actionSpell)
+            ? actionSpell?.ToString()
+            : null;
+        var unit = ReadInt(decision.UnitInfo, "动作单位槽位");
+        return unit is ReservedUnit.None or ReservedUnit.Target
+            && spell is "审判" or "神圣震击" or "灵界打击" or "心脏打击"
+                or "精髓分裂" or "血液沸腾" or "枯萎凋零";
+    }
+
+    private static LogicDecision OverlayCurrentTargetState(LogicDecision decision, GameState state)
+    {
+        var info = decision.UnitInfo.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Value,
+            StringComparer.Ordinal);
+        foreach (var key in new[] { "目标类型", "目标距离", "目标死亡", "目标正面" })
+        {
+            if (state.Values.TryGetValue(key, out var value))
+            {
+                info[key] = value;
+            }
+        }
+
+        return decision with { UnitInfo = info };
     }
 
     private bool IsBloodDeathKnight() => _classId == 6 && _specId == 1;
@@ -713,7 +840,8 @@ public sealed class ShigureRuntime : IDisposable
     private void SendAndPauseLogic(
         LogicDecision decision,
         TargetIdentity? targetIdentity,
-        int queueWindowCentiseconds = CooldownConfirmationTracker.QueueWindowCentiseconds)
+        int queueWindowCentiseconds = CooldownConfirmationTracker.QueueWindowCentiseconds,
+        GameState? dispatchState = null)
     {
         var hotkeySequence = decision.ResolveHotkeySequence();
         var sendResult = _keySender.SendSequence(hotkeySequence, targetIdentity);
@@ -760,7 +888,7 @@ public sealed class ShigureRuntime : IDisposable
         _cooldownConfirmationTracker.RecordSent(
             decision,
             sentAt,
-            _state,
+            dispatchState ?? _state,
             allowTargetReplacement: true,
             queueWindowCentiseconds: queueWindowCentiseconds);
         RecordSent(decision, sentAt);
@@ -828,6 +956,8 @@ public sealed class ShigureRuntime : IDisposable
                     ? update.Spell == "灵界打击"
                         ? "技能确认：灵界打击未生效，进入紧急保命降级"
                         : $"技能确认：{update.Spell} 连续未生效，临时让出优先级"
+                    : update.ConflictingActionObserved
+                        ? $"技能确认：{update.Spell} 动作归因冲突，短暂让出后重试"
                     : ambiguousTarget
                         ? $"技能确认：{update.Spell} 状态未变化，目标归因不确定，允许重试"
                         : $"技能确认：{update.Spell} 状态未变化，允许重试";
@@ -869,6 +999,11 @@ public sealed class ShigureRuntime : IDisposable
             if (ambiguousTarget)
             {
                 info["失败归因"] = "同一确认窗口尝试了多个目标，不对单个目标累计失败";
+            }
+            else if (update.ConflictingActionObserved)
+            {
+                info["确认冲突"] = $"收到其他动作码 {update.ObservedActionCode}，期待动作码 {update.ExpectedPlayerActionCode ?? 0}，本次不判断 {update.Spell} 成功或失败";
+                info["重试时机"] = $"约 {CooldownConfirmationTracker.RetryCadence.TotalMilliseconds:F0} ms 后重新检查";
             }
             else if (!update.Confirmed && observedActionStatus == 4)
             {
@@ -1055,13 +1190,11 @@ public sealed class ShigureRuntime : IDisposable
             _scanFailureReason));
     }
 
-    private static string DescribeInvalidState(int code) => code switch
+    private static string? DescribeInvalidState(int code) => code switch
     {
         2 => "游戏状态暂停：角色已死亡",
-        3 => "游戏状态暂停：角色处于坐骑状态",
-        4 => "游戏状态暂停：聊天输入框已打开",
+        3 or 4 or 6 => null,
         5 => "游戏状态暂停：角色正在饮水",
-        6 => "游戏状态暂停：角色正在施放坐骑",
         _ => "色块状态尚未就绪：请等待游戏界面加载"
     };
 
@@ -1194,6 +1327,7 @@ internal sealed class CooldownConfirmationTracker
     };
     private readonly Dictionary<string, PendingCooldownConfirmation> _pending = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _recentlyConfirmed = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> _retryNotBefore = new(StringComparer.Ordinal);
     private DateTimeOffset _globalCooldownBlockedUntil = DateTimeOffset.MinValue;
 
     public bool HasPending => _pending.Count > 0;
@@ -1250,6 +1384,18 @@ internal sealed class CooldownConfirmationTracker
             return false;
         }
 
+        if (decisionSpell is not null
+            && _retryNotBefore.TryGetValue(decisionSpell, out var retryNotBefore))
+        {
+            if (now < retryNotBefore)
+            {
+                pendingSpell = decisionSpell;
+                return false;
+            }
+
+            _retryNotBefore.Remove(decisionSpell);
+        }
+
         if (_pending.Count == 0)
         {
             pendingSpell = decisionSpell;
@@ -1271,18 +1417,12 @@ internal sealed class CooldownConfirmationTracker
                 return false;
             }
 
-            // Keep target attribution unambiguous. A changed target is allowed
-            // only after the previous target is no longer a valid healing
-            // target; the caller then replaces the entire pending generation.
+            // Keep same-spell target attribution unambiguous. Only a healing
+            // target that is no longer valid may replace its active generation.
             return IsPendingTargetInvalid(pending.LastAction, decision, state);
         }
 
         pendingSpell = blocking.Spell;
-        if (OffGlobalCooldownSpells.Contains(decisionSpell ?? string.Empty))
-        {
-            return true;
-        }
-
         var candidateUrgency = ResolveUrgency(decision);
         if (candidateUrgency >= blocking.Urgency)
         {
@@ -1386,13 +1526,32 @@ internal sealed class CooldownConfirmationTracker
         foreach (var (spell, pending) in _pending.ToArray())
         {
             var cooldown = state.GetInt($"spells.{spell}");
-            var actionSerial = state.GetInt("玩家动作序号");
-            var actionCode = state.GetInt("玩家动作技能");
-            var actionStatus = state.GetInt("玩家动作状态");
+            var latestActionSerial = state.GetInt("玩家动作序号");
+            var latestActionCode = state.GetInt("玩家动作技能");
+            var latestActionStatus = state.GetInt("玩家动作状态");
+            var newActionEvents = ReadPlayerActionEvents(state)
+                .Where(action => IsNewerActionSerial(action.Serial, pending.InitialActionSerial))
+                .OrderBy(action => ActionSerialDistance(action.Serial, pending.InitialActionSerial))
+                .ToArray();
+            var observedAction = newActionEvents.Length > 0
+                ? newActionEvents[^1]
+                : (PlayerActionEvent?)null;
+            var actionSerial = observedAction?.Serial ?? latestActionSerial;
+            var actionCode = observedAction?.Code ?? latestActionCode;
+            var actionStatus = observedAction?.Status ?? latestActionStatus;
             var gcdRemaining = state.GetInt("公共冷却剩余");
+            var newActionEvent = observedAction is not null;
             var matchingActionObserved = pending.PlayerActionCode.HasValue
-                && actionSerial != pending.InitialActionSerial
+                && newActionEvent
                 && actionCode == pending.PlayerActionCode.Value;
+            // A different non-anonymous action in this confirmation window
+            // must not make a cooldown/resource change look like our cast.
+            var mismatchedActionObserved = newActionEvent
+                && actionCode != 0
+                && (!pending.PlayerActionCode.HasValue
+                    || actionCode != pending.PlayerActionCode.Value);
+            var conflictingActionObserved = mismatchedActionObserved
+                && (pending.AllowResourceOnlyConfirmation || actionStatus is 3 or 4);
             var actionFailed = matchingActionObserved && actionStatus is 3 or 4;
             // Some off-GCD class actions are not present in the one-key spell
             // map, so WoW reports them with action code 0. Within the pending
@@ -1418,7 +1577,10 @@ internal sealed class CooldownConfirmationTracker
                 && actionStatus is 3 or 4;
             var resourceOnlyActionFailure = pending.AllowResourceOnlyConfirmation
                 && actionSerial != pending.InitialActionSerial
-                && actionStatus is 3 or 4;
+                && actionStatus is 3 or 4
+                && (actionCode == 0
+                    || pending.PlayerActionCode.HasValue
+                        && actionCode == pending.PlayerActionCode.Value);
             var definitiveActionFailure = actionFailed
                 || unattributedOffGcdFailure
                 || unattributedLayOnHandsFailure
@@ -1467,8 +1629,12 @@ internal sealed class CooldownConfirmationTracker
                 && actionSerial != pending.InitialActionSerial
                 && actionCode == 0
                 && actionStatus == 2;
+            var resourceOnlyStateAccepted = pending.AllowResourceOnlyConfirmation
+                && stateChanged
+                && (!newActionEvent || matchingActionObserved);
             var stateChangeAccepted = stateChanged
-                && (pending.AllowResourceOnlyConfirmation
+                && !mismatchedActionObserved
+                && (resourceOnlyStateAccepted
                     || pending.PlayerActionCode.HasValue
                         && (matchingActionObserved
                             || delayedActionAcknowledgement
@@ -1481,8 +1647,10 @@ internal sealed class CooldownConfirmationTracker
                     || stateChanged && actionStatus == 2);
             var anonymousActionAccepted = unattributedLayOnHandsAcknowledgement
                 || unattributedDivinePurposeAcknowledgement;
-            var cooldownAdvanced = cooldown > 0
-                && cooldown > pending.InitialCooldown;
+            var cooldownAdvanced = !mismatchedActionObserved
+                && cooldown > 0
+                && cooldown > pending.InitialCooldown
+                && (!newActionEvent || matchingActionObserved);
             var confirmationSource = stateChangeAccepted
                 ? unattributedHolyPowerAcknowledgement
                     ? "神圣能量字段变化（正义盾击动作码未回写）"
@@ -1505,6 +1673,7 @@ internal sealed class CooldownConfirmationTracker
                     || cooldownAdvanced || stateChangeAccepted))
             {
                 _pending.Remove(spell);
+                _retryNotBefore.Remove(spell);
                 _recentlyConfirmed[spell] = now;
                 updates.Add(new CooldownConfirmationUpdate(
                     spell,
@@ -1518,17 +1687,24 @@ internal sealed class CooldownConfirmationTracker
                     false,
                     pending.PlayerActionCode,
                     delayedActionAcknowledgement,
-                    state.GetInt("玩家动作序号"),
-                    state.GetInt("玩家动作技能"),
-                    state.GetInt("玩家动作状态"),
+                    actionSerial,
+                    actionCode,
+                    actionStatus,
                     state.GetInt("公共冷却剩余"),
                     actionFailed,
                     confirmationSource));
             }
             else if (definitiveActionFailure
+                     || conflictingActionObserved
                      || now - pending.SentAt >= ConfirmationTimeout(pending.Spell))
             {
                 _pending.Remove(spell);
+                if (conflictingActionObserved && !definitiveActionFailure)
+                {
+                    _retryNotBefore[spell] = pending.SentAt.Add(RetryCadence) > now
+                        ? pending.SentAt.Add(RetryCadence)
+                        : now;
+                }
                 updates.Add(new CooldownConfirmationUpdate(
                     spell,
                     false,
@@ -1545,7 +1721,9 @@ internal sealed class CooldownConfirmationTracker
                     actionCode,
                     actionStatus,
                     gcdRemaining,
-                    definitiveActionFailure));
+                    definitiveActionFailure,
+                    null,
+                    conflictingActionObserved));
             }
         }
 
@@ -1556,6 +1734,7 @@ internal sealed class CooldownConfirmationTracker
     {
         _pending.Clear();
         _recentlyConfirmed.Clear();
+        _retryNotBefore.Clear();
         _globalCooldownBlockedUntil = DateTimeOffset.MinValue;
     }
 
@@ -1579,6 +1758,55 @@ internal sealed class CooldownConfirmationTracker
 
         return RetryAfter;
     }
+
+    private const int PlayerActionQueueFirstSlot = 1;
+    private const int PlayerActionQueueLastSlot = 4;
+
+    private static IReadOnlyList<PlayerActionEvent> ReadPlayerActionEvents(GameState state)
+    {
+        var events = new List<PlayerActionEvent>(PlayerActionQueueLastSlot);
+        var hasQueue = false;
+        for (var slot = PlayerActionQueueFirstSlot; slot <= PlayerActionQueueLastSlot; slot++)
+        {
+            if (state.Values.ContainsKey($"玩家动作事件{slot}序号"))
+            {
+                hasQueue = true;
+                var serial = state.GetInt($"玩家动作事件{slot}序号");
+                var status = state.GetInt($"玩家动作事件{slot}状态");
+                if (serial > 0 && status is 1 or 2 or 3 or 4)
+                {
+                    events.Add(new PlayerActionEvent(
+                        serial,
+                        state.GetInt($"玩家动作事件{slot}技能"),
+                        status));
+                }
+            }
+        }
+
+        if (hasQueue)
+        {
+            return events;
+        }
+
+        var legacyStatus = state.GetInt("玩家动作状态");
+        return legacyStatus is 1 or 2 or 3 or 4
+            ? [new PlayerActionEvent(
+                state.GetInt("玩家动作序号"),
+                state.GetInt("玩家动作技能"),
+                legacyStatus)]
+            : [];
+    }
+
+    private static bool IsNewerActionSerial(int serial, int baseline)
+    {
+        var distance = ActionSerialDistance(serial, baseline);
+        return serial > 0 && distance is > 0 and <= 127;
+    }
+
+    private static int ActionSerialDistance(int serial, int baseline) =>
+        (serial - baseline + 255) % 255;
+
+    private readonly record struct PlayerActionEvent(int Serial, int Code, int Status);
 
     private void RecordGlobalCooldownSent(
         DateTimeOffset sentAt,
@@ -1728,7 +1956,8 @@ internal sealed record CooldownConfirmationUpdate(
     int ObservedActionStatus = 0,
     int CooldownRemaining = 0,
     bool DefinitiveFailure = true,
-    string? ConfirmationSource = null);
+    string? ConfirmationSource = null,
+    bool ConflictingActionObserved = false);
 
 internal static class AoeAbsorbStageGuard
 {
@@ -1969,6 +2198,55 @@ internal sealed record HealAbsorbStabilizationResult(
 internal sealed record EmergencyActionCheck(bool Allowed, string? Reason, int ConsecutiveFrames)
 {
     public static EmergencyActionCheck Allow { get; } = new(true, null, 0);
+}
+
+internal sealed class RuntimeProtocolHealth
+{
+    internal const int CurrentProtocolVersion = 3;
+    private static readonly TimeSpan HeartbeatTimeout = TimeSpan.FromSeconds(1);
+
+    private int? _lastHeartbeat;
+    private DateTimeOffset _lastHeartbeatChangeAt = DateTimeOffset.MinValue;
+
+    public bool Observe(GameState state, DateTimeOffset now, out string reason)
+    {
+        if (!state.Values.ContainsKey("Fuyutsui协议版本")
+            || !state.Values.ContainsKey("Fuyutsui状态心跳"))
+        {
+            reason = "等待 Fuyutsui 协议心跳（字段缺失）";
+            return false;
+        }
+
+        var version = state.GetInt("Fuyutsui协议版本");
+        if (version != CurrentProtocolVersion)
+        {
+            reason = $"等待 Fuyutsui 协议匹配（收到 v{version}，需要 v{CurrentProtocolVersion}）";
+            return false;
+        }
+
+        var heartbeat = state.GetInt("Fuyutsui状态心跳");
+        if (_lastHeartbeat is null || _lastHeartbeat.Value != heartbeat)
+        {
+            _lastHeartbeat = heartbeat;
+            _lastHeartbeatChangeAt = now;
+        }
+
+        var age = now - _lastHeartbeatChangeAt;
+        if (age > HeartbeatTimeout)
+        {
+            reason = $"等待 Fuyutsui 状态刷新（心跳已冻结 {age.TotalMilliseconds:F0} ms）";
+            return false;
+        }
+
+        reason = string.Empty;
+        return true;
+    }
+
+    public void Reset()
+    {
+        _lastHeartbeat = null;
+        _lastHeartbeatChangeAt = DateTimeOffset.MinValue;
+    }
 }
 
 internal static class RuntimeScanCadence

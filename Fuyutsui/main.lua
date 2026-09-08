@@ -2,6 +2,11 @@ local addon, ns = ...
 
 local FALLBACK_MACRO_STATUS_BLOCK = 500
 local FALLBACK_MACRO_COUNT_BLOCK = 501
+local FALLBACK_PROTOCOL_VERSION_BLOCK = 502
+local FALLBACK_PROTOCOL_HEARTBEAT_BLOCK = 503
+local PLAYER_ACTION_QUEUE_FIRST_BLOCK = 504
+local PLAYER_ACTION_QUEUE_SLOT_COUNT = 4
+local PLAYER_ACTION_QUEUE_FIELDS = { "序号", "技能", "状态" }
 
 function Fuyutsui:MacroTrace(message, ...)
     -- 保留诊断调用点，但不向 WoW 聊天框输出测试信息。
@@ -202,12 +207,26 @@ function Fuyutsui:LoadPlayerBlocks(specIndex)
     end
 
     self.blocks = blocks
+    -- 协议字段固定在公共高位，避免职业配置增删字段时改变其索引。
+    if not blocks.state["Fuyutsui协议版本"] then
+        blocks.state["Fuyutsui协议版本"] = FALLBACK_PROTOCOL_VERSION_BLOCK
+    end
+    if not blocks.state["Fuyutsui状态心跳"] then
+        blocks.state["Fuyutsui状态心跳"] = FALLBACK_PROTOCOL_HEARTBEAT_BLOCK
+    end
     -- 保持宏状态协议在旧版职业表和本地冲突副本上仍可用。
     if not blocks.state["宏绑定状态"] then
         blocks.state["宏绑定状态"] = FALLBACK_MACRO_STATUS_BLOCK
     end
     if not blocks.state["宏绑定数量"] then
         blocks.state["宏绑定数量"] = FALLBACK_MACRO_COUNT_BLOCK
+    end
+    -- 动作事件队列使用固定高位，避免职业状态增删改变协议索引。
+    for slot = 1, PLAYER_ACTION_QUEUE_SLOT_COUNT do
+        local base = PLAYER_ACTION_QUEUE_FIRST_BLOCK + (slot - 1) * #PLAYER_ACTION_QUEUE_FIELDS
+        for fieldOffset, field in ipairs(PLAYER_ACTION_QUEUE_FIELDS) do
+            blocks.state["玩家动作事件" .. slot .. field] = base + fieldOffset - 1
+        end
     end
     if self.ReleaseUnitAuraContainers then
         self:ReleaseUnitAuraContainers()
