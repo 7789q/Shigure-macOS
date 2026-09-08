@@ -10,6 +10,30 @@ local boss = Fuyutsui.boss
 local nameplate = Fuyutsui.nameplate
 local lastTargetTrace
 
+local function IsSafeGuid(value)
+    return type(value) == "string"
+        and (type(issecretvalue) ~= "function" or not issecretvalue(value))
+end
+
+local function IsFriendlyNpc(unit)
+    local isPlayer = UnitIsPlayer(unit)
+    if not issecretvalue(isPlayer) then
+        return isPlayer == false
+    end
+
+    -- Midnight combat lockdown can expose UnitIsPlayer as a secret value.
+    -- A safe GUID still lets us distinguish NPCs from out-of-party players.
+    local guid = UnitGUID(unit)
+    if not IsSafeGuid(guid) then
+        return false
+    end
+
+    local objectType = guid:match("^([^-]+)-")
+    return objectType == "Creature"
+        or objectType == "Vehicle"
+        or objectType == "Pet"
+end
+
 local function SafeUnitFlag(value)
     if type(issecretvalue) == "function" and issecretvalue(value) then
         return "secret"
@@ -164,8 +188,7 @@ local function getUnitType(unit)
     if canAssist then
         -- 151 保留给队伍外友方玩家；152 表示队伍外友方 NPC。复用类型字段，不新增像素槽位。
         if index == 51 then
-            local isPlayer = UnitIsPlayer(unit)
-            if not issecretvalue(isPlayer) and not isPlayer then
+            if IsFriendlyNpc(unit) then
                 index = 52
             end
         end
@@ -246,12 +269,29 @@ function Fuyutsui:UpdateUnitDeathStatus(unit)
     local cache = GetUnitCache(unit)
     local category = unitZHMap[unit]
     if not cache then return end
-    cache.guid = UnitGUID(unit)
+    local guid = UnitGUID(unit)
+    if unit == "target" then
+        if IsSafeGuid(guid) then
+            if self.state.targetIdentityGuid and self.state.targetIdentityGuid ~= guid then
+                self:AdvanceTargetIdentity()
+            end
+            self.state.targetIdentityGuid = guid
+        else
+            self.state.targetIdentityGuid = nil
+        end
+    end
+    cache.guid = guid
     cache.isDead = UnitIsDeadOrGhost(unit)
     self:UpdateUnitType(unit)
     if category then
         self:UpdateStateBlock(category, "死亡")
     end
+end
+
+function Fuyutsui:AdvanceTargetIdentity()
+    self.state.targetIdentitySerial = ((self.state.targetIdentitySerial or 0) % 255) + 1
+    self.state.targetIdentityGuid = nil
+    self:UpdateStateBlock("状态", "目标身份序号")
 end
 
 function Fuyutsui:UpdateUnitHealthBlock(unit)
