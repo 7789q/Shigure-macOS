@@ -87,6 +87,16 @@ end
 
 local function buildTankTargetMacro(spell)
     local tankUnit = findTankUnit()
+    if spell == "审判" then
+        local fallback = tankUnit
+            and format("[@%starget,harm,nodead]", tankUnit)
+            or "[@targettarget,harm,nodead]"
+        return format(
+            "/cast [harm,nodead]%s\n/cast %s%s",
+            spell,
+            fallback,
+            spell)
+    end
     if not tankUnit then
         return format("/cast [@targettarget,harm,nodead][harm,nodead]%s", spell)
     end

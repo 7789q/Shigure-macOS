@@ -258,6 +258,14 @@ public sealed class RuntimeResourceWorkspaceService
             if (string.Equals(Path.GetFileName(classPath), "Paladin.lua", StringComparison.OrdinalIgnoreCase)
                 && document.Specs.TryGetValue(1, out var holySpec))
             {
+                if (holySpec.Group is { } group
+                    && group.CanHeal is null)
+                {
+                    group.CanHeal = 11;
+                    group.Num = Math.Max(group.Num, group.CanHeal.Value);
+                    changed = true;
+                }
+
                 var states = holySpec.NestedStates
                     ? holySpec.CategorizedStates[ClassStateCatalog.CategoryState]
                     : holySpec.FlatStates;

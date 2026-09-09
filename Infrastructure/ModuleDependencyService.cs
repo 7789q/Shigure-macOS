@@ -240,6 +240,7 @@ public sealed class ModuleDependencyService
             HealthPercent = spec.Group.HealthPercent,
             Role = spec.Group.Role,
             Dispel = spec.Group.Dispel,
+            CanHeal = spec.Group.CanHeal,
             Auras = spec.Group.Auras.Select(entry => new ModuleGroupAuraSnapshot
             {
                 Offset = entry.Offset,
@@ -667,7 +668,8 @@ public sealed class ModuleDependencyService
                 Num = incoming.Num,
                 HealthPercent = incoming.HealthPercent,
                 Role = incoming.Role,
-                Dispel = incoming.Dispel
+                Dispel = incoming.Dispel,
+                CanHeal = incoming.CanHeal
             };
             counters.ConfigAdded++;
             foreach (var aura in incoming.Auras)
@@ -692,6 +694,7 @@ public sealed class ModuleDependencyService
         AddOffset(local.HealthPercent);
         AddOffset(local.Role);
         AddOffset(local.Dispel);
+        AddOffset(local.CanHeal);
 
         if (local.HealthPercent is null && incoming.HealthPercent is not null)
         {
@@ -706,6 +709,11 @@ public sealed class ModuleDependencyService
         if (local.Dispel is null && incoming.Dispel is not null)
         {
             local.Dispel = AllocateOffset(incoming.Dispel.Value, occupied);
+            counters.ConfigAdded++;
+        }
+        if (local.CanHeal is null && incoming.CanHeal is not null)
+        {
+            local.CanHeal = AllocateOffset(incoming.CanHeal.Value, occupied);
             counters.ConfigAdded++;
         }
 

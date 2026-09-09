@@ -160,9 +160,15 @@ function Fuyutsui:UpdateHolyPaladinForecast()
 end
 
 function Fuyutsui:UpdateUnitValid(unit)
+    local blocks = self.blocks
     local obj = self.group[unit]
     if not obj then return end
-    obj.valid = not obj.isDead and obj.canAssist and obj.inSight
+    obj.inRange = unit == "player" or UnitInRange(unit) == true
+    obj.valid = not obj.isDead and obj.canAssist and obj.inSight and obj.inRange
+    if blocks and blocks.groups and blocks.groups.canHeal then
+        local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.canHeal
+        self:CreateTexture(index, obj.valid and 1 / 255 or 0)
+    end
 end
 
 function Fuyutsui:UpdateGroupInRangeAndHealth()
@@ -181,10 +187,10 @@ function Fuyutsui:UpdateGroupInRangeAndHealth()
         local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.role
         obj.isDead = UnitIsDeadOrGhost(unit)
         obj.canAssist = UnitCanAssist("player", unit)
-        obj.valid = not obj.isDead and obj.canAssist and obj.inSight
+        self:UpdateUnitValid(unit)
         if obj.valid then
             self:UpdateUnitHealthInfo(unit)
-            -- 职责色块同时作为运行时的成员存在标记，不能再用超出距离表示为 0。
+            -- 可治疗成员保留职责标记；无职责的有效成员使用稳定占位值。
             local roleValue = roleMap[obj.role]
             if not roleValue or roleValue == 0 then
                 roleValue = 5
@@ -200,6 +206,9 @@ function Fuyutsui:UpdateGroupInRangeAndHealth()
             obj.sustainNeed, obj.singleNeed = 0, 0
             self:CreateTexture(healthIndex, 0)
             self:CreateTexture(index, 0)
+            if blocks.groups.expectedNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.expectedNeed, 0) end
+            if blocks.groups.burstNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.burstNeed, 0) end
+            if blocks.groups.sustainNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.sustainNeed, 0) end
         end
         updateIndex = updateIndex + 1
         if updateIndex > numUnits then

@@ -890,6 +890,10 @@ public static class ModuleLogic
             var step = BuildStep(module, rule, hotkey, actionSpell);
             info["命中条件"] = string.IsNullOrWhiteSpace(rule.Condition) ? "始终" : rule.Condition;
             info["动作技能"] = string.IsNullOrWhiteSpace(actionSpell) ? "-" : actionSpell;
+            if (string.Equals(actionSpell, "审判", StringComparison.Ordinal))
+            {
+                info["宏目标路由"] = "当前目标优先，坦克目标回退";
+            }
             info["宏条件"] = string.IsNullOrWhiteSpace(resolvedMacroCondition)
                 ? "-"
                 : MacroConditionText.ToDisplayText(resolvedMacroCondition);
@@ -1201,6 +1205,19 @@ public static class ModuleLogic
             adjustment => IsEarlyThresholdAdjustment(module, state, adjustment));
         var unitSlots = ResolveUnits(module, state);
         ResolveCounts(module, state);
+        if (!state.Values.ContainsKey("治疗吸收总量"))
+        {
+            var totalAbsorb = 0;
+            foreach (var member in state.Group.Values)
+            {
+                if ((!member.ContainsKey("可治疗") || Convert.ToInt32(member["可治疗"]) != 0)
+                    && member.TryGetValue("治疗吸收", out var value))
+                {
+                    totalAbsorb += Convert.ToInt32(value);
+                }
+            }
+            state.Values["治疗吸收总量"] = totalAbsorb;
+        }
         ApplyValueAdjustments(module, state, adjustment => !earlyAppliedAdjustments.Contains(adjustment));
         state.Values["$dynamicModuleId"] = module.Id;
         return unitSlots;

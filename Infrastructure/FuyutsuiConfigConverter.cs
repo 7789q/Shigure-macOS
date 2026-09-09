@@ -369,6 +369,7 @@ public static class FuyutsuiConfigConverter
             AddGroupOffset(groupJson, group.GetNumber("healthPercent"), "生命值");
             AddGroupOffset(groupJson, group.GetNumber("role"), "职责");
             AddGroupOffset(groupJson, group.GetNumber("dispel"), "驱散");
+            AddGroupOffset(groupJson, group.GetNumber("canHeal"), "可治疗", "bool");
             AddGroupOffset(groupJson, group.GetNumber("expectedNeed"), "预期需求");
             AddGroupOffset(groupJson, group.GetNumber("burstNeed"), "爆发需求");
             AddGroupOffset(groupJson, group.GetNumber("sustainNeed"), "持续需求");
@@ -476,14 +477,14 @@ public static class FuyutsuiConfigConverter
             classification);
     }
 
-    private static void AddGroupOffset(JsonObject groupJson, double? offset, string name)
+    private static void AddGroupOffset(JsonObject groupJson, double? offset, string name, string type = "int")
     {
         if (offset is null)
         {
             return;
         }
 
-        groupJson[name] = Field((int)offset.Value, "int");
+        groupJson[name] = Field((int)offset.Value, type);
     }
 
     private static JsonObject Field(int step, string type, string? classification = null)

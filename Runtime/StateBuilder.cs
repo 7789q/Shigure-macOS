@@ -158,6 +158,10 @@ public sealed class StateBuilder : IRuntimeStateBuilder
             }
 
             var absorb = ReadInt(mutable, "治疗吸收");
+            if (mutable.ContainsKey("可治疗") && !ReadBool(mutable, "可治疗"))
+            {
+                continue;
+            }
             if (absorb > 0)
             {
                 positiveUnits++;

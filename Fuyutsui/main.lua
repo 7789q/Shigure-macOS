@@ -203,6 +203,7 @@ function Fuyutsui:LoadPlayerBlocks(specIndex)
             healthPercent = t.group.healthPercent,
             role = t.group.role,
             dispel = t.group.dispel,
+            canHeal = t.group.canHeal,
             -- 成员光环偏移：pixel = start + (memberIndex-1)*num + offset
             aura = t.group.aura,
         }

@@ -3,7 +3,7 @@
   "Name": "烈日奶骑大秘境-美德爆发 12.1",
   "Author": "Shigure",
   "RecommendedTalent": "CEEAzbn3egSOtoSwvPw1U1vTLAAAALAwMAAD2GzMzMjZmZBmZYZsZmFjmYYMzMMmtMAMAsB2YZmZmlZbmZ2aAAAAWAGsZgZMDzAAYmhZMGNA",
-  "Version": "1.2.1.27",
+  "Version": "1.2.1.28",
   "UnitMappingVersion": 3,
   "Enabled": true,
   "Match": { "ClassId": 2, "SpecId": 1 },
@@ -186,11 +186,11 @@
     },
     {
       "Enabled": true,
-      "Condition": "AbsorbAny > 0",
+      "Condition": "AbsorbAny > 0 && 治疗吸收总量 >= 30",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "UnitName": "治疗目标",
       "Spell": "荣耀圣令",
-      "Comment": "治疗吸收分支优先处理治疗负荷最高的目标"
+      "Comment": "仅在吸收总量达到压力阈值时优先处理治疗负荷最高的目标"
     },
     {
       "Enabled": true,
@@ -225,17 +225,17 @@
     },
     {
       "Enabled": true,
-      "Condition": "AbsorbAny > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "Condition": "AbsorbAny > 0 && 治疗吸收总量 >= 30 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
       "UnitName": "治疗目标",
       "Spell": "神圣震击",
       "Comment": "没有圣能时用神圣震击处理最高治疗吸收"
     },
     {
       "Enabled": true,
-      "Condition": "重伤目标 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28 || AbsorbAny > 0 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "重伤目标 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 || AbsorbAny > 0 && 治疗吸收总量 < 30 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5",
       "Unit": 0,
       "Spell": "审判",
-      "Comment": "重伤或治疗吸收且即时治疗不可用、没有灌注时用审判补充圣能；目标无效时不发送"
+      "Comment": "重伤或低压力吸收且即时治疗不可用、没有灌注时用审判补充圣能；当前目标不满足时宏回退坦克目标"
     },
     {
       "Enabled": true,
@@ -247,7 +247,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "移动 == false && AbsorbAny > 0 && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
+      "Condition": "移动 == false && AbsorbAny > 0 && 治疗吸收总量 >= 30 && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
       "UnitName": "治疗目标",
       "Spell": "圣光术",
       "DelayMs": 700,
@@ -330,10 +330,10 @@
     },
     {
       "Enabled": true,
-      "Condition": "移动 == true && 轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "移动 == true && 轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5",
       "Unit": 0,
       "Spell": "审判",
-      "Comment": "轻伤时震击不可用且没有灌注时用审判补充圣能；有效目标覆盖普通 AOE 阶段"
+      "Comment": "轻伤时震击不可用且没有灌注时用审判补充圣能；普通 AOE 阶段由当前目标优先、坦克目标回退宏处理"
     },
     {
       "Enabled": true,
@@ -353,15 +353,23 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal == 0 && AOE事件阶段 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && AOE事件阶段 in (1, 3) && spells.圣洁鸣钟 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && AOE事件阶段 in (1, 3) && 圣洁鸣钟预计可用 > 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false",
+      "Condition": "HTotal == 0 && 治疗吸收总量 < 30 && 战斗时间 > 0 && AOE事件阶段 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || HTotal == 0 && 治疗吸收总量 < 30 && 战斗时间 > 0 && AOE事件阶段 in (1, 3) && spells.圣洁鸣钟 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || HTotal == 0 && 治疗吸收总量 < 30 && 战斗时间 > 0 && AOE事件阶段 in (1, 3) && 圣洁鸣钟预计可用 > 0 && auras.圣光灌注 > 0 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && 治疗吸收总量 < 30 && 战斗时间 == 0 && AOE事件阶段 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && 治疗吸收总量 < 30 && 战斗时间 == 0 && AOE事件阶段 in (1, 3) && spells.圣洁鸣钟 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && 治疗吸收总量 < 30 && 战斗时间 == 0 && AOE事件阶段 in (1, 3) && 圣洁鸣钟预计可用 > 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false",
       "Unit": 1,
       "Spell": "圣光闪现",
       "DelayMs": 700,
-      "Comment": "队伍安全且灌注即将结束时，在战斗或脱战状态用圣光闪现将其转为圣能；预计美德时点鸣钟已可用时不受 AOE 资源预留限制"
+      "Comment": "队伍安全时，战斗中立即用圣光闪现将灌注转为圣能；脱战仅转换即将结束的灌注，并保留 AOE 资源门槛"
     },
     {
       "Enabled": true,
-      "Condition": "战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && 目标类型 > 0 && 目标类型 < 100 && 目标距离 <= 5",
+      "Condition": "AbsorbAny > 0 && 治疗吸收总量 >= 30 && auras.圣光灌注 > 0 && auras.圣光灌注层数 > 0 && spells.神圣震击层数 == 0 && 移动 == false",
+      "UnitName": "治疗目标",
+      "Spell": "圣光闪现",
+      "DelayMs": 700,
+      "Comment": "战斗或脱战阶段存在高压力治疗吸收且无神圣震击充能时，优先消耗灌注治疗吸收目标"
+    },
+    {
+      "Enabled": true,
+      "Condition": "战斗时间 > 0 && 治疗吸收总量 < 30 && AOE事件阶段 in (0, 1, 3, 4) && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 5",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "Unit": 32,
       "Spell": "正义盾击",
@@ -369,7 +377,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 40",
+      "Condition": "H90 == 0 && 治疗吸收总量 < 30 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 40",
       "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
       "Unit": 0,
       "Spell": "神圣震击",
@@ -377,11 +385,11 @@
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28 || H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 > 5 && 神圣能量 <= 3 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "H90 == 0 && 治疗吸收总量 < 30 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 || H90 == 0 && 治疗吸收总量 < 30 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 > 5 && 神圣能量 <= 3",
       "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
       "Unit": 0,
       "Spell": "审判",
-      "Comment": "全员至少 90% 且无治疗吸收时用审判填充；灌注剩余时间大于 5 秒且不会溢出时才释放，临近结束优先转化灌注"
+      "Comment": "全员至少 90% 且吸收压力较低时用审判填充；当前目标不满足时宏回退坦克目标，灌注转化优先且避免圣能溢出"
     },
     {
       "Enabled": true,

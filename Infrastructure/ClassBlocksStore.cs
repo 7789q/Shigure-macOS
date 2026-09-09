@@ -104,6 +104,7 @@ public static class ClassBlocksStore
         public int? HealthPercent { get; set; } = 1;
         public int? Role { get; set; } = 2;
         public int? Dispel { get; set; }
+        public int? CanHeal { get; set; }
         public int? ExpectedNeed { get; set; }
         public int? BurstNeed { get; set; }
         public int? SustainNeed { get; set; }
@@ -434,6 +435,7 @@ public static class ClassBlocksStore
                 HealthPercent = group.GetNumber("healthPercent") is { } hp ? (int)hp : null,
                 Role = group.GetNumber("role") is { } role ? (int)role : null,
                 Dispel = group.GetNumber("dispel") is { } dispel ? (int)dispel : null,
+                CanHeal = group.GetNumber("canHeal") is { } canHeal ? (int)canHeal : null,
                 ExpectedNeed = group.GetNumber("expectedNeed") is { } expectedNeed ? (int)expectedNeed : null,
                 BurstNeed = group.GetNumber("burstNeed") is { } burstNeed ? (int)burstNeed : null,
                 SustainNeed = group.GetNumber("sustainNeed") is { } sustainNeed ? (int)sustainNeed : null
@@ -644,6 +646,11 @@ public static class ClassBlocksStore
             if (group.Dispel is { } dispel)
             {
                 sb.Append(indent).Append("    dispel = ").Append(dispel).AppendLine(",");
+            }
+
+            if (group.CanHeal is { } canHeal)
+            {
+                sb.Append(indent).Append("    canHeal = ").Append(canHeal).AppendLine(",");
             }
 
             if (group.ExpectedNeed is { } expectedNeed)

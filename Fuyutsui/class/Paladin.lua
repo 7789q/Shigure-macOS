@@ -152,10 +152,11 @@ Fuyutsui.ClassBlocks = {
             { spellId = 391054, name = "代祷" },
         },
         group = {
-            num = 10,
+            num = 11,
             healthPercent = 1,
             role = 2,
             dispel = 3,
+            canHeal = 11,
             aura = {
                 [4] = { name = "救赎之魂", spellId = 27827, },
                 [5] = { name = "圣光道标", spellIds = { 53563, 156910 }, },

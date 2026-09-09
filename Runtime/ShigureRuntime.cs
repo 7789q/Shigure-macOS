@@ -472,7 +472,7 @@ public sealed class ShigureRuntime : IDisposable
             return;
         }
 
-        if (!IsDispatchTargetValid(decision))
+        if (!IsDispatchTargetValid(decision, _state))
         {
             var guardedInfo = _unitInfo.ToDictionary(
                 entry => entry.Key,
@@ -665,7 +665,7 @@ public sealed class ShigureRuntime : IDisposable
         }
 
         dispatchDecision = OverlayCurrentTargetState(decision, freshState);
-        if (!IsDispatchTargetValid(dispatchDecision))
+        if (!IsDispatchTargetValid(dispatchDecision, freshState))
         {
             failureReason = "目标已死亡、超出距离或不满足技能目标条件";
             return false;
@@ -681,6 +681,11 @@ public sealed class ShigureRuntime : IDisposable
         var spell = decision.UnitInfo.TryGetValue("动作技能", out var actionSpell)
             ? actionSpell?.ToString()
             : null;
+        if (string.Equals(spell, "审判", StringComparison.Ordinal)
+            && decision.UnitInfo.ContainsKey("宏目标路由"))
+        {
+            return false;
+        }
         var unit = ReadInt(decision.UnitInfo, "动作单位槽位");
         return unit is ReservedUnit.None or ReservedUnit.Target
             && spell is "审判" or "神圣震击" or "灵界打击" or "心脏打击"
@@ -811,7 +816,7 @@ public sealed class ShigureRuntime : IDisposable
         return health >= 100 && absorb <= 0;
     }
 
-    internal static bool IsDispatchTargetValid(LogicDecision decision)
+    internal static bool IsDispatchTargetValid(LogicDecision decision, GameState? state = null)
     {
         if (!decision.UnitInfo.TryGetValue("动作技能", out var actionSpell))
         {
@@ -820,6 +825,13 @@ public sealed class ShigureRuntime : IDisposable
 
         var spell = actionSpell?.ToString();
         var unit = ReadInt(decision.UnitInfo, "动作单位槽位");
+        if (unit > 0
+            && state?.Group.TryGetValue(unit.ToString(), out var member) == true
+            && member.TryGetValue("可治疗", out var canHeal)
+            && Convert.ToInt32(canHeal) == 0)
+        {
+            return false;
+        }
         if (unit is ReservedUnit.None or ReservedUnit.Target
             && spell is "荣耀圣令" or "圣光术" or "圣光闪现" or "神圣震击"
             && decision.UnitInfo.ContainsKey("目标类型")
@@ -851,6 +863,10 @@ public sealed class ShigureRuntime : IDisposable
 
             var targetType = ReadInt(decision.UnitInfo, "目标类型");
             var distance = ReadInt(decision.UnitInfo, "目标距离");
+            if (decision.UnitInfo.ContainsKey("宏目标路由"))
+            {
+                return true;
+            }
             return targetType != 0 && distance > 0 && distance <= 28;
         }
 
@@ -2050,7 +2066,9 @@ internal sealed class CooldownConfirmationTracker
         var absorb = member.TryGetValue("治疗吸收", out var absorbValue)
             ? Convert.ToInt32(absorbValue)
             : 0;
-        return health <= 0 || (health >= 100 && absorb <= 0);
+        var outOfRange = member.TryGetValue("可治疗", out var canHealValue)
+            && Convert.ToInt32(canHealValue) == 0;
+        return outOfRange || health <= 0 || (health >= 100 && absorb <= 0);
     }
 
     private static LogicActionKey ResolveAction(LogicDecision decision) => new(
@@ -2397,7 +2415,7 @@ internal sealed record EmergencyActionCheck(bool Allowed, string? Reason, int Co
 
 internal sealed class RuntimeProtocolHealth
 {
-    internal const int CurrentProtocolVersion = 5;
+    internal const int CurrentProtocolVersion = 6;
     private static readonly TimeSpan HeartbeatTimeout = TimeSpan.FromSeconds(1);
 
     private int? _lastHeartbeat;

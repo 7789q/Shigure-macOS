@@ -111,6 +111,7 @@ public sealed class ModuleGroupSnapshot
     public int? HealthPercent { get; set; }
     public int? Role { get; set; }
     public int? Dispel { get; set; }
+    public int? CanHeal { get; set; }
     public List<ModuleGroupAuraSnapshot> Auras { get; set; } = new();
 
     public ModuleGroupSnapshot Clone() => new()
@@ -119,6 +120,7 @@ public sealed class ModuleGroupSnapshot
         HealthPercent = HealthPercent,
         Role = Role,
         Dispel = Dispel,
+        CanHeal = CanHeal,
         Auras = (Auras ?? []).Where(entry => entry is not null).Select(entry => entry.Clone()).ToList()
     };
 }

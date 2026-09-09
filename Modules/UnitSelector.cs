@@ -736,7 +736,9 @@ public static class UnitSelector
     private static bool RoleNotZero(IReadOnlyDictionary<string, object?> data)
     {
         var role = GetField(data, "职责");
-        return role is null || !TryInt(role, out var value) || value != 0;
+        var canHeal = GetField(data, "可治疗");
+        return (canHeal is null || !TryInt(canHeal, out var available) || available != 0)
+            && (role is null || !TryInt(role, out var value) || value != 0);
     }
 
     private static bool HasAura(IReadOnlyDictionary<string, object?> data, string auraName)

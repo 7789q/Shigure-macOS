@@ -10,7 +10,7 @@ local boss = Fuyutsui.boss
 
 local ColorValue0 = CreateColor(0, 0, 0, 1)
 local ColorValue1 = CreateColor(0, 0, 1 / 255, 1)
-local FUYUTSUI_PROTOCOL_VERSION = 5
+local FUYUTSUI_PROTOCOL_VERSION = 6
 
 Fuyutsui.powerNameMap = {
     ["MANA"] = "法力值",

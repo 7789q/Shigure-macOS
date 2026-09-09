@@ -686,7 +686,14 @@ public sealed class ConfigEditorView : UserControl
             error = "队伍字段超出允许范围：人数 1–40，可选字段 0–40。";
             return false;
         }
-        var group = new ClassBlocksStore.GroupBlocks { Num = num, HealthPercent = health, Role = role, Dispel = dispel };
+        var group = new ClassBlocksStore.GroupBlocks
+        {
+            Num = num,
+            HealthPercent = health,
+            Role = role,
+            Dispel = dispel,
+            CanHeal = _spec.Group?.CanHeal
+        };
         for (var index = 0; index < _groupAuras.Count; index++)
         {
             var row = _groupAuras[index];
