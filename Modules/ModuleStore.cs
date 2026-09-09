@@ -813,6 +813,16 @@ public static class ModuleLogic
                 resolvedUnit = 0;
             }
 
+            var actionIntent = ResolveActionIntent(actionSpell, resolvedUnit, state);
+            if (IsFriendlyNpcTarget(module, state)
+                && actionIntent is LogicActionIntent.GroupHealing
+                    or LogicActionIntent.DirectHealing
+                    or LogicActionIntent.EmergencyPartySupport)
+            {
+                AddCandidateDiagnostic($"规则 {ruleIndex + 1} {actionSpell}: 友方 NPC 独占模式跳过玩家治疗");
+                continue;
+            }
+
             if (!string.IsNullOrWhiteSpace(actionSpell)
                 && suppressedActions?.Contains(new LogicActionKey(actionSpell, resolvedUnit.GetValueOrDefault())) == true)
             {
@@ -977,16 +987,22 @@ public static class ModuleLogic
                 .Where(entry => string.Equals(entry.Value, actionSpell, StringComparison.Ordinal))
                 .Select(entry => (int?)entry.Key)
                 .FirstOrDefault();
-            var actionIntent = ResolveActionIntent(actionSpell, resolvedUnit, state);
             var allowCastPreemption = CastPreemptionPolicy.Allows(actionSpell);
+            var effectiveDelayMs = actionIntent == LogicActionIntent.NpcHealing
+                ? 0
+                : rule.DelayMs.GetValueOrDefault();
             info["动作意图"] = actionIntent.ToString();
+            if (actionIntent == LogicActionIntent.NpcHealing)
+            {
+                info["动作延迟"] = "-";
+            }
             info["允许抢占读条"] = allowCastPreemption ? "是" : "否";
             return new LogicDecision(
                 hotkey,
                 step,
                 info,
                 module.Name,
-                rule.DelayMs.GetValueOrDefault(),
+                effectiveDelayMs,
                 rateLimitKey,
                 rule.LogicDelayMs.GetValueOrDefault(),
                 binding?.Hotkeys,
@@ -1050,6 +1066,7 @@ public static class ModuleLogic
         }
 
         if (unit == ReservedUnit.Target
+            && state.GetInt("目标类型") == 152
             && !CooldownConfirmationTracker.IsOffGlobalCooldownSpell(spell))
         {
             return LogicActionIntent.NpcHealing;
@@ -1073,6 +1090,13 @@ public static class ModuleLogic
         return spell is "暂停"
             ? LogicActionIntent.Pause
             : LogicActionIntent.Offensive;
+    }
+
+    private static bool IsFriendlyNpcTarget(ModuleDefinition module, GameState state)
+    {
+        return module.Match.ClassId == 2
+            && module.Match.SpecId == 1
+            && state.GetInt("目标类型") == 152;
     }
 
     private static void AddRuleLogInfo(

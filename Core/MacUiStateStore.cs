@@ -31,6 +31,8 @@ public sealed class MacUiState
     public MacUiBounds? VerticalOverlayBounds { get; set; }
     public string TriggerKey { get; set; } = "XBUTTON2";
     public SendMode SendMode { get; set; } = SendMode.Switch;
+    public int LogicIntervalMilliseconds { get; set; } = 100;
+    public int RenderIntervalMilliseconds { get; set; } = 250;
     public string? LocalModuleSourceDirectory { get; set; }
 }
 
@@ -126,6 +128,8 @@ public sealed class MacUiStateStore
             VerticalOverlayBounds = NormalizeBounds(state.VerticalOverlayBounds),
             TriggerKey = NormalizeTriggerKey(state.TriggerKey),
             SendMode = Enum.IsDefined(state.SendMode) ? state.SendMode : SendMode.Switch,
+            LogicIntervalMilliseconds = NormalizeInterval(state.LogicIntervalMilliseconds, 50, 1000, 100),
+            RenderIntervalMilliseconds = NormalizeInterval(state.RenderIntervalMilliseconds, 100, 5000, 250),
             LocalModuleSourceDirectory = NormalizeDirectoryPath(state.LocalModuleSourceDirectory)
         };
     }
@@ -186,4 +190,7 @@ public sealed class MacUiStateStore
             return null;
         }
     }
+
+    private static int NormalizeInterval(int value, int minimum, int maximum, int fallback) =>
+        value is < 1 ? fallback : Math.Clamp(value, minimum, maximum);
 }

@@ -6,7 +6,8 @@ local FALLBACK_PROTOCOL_VERSION_BLOCK = 502
 local FALLBACK_PROTOCOL_HEARTBEAT_BLOCK = 503
 local PLAYER_ACTION_QUEUE_FIRST_BLOCK = 504
 local PLAYER_ACTION_QUEUE_SLOT_COUNT = 4
-local PLAYER_ACTION_QUEUE_FIELDS = { "序号", "技能", "状态" }
+local PLAYER_ACTION_QUEUE_FIELDS = { "序号", "技能", "状态", "失败原因" }
+local TARGET_IDENTITY_BLOCK = 520
 
 function Fuyutsui:MacroTrace(message, ...)
     -- 保留诊断调用点，但不向 WoW 聊天框输出测试信息。
@@ -40,6 +41,7 @@ function Fuyutsui:UpdatePlayerBlocks()
     self:UpdateTargetRangeBlock()
     self:UpdateFocusRangeBlock()
     self:UpdateTargetHealth()
+    self:UpdateStateBlock("状态", "目标身份序号")
     self:UpdateFocusHealth()
     for index = 1, 5 do
         self:UpdateUnitFullInfo("boss" .. index)
@@ -227,6 +229,9 @@ function Fuyutsui:LoadPlayerBlocks(specIndex)
         for fieldOffset, field in ipairs(PLAYER_ACTION_QUEUE_FIELDS) do
             blocks.state["玩家动作事件" .. slot .. field] = base + fieldOffset - 1
         end
+    end
+    if not blocks.state["目标身份序号"] then
+        blocks.state["目标身份序号"] = TARGET_IDENTITY_BLOCK
     end
     if self.ReleaseUnitAuraContainers then
         self:ReleaseUnitAuraContainers()

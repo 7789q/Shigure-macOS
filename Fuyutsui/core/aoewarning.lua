@@ -10,6 +10,7 @@ local warning = {
     pendingCasts = {},
     polledCasts = {},
     castPollElapsed = 0,
+    observedAbsorbStreak = 0,
     nextSequence = 0,
     nextProtectedCastSequence = 0,
     initialized = false,
@@ -325,7 +326,11 @@ function Fuyutsui:GetEstimatedGCDSeconds()
     if C_Spell and C_Spell.GetSpellCooldown then
         local cooldown = C_Spell.GetSpellCooldown(61304)
         local duration = type(cooldown) == "table" and SafeNumber(cooldown.duration) or nil
-        if duration and duration > 0 then return duration end
+        local modRate = type(cooldown) == "table" and SafeNumber(cooldown.modRate) or 1
+        if duration and duration > 0 then
+            modRate = modRate and modRate > 0 and modRate or 1
+            return math.max(0.75, duration / modRate)
+        end
     end
     local haste = GetHaste and SafeNumber(GetHaste()) or nil
     if not haste then return Fuyutsui.AOEWarningConfig.defaultGCDSeconds end
@@ -1265,6 +1270,8 @@ end
 function Fuyutsui:ObserveAOEHealAbsorbs()
     if not warning.absorbCalculator or not UnitGetDetailedHealPrediction then return end
     local anyPositive, readable = false, false
+    local positiveUnits, significantAbsorbUnits, totalAbsorb = 0, 0, 0
+    local totalAbsorbPercent = 0
     for _, unit in ipairs(self.groupList or {}) do
         local member = self.group and self.group[unit]
         if member and member.valid then
@@ -1272,11 +1279,67 @@ function Fuyutsui:ObserveAOEHealAbsorbs()
             local amount = SafeNumber(warning.absorbCalculator:GetHealAbsorbs())
             if amount then
                 readable = true
-                if amount > 0 then anyPositive = true end
+                if amount > 0 then
+                    anyPositive = true
+                    positiveUnits = positiveUnits + 1
+                    totalAbsorb = totalAbsorb + amount
+                    local maxHealth = type(UnitHealthMax) == "function" and SafeNumber(UnitHealthMax(unit)) or nil
+                    if maxHealth and maxHealth > 0 then
+                        local absorbPercent = amount / maxHealth * 100
+                        totalAbsorbPercent = totalAbsorbPercent + math.min(100, absorbPercent)
+                        if absorbPercent >= 10 then
+                            significantAbsorbUnits = significantAbsorbUnits + 1
+                        end
+                    end
+                end
             end
         end
     end
-    if not readable then return end
+    if not readable then
+        warning.observedAbsorbStreak = 0
+        return
+    end
+
+    local significantGroupAbsorb = significantAbsorbUnits >= 3 and totalAbsorbPercent >= 45
+    warning.observedAbsorbStreak = anyPositive and significantGroupAbsorb
+        and warning.observedAbsorbStreak + 1
+        or 0
+
+    if warning.observedAbsorbStreak >= 2 then
+        local now = GetTime()
+        local observedEvent
+        for _, event in pairs(warning.events) do
+            if event.eventType == 2 and not event.completed and not event.timelineFallbackBlocked then
+                observedEvent = event
+                break
+            end
+        end
+
+        if not observedEvent then
+            observedEvent = NewEvent(
+                "observed-absorb:" .. tostring(now) .. ":" .. tostring(warning.nextSequence + 1),
+                2,
+                now,
+                "observed")
+        end
+
+        if observedEvent and not observedEvent.completed then
+            observedEvent.status = "succeeded"
+            observedEvent.completed = true
+            observedEvent.castOutcome = "observed_absorb_without_prompt"
+            observedEvent.impactAnchor = "actual"
+            observedEvent.impactAt = now
+            observedEvent.virtueReadyAt = now
+            observedEvent.expiresAt = now + Fuyutsui.AOEWarningConfig.impactActiveSeconds
+            TraceLog(
+                "实际吸收建立反应式事件 event=%s units=%d significant=%d total=%d totalPercent=%.1f，无 DiGua 预警",
+                tostring(observedEvent.runtimeID or observedEvent.id),
+                positiveUnits,
+                significantAbsorbUnits,
+                totalAbsorb,
+                totalAbsorbPercent)
+        end
+    end
 
     for id, event in pairs(warning.events) do
         if event.eventType == 2 then
@@ -1562,6 +1625,7 @@ function Fuyutsui:ClearAOEWarningEvents(reason)
     warning.castPollElapsed = 0
     warning.castOwners = {}
     warning.completedCasts = {}
+    warning.observedAbsorbStreak = 0
     SetOutput(0, 0)
 end
 

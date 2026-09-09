@@ -100,7 +100,7 @@ function Fuyutsui:UpdateHolyPaladinForecast()
 
     for _, unit in ipairs(self.groupList or {}) do
         local obj = self.group[unit]
-        if obj then
+        if obj and obj.valid then
             local health = Clamp((obj.healthPercentValue or 1) * 100, 0, 100)
             local deficit = math.max(0, 100 - health)
             local elapsed = math.max(0.1, now - (obj.forecastAt or now))
@@ -178,12 +178,12 @@ function Fuyutsui:UpdateGroupInRangeAndHealth()
         local unit = groupList[updateIndex]
         local obj = group[unit]
         if not obj then return end
-        self:UpdateUnitHealthInfo(unit)
         local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.role
         obj.isDead = UnitIsDeadOrGhost(unit)
         obj.canAssist = UnitCanAssist("player", unit)
         obj.valid = not obj.isDead and obj.canAssist and obj.inSight
         if obj.valid then
+            self:UpdateUnitHealthInfo(unit)
             -- 职责色块同时作为运行时的成员存在标记，不能再用超出距离表示为 0。
             local roleValue = roleMap[obj.role]
             if not roleValue or roleValue == 0 then
@@ -191,6 +191,14 @@ function Fuyutsui:UpdateGroupInRangeAndHealth()
             end
             self:CreateTexture(index, roleValue / 255)
         else
+            local healthIndex = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.healthPercent
+            obj.healthPercent = 0
+            obj.healthPercentValue = 0
+            obj.forecastHealth = 0
+            obj.damageRate = 0
+            obj.expectedNeed, obj.burstNeed = 0, 0
+            obj.sustainNeed, obj.singleNeed = 0, 0
+            self:CreateTexture(healthIndex, 0)
             self:CreateTexture(index, 0)
         end
         updateIndex = updateIndex + 1

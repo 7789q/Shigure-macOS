@@ -104,6 +104,9 @@ public static class ClassBlocksStore
         public int? HealthPercent { get; set; } = 1;
         public int? Role { get; set; } = 2;
         public int? Dispel { get; set; }
+        public int? ExpectedNeed { get; set; }
+        public int? BurstNeed { get; set; }
+        public int? SustainNeed { get; set; }
         public List<GroupAuraEntry> Auras { get; } = new();
     }
 
@@ -430,7 +433,10 @@ public static class ClassBlocksStore
                 Num = (int)(group.GetNumber("num") ?? 5),
                 HealthPercent = group.GetNumber("healthPercent") is { } hp ? (int)hp : null,
                 Role = group.GetNumber("role") is { } role ? (int)role : null,
-                Dispel = group.GetNumber("dispel") is { } dispel ? (int)dispel : null
+                Dispel = group.GetNumber("dispel") is { } dispel ? (int)dispel : null,
+                ExpectedNeed = group.GetNumber("expectedNeed") is { } expectedNeed ? (int)expectedNeed : null,
+                BurstNeed = group.GetNumber("burstNeed") is { } burstNeed ? (int)burstNeed : null,
+                SustainNeed = group.GetNumber("sustainNeed") is { } sustainNeed ? (int)sustainNeed : null
             };
 
             if (group.GetTable("aura") is { } auraOffsets)
@@ -638,6 +644,21 @@ public static class ClassBlocksStore
             if (group.Dispel is { } dispel)
             {
                 sb.Append(indent).Append("    dispel = ").Append(dispel).AppendLine(",");
+            }
+
+            if (group.ExpectedNeed is { } expectedNeed)
+            {
+                sb.Append(indent).Append("    expectedNeed = ").Append(expectedNeed).AppendLine(",");
+            }
+
+            if (group.BurstNeed is { } burstNeed)
+            {
+                sb.Append(indent).Append("    burstNeed = ").Append(burstNeed).AppendLine(",");
+            }
+
+            if (group.SustainNeed is { } sustainNeed)
+            {
+                sb.Append(indent).Append("    sustainNeed = ").Append(sustainNeed).AppendLine(",");
             }
 
             if (group.Auras.Count > 0)

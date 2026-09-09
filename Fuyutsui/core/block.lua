@@ -6,7 +6,7 @@ local screenWidth = GetScreenWidth()
 ============================================================================]]
 
 -- 主色条（FuyutsuiColorBars / CreateTexture）
-local BLOCK_FIX_COUNT = 515        -- 总色块数量
+local BLOCK_FIX_COUNT = 520        -- 总色块数量
 local BLOCK_FIRST_SCHEME_MAX = 255 -- 第一套索引方案上限（其后用 r=1/255）
 local BLOCK_HEIGHT = 1             -- 色块高度
 local BLOCK_SPACING = 0            -- 色块间距

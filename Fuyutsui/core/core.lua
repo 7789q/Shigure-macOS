@@ -87,6 +87,8 @@ function Fuyutsui:OnEnable()
     self:MacroTrace("OnEnable 开始：class=%s classId=%s", tostring(classFilename), tostring(classId))
     self:GetCharacterSpecInfo()
     self:MacroTrace("GetCharacterSpecInfo 返回：specIndex=%s specID=%s", tostring(self.state.specIndex), tostring(self.state.specID))
+    -- 先建立可用绑定，避免 reload 后的延迟回调尚未执行就进入战斗。
+    self:LoadPlayerMacros()
     self:UpdateSpellKnown()
     self:UpdatePlayerBlocks()
     if self.InitializeAOEWarning then
@@ -175,6 +177,7 @@ Fuyutsui.state = {
     classId = classId,
     className = className,
     classFilename = classFilename,
+    targetIdentitySerial = 1,
 }
 Fuyutsui.blocks = {}
 Fuyutsui.target = {}

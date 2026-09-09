@@ -184,14 +184,14 @@ local function getUnitType(unit)
         return getHostileType(unit)
     end
 
+    -- NPC 可能通过 boss1..boss5 暴露，不能只在默认目标槽位上识别。
+    if canAssist and IsFriendlyNpc(unit) then
+        return 152 / 255
+    end
+
     local index = getUnitTypeIndex(unit)
     if canAssist then
         -- 151 保留给队伍外友方玩家；152 表示队伍外友方 NPC。复用类型字段，不新增像素槽位。
-        if index == 51 then
-            if IsFriendlyNpc(unit) then
-                index = 52
-            end
-        end
         index = index + 100
     end
     return index / 255
@@ -201,12 +201,6 @@ function Fuyutsui:UpdateUnitType(unit)
     local cache = GetUnitCache(unit)
     local category = unitZHMap[unit]
     if not cache or not category then return end
-
-    if boss and boss[unit] then
-        cache.type = (cache.canAttack and 92 or 2) / 255
-        self:UpdateStateBlock(category, "类型")
-        return
-    end
 
     local unitType = 0
     if not cache.isDead then
@@ -221,11 +215,7 @@ function Fuyutsui:UpdateUnitCanAttack(unit)
     if not cache then return end
     local exists = UnitExists(unit)
     cache.canAttack = UnitCanAttack("player", unit)
-    if boss and boss[unit] then
-        cache.canAssist = false
-    else
-        cache.canAssist = UnitCanAssist("player", unit)
-    end
+    cache.canAssist = UnitCanAssist("player", unit)
     cache.inFront = IsUnitInFront(unit)
     self:UpdateUnitType(unit)
     TraceTargetState(unit, cache, exists, cache.canAttack, cache.canAssist)

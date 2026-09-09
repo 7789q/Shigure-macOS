@@ -82,6 +82,8 @@ public sealed partial class MainWindow : Window
     private Button? _triggerButton;
     private string _triggerKey = "XBUTTON2";
     private SendMode _sendMode = SendMode.Switch;
+    private int _logicIntervalMilliseconds = 100;
+    private int _renderIntervalMilliseconds = 250;
     private string? _selectedModuleId;
     private MacOverlayLayout _overlayLayout;
     private bool? _lastObservedLogicEnabled;
@@ -117,6 +119,11 @@ public sealed partial class MainWindow : Window
         if (services.Workspace.RegeneratedFiles.Count > 0)
         {
             AppendLocalLog($"已从 Fuyutsui 重新生成配置与键位：{services.Workspace.RegeneratedFiles.Count} 个文件");
+        }
+        if (services.Workspace.BackedUpFiles.Count > 0)
+        {
+            AppendLocalLog(
+                $"已备份并升级旧 Fuyutsui 代码：{string.Join("、", services.Workspace.BackedUpFiles)}");
         }
         AppendLocalLog(services.AddonSync.TargetFound
             ? $"游戏插件已同步：更新 {services.AddonSync.CopiedFiles.Count}，无需更新 {services.AddonSync.SkippedFiles.Count}，失败 {services.AddonSync.Failures.Count}"
@@ -171,6 +178,8 @@ public sealed partial class MainWindow : Window
         _overlayLayout = _uiState.OverlayLayout;
         _triggerKey = _uiState.TriggerKey;
         _sendMode = _uiState.SendMode;
+        _logicIntervalMilliseconds = _uiState.LogicIntervalMilliseconds;
+        _renderIntervalMilliseconds = _uiState.RenderIntervalMilliseconds;
         InitializeComponent();
         _mainBoundsCaptureTimer = new DispatcherTimer
         {
@@ -1018,6 +1027,11 @@ public sealed partial class MainWindow : Window
             _ = RestartRuntimeAfterSettingChangeAsync("发送模式已更改");
         };
 
+        var logicInterval = IntervalBox(_logicIntervalMilliseconds, 50, 1000);
+        var renderInterval = IntervalBox(_renderIntervalMilliseconds, 100, 5000);
+        logicInterval.LostFocus += (_, _) => CommitRuntimeIntervals(logicInterval, renderInterval);
+        renderInterval.LostFocus += (_, _) => CommitRuntimeIntervals(logicInterval, renderInterval);
+
         var module = new ComboBox
         {
             ItemsSource = _modules,
@@ -1097,7 +1111,9 @@ public sealed partial class MainWindow : Window
         return ScrollPage(
             Section("输入与运行", "修改后运行会话应以最新设置重启",
                 SettingRow("触发键", triggerButton),
-                SettingRow("发送模式", mode)),
+                SettingRow("发送模式", mode),
+                SettingRow("逻辑周期 (ms)", logicInterval),
+                SettingRow("界面刷新周期 (ms)", renderInterval)),
             BuildPermissionsSection(),
             Section("模块选择", "按实时职业与专精自动匹配，或手动指定模块",
                 SettingRow("当前模块", module),
@@ -1801,8 +1817,8 @@ public sealed partial class MainWindow : Window
         _triggerKey,
         _sendMode,
         _selectedModuleId,
-        TimeSpan.FromMilliseconds(100),
-        TimeSpan.FromMilliseconds(250));
+        TimeSpan.FromMilliseconds(_logicIntervalMilliseconds),
+        TimeSpan.FromMilliseconds(_renderIntervalMilliseconds));
 
     private async Task RestartRuntimeAfterSettingChangeAsync(string reason)
     {
@@ -2399,7 +2415,35 @@ public sealed partial class MainWindow : Window
     {
         _uiState.TriggerKey = _triggerKey;
         _uiState.SendMode = _sendMode;
+        _uiState.LogicIntervalMilliseconds = _logicIntervalMilliseconds;
+        _uiState.RenderIntervalMilliseconds = _renderIntervalMilliseconds;
         SaveUiState();
+    }
+
+    private void CommitRuntimeIntervals(TextBox logicInterval, TextBox renderInterval)
+    {
+        if (!int.TryParse(logicInterval.Text, out var logicMs)
+            || !int.TryParse(renderInterval.Text, out var renderMs))
+        {
+            logicInterval.Text = _logicIntervalMilliseconds.ToString();
+            renderInterval.Text = _renderIntervalMilliseconds.ToString();
+            return;
+        }
+
+        var previousLogicMs = _logicIntervalMilliseconds;
+        var previousRenderMs = _renderIntervalMilliseconds;
+        _logicIntervalMilliseconds = Math.Clamp(logicMs, 50, 1000);
+        _renderIntervalMilliseconds = Math.Clamp(renderMs, 100, 5000);
+        logicInterval.Text = _logicIntervalMilliseconds.ToString();
+        renderInterval.Text = _renderIntervalMilliseconds.ToString();
+        if (_logicIntervalMilliseconds == previousLogicMs
+            && _renderIntervalMilliseconds == previousRenderMs)
+        {
+            return;
+        }
+
+        SaveRuntimeSettings();
+        _ = RestartRuntimeAfterSettingChangeAsync("运行周期已更改");
     }
 
     private void ShowLogicToast(bool enabled)
@@ -2608,6 +2652,18 @@ public sealed partial class MainWindow : Window
         row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.Parse("#AEB5BA")) });
         row.Children.Add(AddToGrid(control, 1));
         return row;
+    }
+
+    private static TextBox IntervalBox(int value, int minimum, int maximum)
+    {
+        var box = new TextBox
+        {
+            Text = value.ToString(),
+            MinWidth = 140,
+            PlaceholderText = $"{minimum}–{maximum}"
+        };
+        AutomationProperties.SetName(box, $"{minimum} 至 {maximum} 毫秒");
+        return box;
     }
 
     private static StackPanel CommandRow(params Control[] controls)

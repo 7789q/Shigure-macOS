@@ -381,6 +381,7 @@ Fuyutsui.spellsList = {
     [50842]   = { index = 11, name = "血液沸腾" },
     [433895]  = { index = 12, name = "吸血鬼打击" },
     [46584]   = { index = 13, name = "亡者复生" },
+    [46585]   = { index = 13, name = "亡者复生" },
     [47541]   = { index = 14, name = "凋零缠绕" },
     [55090]   = { index = 15, name = "天灾打击" },
     [207317]  = { index = 16, name = "扩散" },
@@ -413,4 +414,5 @@ Fuyutsui.spellsList = {
     [194679]  = { index = 43, name = "符文分流" },
     [48707]   = { index = 44, name = "反魔法护罩" },
     [48265]   = { index = 45, name = "死亡脚步" },
+    [49039]   = { index = 46, name = "巫妖之躯" },
 }

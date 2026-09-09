@@ -3,7 +3,7 @@
   "Name": "烈日奶骑大秘境-美德爆发 12.1",
   "Author": "Shigure",
   "RecommendedTalent": "CEEAzbn3egSOtoSwvPw1U1vTLAAAALAwMAAD2GzMzMjZmZBmZYZsZmFjmYYMzMMmtMAMAsB2YZmZmlZbmZ2aAAAAWAGsZgZMDzAAYmhZMGNA",
-  "Version": "1.2.1.25",
+  "Version": "1.2.1.27",
   "UnitMappingVersion": 3,
   "Enabled": true,
   "Match": { "ClassId": 2, "SpecId": 1 },
@@ -133,11 +133,11 @@
     },
     {
       "Enabled": true,
-      "Condition": "真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发高压 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人持续高压 > 0 && AbsorbAny == 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+      "Condition": "真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发高压 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
       "SubConditions": [ "AOE事件类型 != 2 && AOE事件阶段 == 0", "AOE事件类型 != 2 && AOE事件阶段 == 4", "AOE事件类型 == 2 && AOE事件阶段 == 1" ],
       "Unit": 1,
       "Spell": "美德道标",
-      "Comment": "按未来 1-2 个 GCD 和 9 秒窗口预测多人压力，至少 3 个目标有预期需求时开启美德；普通 AOE 与吸奶盾仍受原有可信事件门禁"
+      "Comment": "真实多人压力或未来 1-2 个 GCD 的多人预测压力达到阈值时开启美德；吸收盾不再阻断真实掉血与预测压力入口"
     },
     {
       "Enabled": true,
@@ -232,7 +232,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "重伤目标 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28 || AbsorbAny > 0 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "重伤目标 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28 || AbsorbAny > 0 && 移动 == true && 战斗时间 > 0 && AOE事件阶段 != 5 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28",
       "Unit": 0,
       "Spell": "审判",
       "Comment": "重伤或治疗吸收且即时治疗不可用、没有灌注时用审判补充圣能；目标无效时不发送"
@@ -268,42 +268,42 @@
     },
     {
       "Enabled": true,
-      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100",
+      "Condition": "目标类型 == 152 && 目标生命值 < 100 && 目标距离 > 0 && 目标距离 <= 38",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "Unit": 32,
       "Spell": "荣耀圣令",
-      "Comment": "队伍安全时治疗友方 NPC"
+      "Comment": "当前目标为友方 NPC 且受伤时只治疗该 NPC"
     },
     {
       "Enabled": true,
-      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.神性之手 > 0",
+      "Condition": "目标类型 == 152 && 目标生命值 < 100 && 目标距离 > 0 && 目标距离 <= 38 && auras.神性之手 > 0",
       "Unit": 32,
       "Spell": "圣光术",
       "DelayMs": 700,
-      "Comment": "队伍安全时用神性之手圣光术治疗友方 NPC"
+      "Comment": "当前目标为受伤友方 NPC 时用神性之手圣光术治疗该 NPC"
     },
     {
       "Enabled": true,
-      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && auras.圣光灌注 > 0",
+      "Condition": "目标类型 == 152 && 目标生命值 < 100 && 目标距离 > 0 && 目标距离 <= 38 && auras.圣光灌注 > 0",
       "Unit": 32,
       "Spell": "圣光闪现",
       "DelayMs": 700,
-      "Comment": "队伍安全时用灌注闪现治疗友方 NPC"
+      "Comment": "当前目标为受伤友方 NPC 时用灌注圣光闪现治疗该 NPC"
     },
     {
       "Enabled": true,
-      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
+      "Condition": "目标类型 == 152 && 目标生命值 < 100 && 目标距离 > 0 && 目标距离 <= 38 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0",
       "Unit": 32,
       "Spell": "神圣震击",
-      "Comment": "队伍安全时用神圣震击治疗友方 NPC"
+      "Comment": "当前目标为受伤友方 NPC 时用神圣震击治疗该 NPC"
     },
     {
       "Enabled": true,
-      "Condition": "DTotal < 30 && H70 == 0 && 目标类型 == 152 && 目标生命值 < 100 && 移动 == false && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
+      "Condition": "目标类型 == 152 && 目标生命值 < 100 && 目标距离 > 0 && 目标距离 <= 38 && 移动 == false && spells.神圣震击层数 == 0 && auras.圣光灌注 == 0",
       "Unit": 32,
       "Spell": "圣光术",
       "DelayMs": 700,
-      "Comment": "友方 NPC 无其他手段时裸读圣光术"
+      "Comment": "当前目标为受伤友方 NPC 且无其他手段时裸读圣光术"
     },
     {
       "Enabled": true,
@@ -330,7 +330,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "移动 == true && 轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "移动 == true && 轻伤目标 && 战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28",
       "Unit": 0,
       "Spell": "审判",
       "Comment": "轻伤时震击不可用且没有灌注时用审判补充圣能；有效目标覆盖普通 AOE 阶段"
@@ -353,6 +353,14 @@
     },
     {
       "Enabled": true,
+      "Condition": "DTotal == 0 && AOE事件阶段 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && AOE事件阶段 in (1, 3) && spells.圣洁鸣钟 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && AOE事件阶段 in (1, 3) && 圣洁鸣钟预计可用 > 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false",
+      "Unit": 1,
+      "Spell": "圣光闪现",
+      "DelayMs": 700,
+      "Comment": "队伍安全且灌注即将结束时，在战斗或脱战状态用圣光闪现将其转为圣能；预计美德时点鸣钟已可用时不受 AOE 资源预留限制"
+    },
+    {
+      "Enabled": true,
       "Condition": "战斗时间 > 0 && AOE事件阶段 in (0, 1, 3, 4) && 目标类型 > 0 && 目标类型 < 100 && 目标距离 <= 5",
       "SubConditions": [ "神圣能量 >= 3", "auras.神圣意志 > 0" ],
       "Unit": 32,
@@ -361,7 +369,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 40",
+      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.神圣震击层数 >= 1 && spells.神圣震击 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 40",
       "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
       "Unit": 0,
       "Spell": "神圣震击",
@@ -369,19 +377,11 @@
     },
     {
       "Enabled": true,
-      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28 || H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 > 0 && 神圣能量 <= 3 && 目标类型 != 0 && 目标距离 > 0 && 目标距离 <= 28",
+      "Condition": "H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 == 0 && 神圣能量 < 5 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28 || H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0 && spells.审判 == 0 && auras.圣光灌注 > 5 && 神圣能量 <= 3 && 目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28",
       "SubConditions": [ "AOE事件阶段 == 0", "AOE事件阶段 == 1", "AOE事件阶段 == 3", "AOE事件阶段 == 4" ],
       "Unit": 0,
       "Spell": "审判",
-      "Comment": "全员至少 90% 且无治疗吸收时用审判填充；灌注审判按 +2 圣能预测，仅在不会溢出时释放"
-    },
-    {
-      "Enabled": true,
-      "Condition": "DTotal == 0 && 战斗时间 == 0 && AOE事件阶段 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && 战斗时间 == 0 && AOE事件阶段 in (1, 3) && spells.圣洁鸣钟 == 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false || DTotal == 0 && 战斗时间 == 0 && AOE事件阶段 in (1, 3) && 圣洁鸣钟预计可用 > 0 && auras.圣光灌注 > 0 && auras.圣光灌注 <= 5 && auras.圣光灌注层数 > 0 && 神圣能量 < 5 && 施法技能 == 0 && 移动 == false",
-      "Unit": 1,
-      "Spell": "圣光闪现",
-      "DelayMs": 700,
-      "Comment": "脱战且队伍安全时，在灌注结束前用圣光闪现将其转为圣能；预计美德时点鸣钟已可用时不受 AOE 资源预留限制"
+      "Comment": "全员至少 90% 且无治疗吸收时用审判填充；灌注剩余时间大于 5 秒且不会溢出时才释放，临近结束优先转化灌注"
     },
     {
       "Enabled": true,

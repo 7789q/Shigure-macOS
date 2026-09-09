@@ -2,14 +2,14 @@
 
 ## 文档状态
 
-- 状态：阶段一至阶段四已完成本地实现；SeUI 风格血沸监测已完成本地实现，Fuyutsui 协议定向契约已通过；当前源码契约和静态检查已通过，既有应用包的签名/启动验收已通过但未包含最新 Runtime 修复，仍待重新打包和实际 WoW 日志验收
+- 状态：阶段一至阶段四已完成本地实现；SeUI 风格血沸监测已完成本地实现，Fuyutsui 协议定向契约已通过；当前源码契约和静态检查已通过，既有应用包的签名/启动验收已通过但未包含最新 Runtime、友方 NPC 目标和急速 GCD 修复，仍待重新打包和实际 WoW 日志验收
 - 制定日期：2026-09-04
-- 最近修订：2026-09-08
+- 最近修订：2026-09-09
 - 当前模块：`BundledModules/blood-deathbringer-12.1.json`
 - 当前模块版本：`1.2.1.61`
 - 当前规则数量：49 条，其中有效自动规则 31 条；另有 17 条禁用兼容占位和 1 条暂停规则
 - 适用范围：血DK、死亡使者、大秘境基础逻辑及团本首领防御策略
-- 既有本地验收包：`artifacts/macos/Shigure-20260908-local-4.app` 为 arm64，已签名并通过 Launch Services 启动验收，内嵌血DK `1.2.1.61`；本轮 Runtime 修复未重新打包，未安装，未完成 WoW 实战验收
+- 最近可见本地验收包：`artifacts/macos/Shigure-20260909-local-4.app` 为 arm64，已签名并通过 Launch Services 启动验收，内嵌血DK `1.2.1.61`；该包早于当前源码，未安装，重新打包和 WoW 实战验收仍待完成
 - 应用版本：`1.2.1`，Bundle 版本 `1.2.22`；血DK模块版本独立为 `1.2.1.61`
 - 当前运行态：协议健康握手、状态心跳和事件轮询回退已完成本地实现；WoW 实战仍待验证。本包未配置 Sparkle；后续血DK JSON 可直接从本地模块源更新
 
@@ -28,7 +28,7 @@
 
 ## 当前交付：阶段一至阶段三（附阶段四团本门禁，本地验证）
 
-当前交付包含资源确认、动作失败退让、死亡使者爆发矩阵、团本首领减伤门禁、分段凋零维护、低骨盾分层补充和 SeUI 风格高亮血沸监测；血沸与心打已拆为高亮、普通四个独立技能分支。当前源码 Release 构建无警告/错误，Core 契约测试 89 passed、0 failed，仍不把本地回放结果等同于 WoW 内实际施法成功。既有应用包尚未包含最新 Runtime 动作确认修复。
+当前交付包含资源确认、动作失败退让、死亡使者爆发矩阵、团本首领减伤门禁、分段凋零维护、低骨盾分层补充和 SeUI 风格高亮血沸监测；血沸与心打已拆为高亮、普通四个独立技能分支。当前源码 Release 构建无警告/错误，Core 契约测试 90 passed、0 failed，仍不把本地回放结果等同于 WoW 内实际施法成功。既有应用包尚未包含最新 Runtime、友方 NPC 目标和急速 GCD 修复。
 
 ### 2026-09-08 动作确认收口
 
@@ -126,7 +126,7 @@
 - 已完成有限退让：单技能确认超时计入短退让，连续两次未确认后按技能和目标进入 5 秒抑制；多目标归因不明确时不抑制具体目标。
 - 已完成规则调整：爆发开关开启且有 1/2/3 个敌人时均可进入符文刃舞；符文能量达到 80 时优先灵界打击，删除高能量心脏打击泄洪分支。
 - 已完成运行健康门禁：Fuyutsui 以固定索引 `502`/`503` 发布协议版本和变化中的状态心跳；Shigure 检测到字段缺失、版本不匹配或心跳冻结时保持 fail-closed，不再把“逻辑已开启”当作游戏状态已就绪。
-- 当前源码验证为 Release 构建 `0 warnings, 0 errors`、契约测试 `89 passed, 0 failed`、改动 Lua 和 macOS shell 语法检查通过；既有本地包已完成包内资源、嵌套签名和 Launch Services 启动验收，但本轮 Runtime 修复未进入该包。以上不等于实际 WoW 施法成功，重新打包后仍需用新日志确认动作发送、资源下降、冷却变化和爆发技能实际命中。
+- 当前源码验证为 Release 构建 `0 warnings, 0 errors`、契约测试 `90 passed, 0 failed`、改动 Lua 和 macOS shell 语法检查通过；既有本地包已完成包内资源、嵌套签名和 Launch Services 启动验收，但本轮 Runtime、友方 NPC 目标和急速 GCD 修复未进入该包。以上不等于实际 WoW 施法成功，重新打包后仍需用新日志确认动作发送、资源下降、冷却变化和爆发技能实际命中。
 
 ### 当前规则收口：2026-09-05
 
@@ -134,7 +134,7 @@
 - 凋零在战斗时间 `<15` 秒时要求非移动且站定至少 1 秒；达到 `15` 秒后仍要求非移动，只在 `血色之地` 消失且资源可用时补铺。
 - 低骨盾顺序固定为爆发三技能、破灭临期加血债精髓、7 层以下血债精髓，再处理普通补盾；普通精髓仍保留 2 符文门槛，破灭触发精髓使用 1 符文。高骨盾时不再因为破灭光环泛化触发精髓。
 - 高亮血沸状态由 SeUI 风格的 `SPELL_ACTIVATION_OVERLAY_GLOW_SHOW/HIDE` 加血沸施法成功事件维护；`UNIT_AURA` 只保留为 `1265968/1265982` 回退和诊断来源。
-- 当前规则表共 49 条，其中 31 条有效自动规则；本次血沸一次性触发状态、物品 `/use` 宏、双 ID 物品可用性、低血量物品降级包和副本内外死神印记分支为源码模块版本 `1.2.1.61`。`Shigure-20260908-local-4.app` 已重新打包并内嵌该版本；WoW 实战验收仍为 pending。本包未配置 Sparkle，应用内更新入口不可用。
+- 当前规则表共 49 条，其中 31 条有效自动规则；本次血沸一次性触发状态、物品 `/use` 宏、双 ID 物品可用性、低血量物品降级包和副本内外死神印记分支为源码模块版本 `1.2.1.61`。最近可见本地包 `Shigure-20260909-local-4.app` 已内嵌该版本，但早于当前源码；重新打包和 WoW 实战验收仍为 pending。本包未配置 Sparkle，应用内更新入口不可用。
 
 ## 后续验收与维护
 
@@ -380,15 +380,15 @@ dotnet run --project Tests/Shigure.Core.ContractTests/Shigure.Core.ContractTests
 ```bash
 dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --runtime osx-arm64
 dotnet build Apps/Shigure.MacUI/Shigure.MacUI.csproj --configuration Release --runtime osx-x64
-codesign --verify --deep --strict artifacts/macos/Shigure-20260908-local-4.app
+codesign --verify --deep --strict artifacts/macos/Shigure-20260909-local-4.app
 ```
 
 当前本地验证结果：
 
 - 核心项目 Release 构建：通过，0 个警告、0 个错误。
-- 契约测试命令：`89 passed, 0 failed`；血DK模块、协议健康、状态构建、目标校验、宏绑定和 Fuyutsui 协议相关测试均通过。
+- 契约测试命令：`90 passed, 0 failed`；血DK模块、协议健康、状态构建、目标校验、宏绑定和 Fuyutsui 协议相关测试均通过。
 - Lua 语法、JSON 解析和 `git diff --check`：通过。
-- 既有 macOS arm64 应用包：`artifacts/macos/Shigure-20260908-local-4.app` 已通过签名检查，内嵌血DK `1.2.1.61`；本轮 Runtime 修复未重新打包，未安装，WoW 实战状态为 pending。
+- 最近可见 macOS arm64 应用包：`artifacts/macos/Shigure-20260909-local-4.app` 已通过签名检查，内嵌血DK `1.2.1.61`，但早于当前源码；未安装，重新打包和 WoW 实战状态为 pending。
 - 当前源码的 Runtime 动作确认收紧尚未进入该应用包；需重新打包后再执行包内资源、Bundle 版本、架构、嵌套签名和 Launch Services 启动检查。
 - 本机 `/Applications/Shigure.app`：不存在，尚未进行 Launch Services 或 WoW 实战验收。
 - macOS x64 独立构建：本次收尾未重新执行，状态为 pending。

@@ -2,7 +2,7 @@ namespace Shigure;
 
 public static class PixelProtocolDecoder
 {
-    private const int TopRowBlockCount = 515;
+    private const int TopRowBlockCount = 520;
     private const int TopRowFirstSchemeMax = 255;
     private const int HealAbsorbMaxUnits = 30;
 

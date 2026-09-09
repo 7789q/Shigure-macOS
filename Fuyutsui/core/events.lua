@@ -469,6 +469,8 @@ function Fuyutsui:ACTION_RANGE_CHECK_UPDATE(_, slot, isInRange, checksRange)
 end
 
 function Fuyutsui:UI_ERROR_MESSAGE(_, errorType, message)
+    state.lastUiErrorType = type(errorType) == "number" and math.min(255, math.max(0, errorType)) or 0
+    state.lastUiErrorAt = GetTime()
     if message == "目标不在视野中" then
         self:UpdateUnitInSight(state.castTargetUnit)
     end
@@ -491,6 +493,7 @@ function Fuyutsui:ACTIONBAR_HIDEGRID()
 end
 
 function Fuyutsui:PLAYER_TARGET_CHANGED()
+    self:AdvanceTargetIdentity()
     self:UpdateTargetFullInfo()
     self:UpdateUnitAuraContainer("target")
 end

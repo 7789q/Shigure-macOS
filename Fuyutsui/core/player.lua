@@ -600,6 +600,18 @@ function Fuyutsui:PublishPlayerAction(spellId, status)
         end
     end
 
+    -- Unmapped successful events are usually secure/passive noise. Keep
+    -- anonymous failures for diagnostics, and retain secret successes for
+    -- the existing scoped fallbacks in Runtime.
+    if spellIndex == 0 and not issecretvalue(spellId) and status == 2 then
+        return
+    end
+
+    local failureReason = 0
+    if status == 4 and state.lastUiErrorAt and GetTime() - state.lastUiErrorAt <= 0.75 then
+        failureReason = state.lastUiErrorType or 0
+    end
+
     -- The queue slot is committed by its serial block after its payload blocks.
     -- This prevents the screen reader from accepting a half-written tuple.
     local serial = ((state.playerActionSerial or 0) % 255) + 1
@@ -616,6 +628,7 @@ function Fuyutsui:PublishPlayerAction(spellId, status)
         serial = serial,
         spell = spellIndex,
         status = status,
+        reason = failureReason,
     }
 
     if spell then
@@ -635,6 +648,7 @@ function Fuyutsui:PublishPlayerAction(spellId, status)
     self:UpdateStateBlock("状态", "玩家动作序号")
     self:UpdateStateBlock("状态", "玩家动作事件" .. slot .. "技能")
     self:UpdateStateBlock("状态", "玩家动作事件" .. slot .. "状态")
+    self:UpdateStateBlock("状态", "玩家动作事件" .. slot .. "失败原因")
     self:UpdateStateBlock("状态", "玩家动作事件" .. slot .. "序号")
 end
 

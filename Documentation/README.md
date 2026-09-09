@@ -10,7 +10,7 @@
 | [`macOS/README.md`](macOS/README.md) | macOS 分层、权限、插件协议、打包和发行边界 | 平台与交付 |
 | [`holy-paladin-healing-optimization-design-2026-09-06.md`](holy-paladin-healing-optimization-design-2026-09-06.md) | 奶骑治疗压力分类和优先级设计 | 治疗策略设计 |
 | [`holy-paladin-virtue-implementation.md`](holy-paladin-virtue-implementation.md) | AOE、吸奶盾、美德和 DiGua/Fuyutsui 状态机 | 运行时实现契约 |
-| [`action-event-protocol-follow-up.md`](action-event-protocol-follow-up.md) | 动作事件协议 v3 的部署、最小验证、20 分钟实战验收和后续根治路径 | 动作确认维护与验收 |
+| [`action-event-protocol-follow-up.md`](action-event-protocol-follow-up.md) | 动作事件协议 v5 的部署、最小验证、20 分钟实战验收和后续根治路径 | 动作确认维护与验收 |
 | [`../BundledModules/holy-paladin-virtue-12.1.json`](../BundledModules/holy-paladin-virtue-12.1.json) | 奶骑可执行规则 | 机器可读规则 |
 | [`../BundledModules/blood-deathbringer-12.1.json`](../BundledModules/blood-deathbringer-12.1.json) | 血DK可执行规则 | 机器可读规则 |
 

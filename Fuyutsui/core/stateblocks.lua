@@ -10,7 +10,7 @@ local boss = Fuyutsui.boss
 
 local ColorValue0 = CreateColor(0, 0, 0, 1)
 local ColorValue1 = CreateColor(0, 0, 1 / 255, 1)
-local FUYUTSUI_PROTOCOL_VERSION = 3
+local FUYUTSUI_PROTOCOL_VERSION = 5
 
 Fuyutsui.powerNameMap = {
     ["MANA"] = "法力值",
@@ -182,6 +182,7 @@ local stateBlockGetters = {
         ["玩家动作序号"] = function() return (state.playerActionSerial or 0) / 255 end,
         ["玩家动作技能"] = function() return (state.playerActionSpell or 0) / 255 end,
         ["玩家动作状态"] = function() return (state.playerActionStatus or 0) / 255 end,
+        ["目标身份序号"] = function() return (state.targetIdentitySerial or 0) / 255 end,
         ["AOE桥接请求数"] = function() return (state.aoeBridgeRequests or 0) / 255 end,
         ["AOE桥接成功数"] = function() return (state.aoeBridgeSuccesses or 0) / 255 end,
         ["AOE带技能预警数"] = function() return (state.aoeCastAwareWarnings or 0) / 255 end,
@@ -372,6 +373,9 @@ for slot = 1, 4 do
     end
     stateBlockGetters["状态"]["玩家动作事件" .. slot .. "状态"] = function()
         return GetPlayerActionEventField("status") / 255
+    end
+    stateBlockGetters["状态"]["玩家动作事件" .. slot .. "失败原因"] = function()
+        return GetPlayerActionEventField("reason") / 255
     end
 end
 

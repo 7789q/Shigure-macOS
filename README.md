@@ -4,7 +4,7 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 本仓库只发布 macOS 应用及其必需的共享核心，不包含 Windows WinForms/Win32 项目。Windows 原版与上游源码位于 [waynebian01/Shigure](https://github.com/waynebian01/Shigure)。本项目基于其 MIT 许可源码继续开发，基线记录在 [`upstream.json`](upstream.json)，许可证与原作者声明见 [LICENSE](LICENSE)。
 
-当前版本的用户可见变化见 [更新日志](CHANGELOG.md)。
+当前版本的用户可见变化见 [更新日志](CHANGELOG.md)。源码当前仍需重新打包后才会进入本地应用包，WoW 实战结论以最新运行日志为准。
 
 ## 文档导航
 
@@ -37,7 +37,7 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 ## Fuyutsui 同步
 
-当前基线为 Fuyutsui 1.2.1.15；源码事实源中的随包模块为血DK 1.2.1.61、奶骑 1.2.1.25。源码当前已通过 Release 构建和 89 项契约测试；既有本地验收包 `artifacts/macos/Shigure-20260908-local-4.app` 已通过签名和此前的 Launch Services 启动验收，但未包含本轮最新 Runtime 动作确认修复，需重新打包后再作为当前运行产物。WoW 实战验收仍需单独完成。应用会迁移工作副本、生成配置并检查协议冲突。协议、模块和奶骑美德的详细边界见[架构与发行说明](Documentation/macOS/README.md)、[文档索引](Documentation/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
+当前基线为 Fuyutsui 1.2.1.15；源码事实源中的随包模块为血DK 1.2.1.61、奶骑 1.2.1.27。源码当前已通过 Release 构建和 90 项契约测试；当前工作区可见最近本地验收包 `artifacts/macos/Shigure-20260909-local-4.app` 已通过签名和此前的 Launch Services 启动验收，但仍早于最新源代码，不能作为当前运行产物，需重新打包后再验证。木桩日志已覆盖友方 NPC 治疗路径，副本和嗜血急速场景仍需单独完成实战验收。应用会迁移工作副本、生成配置并检查协议冲突。协议、模块和奶骑美德的详细边界见[架构与发行说明](Documentation/macOS/README.md)、[文档索引](Documentation/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
 
 ## 环境要求
 

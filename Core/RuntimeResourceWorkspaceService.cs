@@ -10,6 +10,7 @@ public sealed class RuntimeResourceWorkspaceService
     public const string LockFileName = "runtime-resources-v1.lock";
 
     private const long MaximumManifestBytes = 4 * 1024 * 1024;
+    private const string ConflictBackupDirectoryName = "runtime-conflicts";
     private static readonly string[] ManagedDirectories = ["Fuyutsui", "config", "keymap"];
     private static readonly string[] OptionalManagedDirectories = ["FuyutsuiDiGuaBridge"];
     private static readonly string[] ManagedFiles = ["wow_process.txt"];
@@ -114,6 +115,8 @@ public sealed class RuntimeResourceWorkspaceService
         var updated = new List<string>();
         var skipped = new List<string>();
         var conflicts = new List<string>();
+        var backedUp = new List<string>();
+        var deployedCodeResources = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var sourceFile in sourceFiles)
         {
@@ -123,8 +126,12 @@ public sealed class RuntimeResourceWorkspaceService
             EnsureTargetPathSafe(workspaceRoot, targetPath);
             if (!File.Exists(targetPath))
             {
-                CopyAtomic(sourceFile.SourcePath, workspaceRoot, targetPath);
+                CopyAtomic(sourceFile.SourcePath, targetPath);
                 created.Add(relativePath);
+                if (IsPackagedCodeResource(relativePath))
+                {
+                    deployedCodeResources.Add(relativePath);
+                }
                 continue;
             }
 
@@ -137,23 +144,48 @@ public sealed class RuntimeResourceWorkspaceService
 
             if (IsKnownUpgradeableResource(relativePath, targetHash))
             {
-                CopyAtomic(sourceFile.SourcePath, workspaceRoot, targetPath);
+                CopyAtomic(sourceFile.SourcePath, targetPath);
                 updated.Add(relativePath);
+                if (IsPackagedCodeResource(relativePath))
+                {
+                    deployedCodeResources.Add(relativePath);
+                }
                 continue;
             }
 
             if (previousManifest?.Files.TryGetValue(relativePath, out var previousHash) == true
                 && string.Equals(targetHash, previousHash, StringComparison.OrdinalIgnoreCase))
             {
-                CopyAtomic(sourceFile.SourcePath, workspaceRoot, targetPath);
+                CopyAtomic(sourceFile.SourcePath, targetPath);
                 updated.Add(relativePath);
+                if (IsPackagedCodeResource(relativePath))
+                {
+                    deployedCodeResources.Add(relativePath);
+                }
+                continue;
+            }
+
+            if (IsUserManagedResource(relativePath))
+            {
+                conflicts.Add(relativePath);
+                continue;
+            }
+
+            if (IsPackagedCodeResource(relativePath))
+            {
+                // Executable addon resources follow the packaged baseline; preserve the old copy for recovery.
+                BackupConflict(targetPath, relativePath, migrationRoot);
+                CopyAtomic(sourceFile.SourcePath, targetPath);
+                updated.Add(relativePath);
+                backedUp.Add(relativePath);
+                deployedCodeResources.Add(relativePath);
                 continue;
             }
 
             conflicts.Add(relativePath);
         }
 
-        var migrated = MigrateLegacyCastStates(workspaceRoot);
+        var migrated = MigrateLegacyCastStates(workspaceRoot, deployedCodeResources);
         var regenerated = RegenerateDerivedResources(workspaceRoot);
         var generatedPaths = regenerated.GeneratedFiles.ToHashSet(StringComparer.Ordinal);
         conflicts.RemoveAll(generatedPaths.Contains);
@@ -175,6 +207,7 @@ public sealed class RuntimeResourceWorkspaceService
             updated,
             skipped,
             conflicts,
+            backedUp,
             migrated,
             regenerated.ChangedFiles);
     }
@@ -183,7 +216,17 @@ public sealed class RuntimeResourceWorkspaceService
         UpgradeableResourceHashes.TryGetValue(relativePath, out var hashes)
         && hashes.Contains(sha256);
 
-    private static IReadOnlyList<string> MigrateLegacyCastStates(string workspaceRoot)
+    private static bool IsPackagedCodeResource(string relativePath) =>
+        relativePath.StartsWith("Fuyutsui/", StringComparison.Ordinal)
+        || relativePath.StartsWith("FuyutsuiDiGuaBridge/", StringComparison.Ordinal);
+
+    private static bool IsUserManagedResource(string relativePath) =>
+        relativePath.StartsWith("Fuyutsui/class/", StringComparison.Ordinal)
+        || relativePath is "Fuyutsui/core/classmacros.lua" or "Fuyutsui/core/quickbutton.lua";
+
+    private static IReadOnlyList<string> MigrateLegacyCastStates(
+        string workspaceRoot,
+        IReadOnlySet<string> deployedCodeResources)
     {
         var classDirectory = Path.Combine(workspaceRoot, "Fuyutsui", "class");
         if (!Directory.Exists(classDirectory))
@@ -195,6 +238,12 @@ public sealed class RuntimeResourceWorkspaceService
         foreach (var classPath in Directory.EnumerateFiles(classDirectory, "*.lua", SearchOption.TopDirectoryOnly)
                      .Order(StringComparer.Ordinal))
         {
+            var relativeClassPath = NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, classPath));
+            if (deployedCodeResources.Contains(relativeClassPath))
+            {
+                continue;
+            }
+
             var document = ClassBlocksStore.Load(classPath);
             var changed = false;
             foreach (var spec in document.Specs.Values)
@@ -249,7 +298,8 @@ public sealed class RuntimeResourceWorkspaceService
 
 
         var classMacrosPath = Path.Combine(workspaceRoot, "Fuyutsui", "core", "classmacros.lua");
-        if (File.Exists(classMacrosPath))
+        var relativeClassMacrosPath = NormalizeRelativePath(Path.GetRelativePath(workspaceRoot, classMacrosPath));
+        if (File.Exists(classMacrosPath) && !deployedCodeResources.Contains(relativeClassMacrosPath))
         {
             var macros = ClassMacrosStore.Load(classMacrosPath);
             if (macros.Classes.TryGetValue("PALADIN", out var paladinMacros))
@@ -461,7 +511,24 @@ public sealed class RuntimeResourceWorkspaceService
         return normalized;
     }
 
-    private static void CopyAtomic(string sourcePath, string workspaceRoot, string targetPath)
+    private static void BackupConflict(string sourcePath, string relativePath, string migrationRoot)
+    {
+        var backupRoot = Path.Combine(
+            migrationRoot,
+            ConflictBackupDirectoryName,
+            $"{DateTime.UtcNow:yyyyMMdd-HHmmssfff}-{Guid.NewGuid():N}");
+        var backupPath = Path.Combine(
+            backupRoot,
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        var backupDirectory = Path.GetDirectoryName(backupPath)
+            ?? throw new InvalidOperationException("无法确定运行资源冲突备份目录。");
+        Directory.CreateDirectory(backupDirectory);
+        RejectLink(backupDirectory);
+        File.Copy(sourcePath, backupPath, overwrite: false);
+        RejectLink(backupPath);
+    }
+
+    private static void CopyAtomic(string sourcePath, string targetPath)
     {
         var directory = Path.GetDirectoryName(targetPath)!;
         var tempPath = Path.Combine(directory, $".{Path.GetFileName(targetPath)}.{Guid.NewGuid():N}.tmp");
@@ -587,6 +654,7 @@ public sealed record RuntimeResourceWorkspaceResult(
     IReadOnlyList<string> UpdatedFiles,
     IReadOnlyList<string> SkippedFiles,
     IReadOnlyList<string> ConflictingFiles,
+    IReadOnlyList<string> BackedUpFiles,
     IReadOnlyList<string> MigratedFiles,
     IReadOnlyList<string> RegeneratedFiles)
 {

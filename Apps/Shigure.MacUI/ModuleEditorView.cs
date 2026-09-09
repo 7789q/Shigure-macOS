@@ -923,12 +923,13 @@ public sealed class ModuleEditorView : UserControl
         Func<T> createRow)
     {
         var add = CommandButton("新增", (_, _) => rows.Add(createRow()));
+        var copy = CommandButton("复制", (_, _) => CloneSelected(grid, rows));
         var remove = CommandButton("删除", (_, _) => RemoveSelected(grid, rows));
         var up = CommandButton("上移", (_, _) => MoveSelected(grid, rows, -1));
         var down = CommandButton("下移", (_, _) => MoveSelected(grid, rows, 1));
         var content = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 8 };
         content.Children.Add(grid);
-        content.Children.Add(At(ActionRow(add, remove, up, down), 1, 0));
+        content.Children.Add(At(ActionRow(add, copy, remove, up, down), 1, 0));
         return new TabItem { Header = title, Content = content };
     }
 
@@ -1048,6 +1049,29 @@ public sealed class ModuleEditorView : UserControl
         {
             rows.Remove(selected);
         }
+    }
+
+    private static void CloneSelected<T>(DataGrid grid, ObservableCollection<T> rows)
+    {
+        if (grid.SelectedItem is not T selected)
+        {
+            return;
+        }
+
+        var current = rows.IndexOf(selected);
+        if (current < 0)
+        {
+            return;
+        }
+
+        var clone = JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(selected));
+        if (clone is null)
+        {
+            return;
+        }
+
+        rows.Insert(current + 1, clone);
+        grid.SelectedItem = clone;
     }
 
     private static void MoveSelected<T>(DataGrid grid, ObservableCollection<T> rows, int delta)

@@ -6,7 +6,8 @@ public sealed class StateBuilder : IRuntimeStateBuilder
 {
     private const int PlayerActionQueueFirstBlock = 504;
     private const int PlayerActionQueueSlotCount = 4;
-    private const int PlayerActionQueueFieldCount = 3;
+    private const int PlayerActionQueueFieldCount = 4;
+    private const int TargetIdentityBlock = 520;
     private readonly ConfigService _config;
 
     public StateBuilder(ConfigService config)
@@ -56,12 +57,14 @@ public sealed class StateBuilder : IRuntimeStateBuilder
         {
             var (group, positiveAbsorbs) = BuildGroup(groupConfig, rowData, barData, healAbsorbData);
             result["group"] = group;
+            ApplyHealingAbsorbForecast(result, group);
             healAbsorbDiagnostic = new HealAbsorbDiagnosticSnapshot(
                 healAbsorbData.Count,
                 positiveAbsorbs);
         }
 
         ApplyPlayerActionEventQueue(result, rowData);
+        result["目标身份序号"] = rowData.GetValueOrDefault(TargetIdentityBlock);
 
         ApplyProtectedAoeStage(result);
 
@@ -107,7 +110,8 @@ public sealed class StateBuilder : IRuntimeStateBuilder
             var baseStep = PlayerActionQueueFirstBlock + (slot - 1) * PlayerActionQueueFieldCount;
             if (rowData.ContainsKey(baseStep)
                 || rowData.ContainsKey(baseStep + 1)
-                || rowData.ContainsKey(baseStep + 2))
+                || rowData.ContainsKey(baseStep + 2)
+                || rowData.ContainsKey(baseStep + 3))
             {
                 hasQueue = true;
                 break;
@@ -125,6 +129,7 @@ public sealed class StateBuilder : IRuntimeStateBuilder
             state[$"玩家动作事件{slot}序号"] = rowData.GetValueOrDefault(baseStep);
             state[$"玩家动作事件{slot}技能"] = rowData.GetValueOrDefault(baseStep + 1);
             state[$"玩家动作事件{slot}状态"] = rowData.GetValueOrDefault(baseStep + 2);
+            state[$"玩家动作事件{slot}失败原因"] = rowData.GetValueOrDefault(baseStep + 3);
         }
     }
 
@@ -133,6 +138,80 @@ public sealed class StateBuilder : IRuntimeStateBuilder
 
     private static bool ReadBool(IDictionary<string, object?> values, string key) =>
         values.TryGetValue(key, out var value) && value is not null && Convert.ToBoolean(value);
+
+    private static void ApplyHealingAbsorbForecast(
+        IDictionary<string, object?> state,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group)
+    {
+        var positiveUnits = 0;
+        var totalAbsorb = 0;
+        var burstTotal = 0;
+        var sustainTotal = 0;
+        var expectedCount = 0;
+        var hasForecast = false;
+
+        foreach (var data in group.Values)
+        {
+            if (data is not Dictionary<string, object?> mutable)
+            {
+                continue;
+            }
+
+            var absorb = ReadInt(mutable, "治疗吸收");
+            if (absorb > 0)
+            {
+                positiveUnits++;
+                totalAbsorb += absorb;
+                AddCapped(mutable, "预期需求", absorb);
+                AddCapped(mutable, "爆发需求", absorb);
+                AddCapped(mutable, "持续需求", absorb);
+            }
+
+            if (mutable.ContainsKey("预期需求")
+                && mutable.ContainsKey("爆发需求")
+                && mutable.ContainsKey("持续需求"))
+            {
+                hasForecast = true;
+                var expected = ReadInt(mutable, "预期需求");
+                var burst = ReadInt(mutable, "爆发需求");
+                var sustain = ReadInt(mutable, "持续需求");
+                if (expected >= 15) expectedCount++;
+                if (burst >= 15) burstTotal += burst;
+                if (sustain >= 15) sustainTotal += sustain;
+            }
+        }
+
+        state["治疗吸收单位数"] = positiveUnits;
+        state["治疗吸收总量"] = totalAbsorb;
+        if (!hasForecast)
+        {
+            return;
+        }
+
+        if (state.ContainsKey("多人爆发需求"))
+        {
+            state["多人爆发需求"] = Math.Min(255, burstTotal);
+        }
+        if (state.ContainsKey("多人持续需求"))
+        {
+            state["多人持续需求"] = Math.Min(255, sustainTotal);
+        }
+        if (state.ContainsKey("预计治疗人数"))
+        {
+            state["预计治疗人数"] = Math.Min(255, expectedCount);
+        }
+
+    }
+
+    private static void AddCapped(Dictionary<string, object?> values, string key, int delta)
+    {
+        if (!values.ContainsKey(key))
+        {
+            return;
+        }
+
+        values[key] = Math.Min(255, ReadInt(values, key) + delta);
+    }
 
     private static Dictionary<string, object?> BuildFieldMap(
         JsonObject fieldsConfig,

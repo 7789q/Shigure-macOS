@@ -18,7 +18,7 @@ Packaging/macOS/repackage-local.sh
 Packaging/macOS/repackage-local.sh --fast
 ```
 
-`--fast` 只适合确认打包链路本身；它不代表源码、配置或 Lua 已通过测试。默认模式发现相关改动时自动走完整验证。契约测试失败时仍会生成本地诊断包，但脚本返回非零状态并显示失败原因；restore、build、shell 或 Lua 检查失败时会在打包前停止。
+`--fast` 只适合确认打包链路本身；它不代表源码、配置或 Lua 已通过测试。默认模式发现相关改动时自动走完整验证。完整验证会运行全部契约测试，包括契约清单 SHA-256 检查。契约测试失败时仍会生成本地诊断包，但脚本返回非零状态并显示失败原因；restore、build、shell 或 Lua 检查失败时会在打包前停止。
 
 不要从受限沙箱终端执行。脚本会在任何 `dotnet restore` 之前检查登录钥匙串访问，环境不正确时立即退出，不再无输出等待。
 
