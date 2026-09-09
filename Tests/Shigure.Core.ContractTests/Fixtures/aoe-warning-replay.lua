@@ -23,6 +23,9 @@ function UnitSpellTargetName() return nil end
 function UnitCastingInfo(unit)
     local cast = casts[unit]
     if not cast then return nil end
+    if cast.secretTiming then
+        return "cast", nil, nil, { secret = true }, { secret = true }
+    end
     return "cast", nil, nil, cast.startedAt * 1000, cast.endsAt * 1000
 end
 function UnitChannelInfo(unit) return UnitCastingInfo(unit) end
@@ -373,8 +376,8 @@ flush()
 now = 115
 update(2, 3, "protected direct success opens absorb execution")
 
--- DiGua's live NamePlateEnterCombat countdown is also authoritative when the
--- client does not expose a matching UNIT_SPELLCAST event to Shigure.
+-- DiGua's live NamePlateEnterCombat countdown is the protected fallback when
+-- no readable cast event can be bound. A real bound cast still takes priority.
 clear()
 now = 120
 Fuyutsui:ObserveAOEDiGuaBar(132334, 3, "准备吸奶盾", "nameplate11")
@@ -382,7 +385,36 @@ update(2, 1, "DiGua bar reserves absorb")
 now = 123
 update(2, 1, "DiGua bar waits its post-cast delay")
 now = 125
-update(2, 3, "DiGua bar opens absorb execution")
+update(2, 3, "DiGua bar fallback opens absorb execution")
+clear()
+
+-- A late DiGua bar update must not overwrite a cast that is already bound.
+-- The actual terminal is four seconds after the initial reservation; Virtue
+-- must become ready two seconds after that terminal, not after the later bar.
+now = 150
+Fuyutsui:ObserveAOEDiGuaBar(132334, 3, "准备吸奶盾", "nameplate14")
+now = 151
+casts.nameplate14 = { startedAt = now, endsAt = now + 3 }
+Fuyutsui:ObserveAOEEnemyCast("nameplate14", "bar-does-not-win", 1306517, false)
+Fuyutsui:ObserveAOEDiGuaBar(132334, 8, "准备吸奶盾", "nameplate14")
+Fuyutsui:FinishAOEEnemyCast("nameplate14", "bar-does-not-win", 1306517, "succeeded")
+flush()
+now = 154
+update(2, 1, "confirmed cast starts the post-cast delay from its real end")
+now = 156
+update(2, 3, "confirmed cast opens Virtue two seconds after its real end")
+clear()
+
+-- When protected timing hides the cast end, the terminal callback timestamp is
+-- the actual fallback. The old prediction must not be reused.
+now = 160
+casts.nameplate15 = { startedAt = now, endsAt = now + 3, secretTiming = true }
+Fuyutsui:ObserveAOEEnemyCast("nameplate15", "protected-terminal-time", protectedSpell, false)
+now = 161
+Fuyutsui:FinishAOEEnemyCast("nameplate15", "protected-terminal-time", protectedSpell, "succeeded")
+flush()
+now = 163
+update(2, 3, "protected success uses terminal time plus two seconds")
 clear()
 
 -- DiGua keeps one independent timeline event per nameplate unit. Two Ritual

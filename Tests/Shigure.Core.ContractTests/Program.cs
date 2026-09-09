@@ -1667,7 +1667,7 @@ static int ValidateHolyPaladinModule(string path)
             "holy paladin Cleanse follows the AOE burst chain and precedes ordinary healing");
         Equal(true, module.Rules.Count >= 30,
             "holy paladin module keeps the complete priority matrix instead of a scenario subset");
-        Equal(42, module.Rules.Count,
+        Equal(41, module.Rules.Count,
             "holy paladin module includes sacrifice, consumable and split lowest-health healing branches");
         Equal(true, module.Rules.All(rule => rule.LogicDelayMs.GetValueOrDefault() == 0),
             "holy paladin rules never pause the whole logic loop after a decision");
@@ -1753,7 +1753,7 @@ static int ValidateHolyPaladinModule(string path)
             "牺牲祝福", "圣盾术", "圣疗术", "治疗石", "治疗药水", "美德道标", "美德道标", "美德道标", "黎明之光", "圣洁鸣钟", "荣耀圣令", "光环掌握", "清洁术",
             "荣耀圣令", "荣耀圣令", "圣光闪现", "圣光术", "圣光术", "神圣震击", "神圣震击", "审判", "圣光术", "圣光术",
             "暂停", "暂停", "荣耀圣令", "圣光术", "圣光闪现", "神圣震击", "圣光术", "圣光闪现", "神圣震击", "荣耀圣令",
-            "审判", "圣光术", "黎明之光", "圣光闪现", "圣光闪现", "正义盾击", "神圣震击", "审判", "暂停"
+            "审判", "圣光术", "黎明之光", "圣光闪现", "正义盾击", "神圣震击", "审判", "暂停"
         };
         Equal(string.Join('|', expectedPriority), string.Join('|', module.Rules.Select(rule => rule.Spell)),
             "holy paladin complete skill priority remains ordered");
@@ -1792,14 +1792,13 @@ static int ValidateHolyPaladinModule(string path)
                 && (rule.SubConditions?.Contains("神圣能量 >= 3") == true)),
             "non-Virtue Light of Dawn requires three light injuries and no severe target");
         var shieldRule = module.Rules.Single(rule => rule.Spell == "正义盾击");
-        Equal(true, shieldRule.Condition.Contains("治疗吸收总量 < 30", StringComparison.Ordinal)
-            && shieldRule.Condition.Contains("目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 5", StringComparison.Ordinal)
+        Equal(true, shieldRule.Condition.Contains("目标类型 > 0 && 目标类型 < 100 && 目标距离 <= 5", StringComparison.Ordinal)
             && !shieldRule.Condition.Contains("目标正面", StringComparison.Ordinal),
             "Shield of the Righteous requires a nearby hostile target without the restricted frontal API gate");
         Equal("神圣能量 >= 3|auras.神圣意志 > 0", string.Join('|', module.Rules[35].SubConditions ?? []),
             "non-Virtue Light of Dawn accepts Holy Power or Divine Purpose");
         Equal(true, module.Rules.Any(rule => rule.Spell == "神圣震击"
-                && rule.Condition.Contains("H90 == 0 && 治疗吸收总量 < 30 && 战斗时间 > 0", StringComparison.Ordinal)
+                && rule.Condition.Contains("H90 == 0 && AbsorbAny == 0 && 战斗时间 > 0", StringComparison.Ordinal)
                 && rule.Condition.Contains("目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 40", StringComparison.Ordinal)),
             "healthy-group offensive Holy Shock requires a current target within forty yards");
         var healthyJudgment = module.Rules.Single(rule => rule.Spell == "审判"
@@ -1807,9 +1806,8 @@ static int ValidateHolyPaladinModule(string path)
         Equal(true,
             healthyJudgment.Condition.Contains("auras.圣光灌注 == 0 && 神圣能量 < 5", StringComparison.Ordinal)
             && healthyJudgment.Condition.Contains("auras.圣光灌注 > 5 && 神圣能量 <= 3", StringComparison.Ordinal)
-            && healthyJudgment.Condition.Contains("治疗吸收总量 < 30", StringComparison.Ordinal)
-            && !healthyJudgment.Condition.Contains("目标类型 > 0", StringComparison.Ordinal),
-            "healthy-group Judgment predicts Infusion's two Holy Power and delegates target fallback to the macro");
+            && healthyJudgment.Condition.Contains("目标类型 > 0 && 目标类型 < 100 && 目标距离 > 0 && 目标距离 <= 28", StringComparison.Ordinal),
+            "healthy-group Judgment predicts Infusion's two Holy Power and requires a valid target");
         var holyLightFallbacks = module.Rules.Where(rule => rule.Spell == "圣光术").ToArray();
         Equal(true, holyLightFallbacks
                 .Where(rule => rule.Comment?.Contains("裸读", StringComparison.Ordinal) == true)
@@ -1824,12 +1822,10 @@ static int ValidateHolyPaladinModule(string path)
                     && !rule.Condition.Contains("敌人数量", StringComparison.Ordinal)),
             "every offensive filler relies on immediate combat state without nameplate gating");
         var infusionConversionRule = module.Rules.Single(rule =>
-            rule.Comment?.Contains("队伍安全时，战斗中立即", StringComparison.Ordinal) == true);
+            rule.Comment?.Contains("队伍安全且灌注即将结束时", StringComparison.Ordinal) == true);
         Equal(true, infusionConversionRule.Condition.Contains("auras.圣光灌注层数 > 0", StringComparison.Ordinal)
-            && infusionConversionRule.Condition.Contains("HTotal == 0", StringComparison.Ordinal)
-            && infusionConversionRule.Condition.Contains("治疗吸收总量 < 30", StringComparison.Ordinal)
-            && infusionConversionRule.Condition.Contains("战斗时间 > 0", StringComparison.Ordinal)
-            && infusionConversionRule.Condition.Contains("战斗时间 == 0", StringComparison.Ordinal)
+            && infusionConversionRule.Condition.Contains("DTotal == 0", StringComparison.Ordinal)
+            && !infusionConversionRule.Condition.Contains("战斗时间 == 0", StringComparison.Ordinal)
             && infusionConversionRule.Condition.Contains("施法技能 == 0", StringComparison.Ordinal),
             "safe Infusion conversion is available in combat and out of combat");
         Equal(true, module.Rules.Where(rule => rule.Unit == ReservedUnit.Target
@@ -2082,6 +2078,16 @@ static int ValidateHolyPaladinModule(string path)
             "MOD-01 Sacrifice Blessing protects the lowest-health other player before self defense");
         Equal(2, Convert.ToInt32(sacrifice.UnitInfo["动作单位槽位"]),
             "MOD-01 Sacrifice Blessing excludes the player slot from its target selector");
+
+        var absorbVirtue = Evaluate(State(
+            [95, 20, 100, 100, 100],
+            aoeType: 2,
+            stage: 3,
+            sacrificeCooldown: 0,
+            layOnHandsCooldown: 0,
+            virtueCooldown: 0));
+        Equal("圣疗术", Action(absorbVirtue),
+            "MOD-01 absorb execution stage preserves the historical emergency priority");
 
         Equal("治疗石", Action(Evaluate(State(
             [40, 100, 100, 100, 100],
@@ -2563,17 +2569,6 @@ static int ValidateHolyPaladinModule(string path)
             [100, 100, 100, 100, 100],
             judgmentCooldown: 0))),
             "MOD-30 full-health damage uses Judgment when Holy Shock is unavailable");
-        Equal("圣光闪现", Action(Evaluate(State(
-            [100, 100, 100, 100, 100],
-            infusion: 10,
-            judgmentCooldown: 0))),
-            "MOD-30 a safe full-health group converts Infusion before its final five seconds");
-        Equal("圣光闪现", Action(Evaluate(State(
-            [100, 100, 100, 100, 100],
-            absorb: [40, 0, 0, 0, 0],
-            combatTime: 0,
-            infusion: 1))),
-            "MOD-30 an out-of-combat absorb target consumes Infusion under the absorb phase rules");
         Equal("正义盾击", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             holyPower: 4,
@@ -2620,8 +2615,8 @@ static int ValidateHolyPaladinModule(string path)
             judgmentCooldown: 0,
             targetType: 152);
         var absorbWaitingOffensive = Evaluate(absorbWaitingOffensiveState);
-        Equal("审判", Action(absorbWaitingOffensive),
-            "MOD-30 Judgment falls back to the tank target when the current target is a friendly NPC");
+        Equal("暂停", Action(absorbWaitingOffensive),
+            "MOD-30 absorb waiting does not cast an offensive filler at a friendly NPC target");
         Equal("圣光术", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             absorb: [10, 10, 10, 10, 0],
@@ -2629,12 +2624,12 @@ static int ValidateHolyPaladinModule(string path)
             judgmentCooldown: 0,
             targetType: 1))),
             "MOD-30 absorb waiting uses Holy Light when a healing target can take the cast");
-        Equal("审判", Action(Evaluate(State(
+        Equal("暂停", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             stage: 3,
             judgmentCooldown: 0,
             targetType: 0))),
-            "MOD-30 Judgment remains dispatchable without a current target so the macro can use the tank fallback");
+            "MOD-30 absorb waiting stops offensive fillers without a valid hostile target");
         var npcShock = Evaluate(State(
             [100, 100, 100, 100, 100],
             shockCharges: 2,
@@ -5005,10 +5000,10 @@ static void CooldownConfirmationTrackerContract()
         ["玩家动作状态"] = 2,
         ["公共冷却剩余"] = 16
     }), now.AddMilliseconds(1800)).Single();
-    Equal(true, delayedActionConfirmation.Confirmed,
-        "a delayed action event cannot turn a successful Shield resource change into a retry");
-    Equal(true, delayedActionConfirmation.UsedDelayedActionAcknowledgement,
-        "delayed Shield confirmation reports the stale action acknowledgement source");
+    Equal(false, delayedActionConfirmation.Confirmed,
+        "a stale unrelated action cannot confirm a Shield resource change");
+    Equal(false, delayedActionConfirmation.UsedDelayedActionAcknowledgement,
+        "Shield confirmation never uses the generic delayed action fallback");
 
     var targetFour = chargeDecision with
     {
@@ -8003,6 +7998,7 @@ static void FuyutsuiProtocolContract()
     var deathKnight = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "class", "DeathKnight.lua"));
     var deathKnightConfig = File.ReadAllText(Path.Combine(repositoryRoot, "config", "DeathKnight.json"));
     var commonConfig = File.ReadAllText(Path.Combine(repositoryRoot, "config", "common.json"));
+    var runtimeText = File.ReadAllText(Path.Combine(repositoryRoot, "Runtime", "ShigureRuntime.cs"));
     var unitSelector = File.ReadAllText(Path.Combine(repositoryRoot, "Modules", "UnitSelector.cs"));
     var toc = File.ReadAllText(Path.Combine(repositoryRoot, "Fuyutsui", "Fuyutsui.toc"));
 
@@ -8110,6 +8106,10 @@ static void FuyutsuiProtocolContract()
         && group.Contains("if updateIndex > numUnits then", StringComparison.Ordinal)
         && group.Contains("updateIndex = 1", StringComparison.Ordinal)
         && group.Contains("local endIndex = startIndex + 30 * blocks.groups.num - 1", StringComparison.Ordinal)
+        && group.Contains("local function ResolveUnitInRange(unit)", StringComparison.Ordinal)
+        && group.Contains("Fuyutsui:GetUnitRange(unit)", StringComparison.Ordinal)
+        && !group.Contains("UnitInRange(unit) == true", StringComparison.Ordinal)
+        && !group.Contains("inRange = UnitInRange(unit)", StringComparison.Ordinal)
         && !group.Contains("EvaluateColorFromBoolean(inRange, trueValue, ColorValue0)", StringComparison.Ordinal),
         "raid group enumeration uses the shared raid predicate, resets after roster size changes and keeps all configured slots addressable");
     Equal(true, block.Contains("local BLOCK_FIX_COUNT = 520", StringComparison.Ordinal)
@@ -8197,8 +8197,11 @@ static void FuyutsuiProtocolContract()
         && compatibilityBridge.Contains("Fuyutsui:ObserveAOEDiGuaBar(132334, 11.7, \"准备吸奶盾\", unit)", StringComparison.Ordinal)
         && compatibilityBridge.Contains("Fuyutsui:CancelAOEDiGuaBar(unit)", StringComparison.Ordinal)
         && aoeWarning.Contains("absorbVirtueDelaySeconds = 2", StringComparison.Ordinal)
-        && aoeWarning.Contains("local impactAt = event.impactAt or now", StringComparison.Ordinal)
-        && aoeWarning.Contains("event.virtueReadyAt = impactAt + config.absorbVirtueDelaySeconds", StringComparison.Ordinal)
+        && aoeWarning.Contains("event.castOutcome = \"diguabar_elapsed\"", StringComparison.Ordinal)
+        && aoeWarning.Contains("local impactAt = cast.endsAt or now", StringComparison.Ordinal)
+        && aoeWarning.Contains("event.impactAnchor = \"actual\"", StringComparison.Ordinal)
+        && aoeWarning.Contains("event.virtueReadyAt = event.eventType == 2", StringComparison.Ordinal)
+        && aoeWarning.Contains("event.timelineFallbackBlocked = true", StringComparison.Ordinal)
         && aoeWarning.Contains("local function TraceLog(message, ...)\n    DebugLog(message, ...)\nend", StringComparison.Ordinal)
         && !compatibilityBridge.Contains("|cff00ff00[Fuyutsui AOE]|r", StringComparison.Ordinal)
         && !compatibilityBridge.Contains("hooksecurefunc(addonTable, \"CustomEncounterBar\"", StringComparison.Ordinal),
@@ -8261,7 +8264,6 @@ static void FuyutsuiProtocolContract()
         && aoeWarning.Contains("protectedCorrelationSeconds = 0.5", StringComparison.Ordinal)
         && aoeWarning.Contains("protectedTiming = timing == nil", StringComparison.Ordinal)
         && aoeWarning.Contains("impactAnchor = \"actual\"", StringComparison.Ordinal)
-        && aoeWarning.Contains("missing_end_anchor", StringComparison.Ordinal)
         && aoeWarning.Contains("absorbDiGuaCastSeconds = 11.7", StringComparison.Ordinal)
         && aoeWarning.Contains("锚点=%s", StringComparison.Ordinal)
         && aoeWarning.Contains("GetAbsorbAnchorCode", StringComparison.Ordinal)
@@ -8272,6 +8274,12 @@ static void FuyutsuiProtocolContract()
         && stateBlocks.Contains("[\"AOE吸奶盾预计剩余\"]", StringComparison.Ordinal)
         && stateBlocks.Contains("[\"AOE读条剩余\"]", StringComparison.Ordinal),
         "protected instanced casts use a narrow DiGua correlation and never fake a missing cast-end anchor");
+    Equal(true,
+        runtimeText.Contains("var observedGcdRemaining = state?.GetInt(\"公共冷却剩余\") ?? 0", StringComparison.Ordinal)
+            && !runtimeText.Contains("DefaultGlobalCooldown", StringComparison.Ordinal)
+            && !runtimeText.Contains("_globalCooldownBlockedUntil", StringComparison.Ordinal)
+            && !runtimeText.Contains("RecordGlobalCooldownSent", StringComparison.Ordinal),
+        "runtime GCD pacing uses only the measured WoW remainder without a fixed local lock");
     Equal(true, aoeWarning.Contains("function Fuyutsui:GetEstimatedGCDSeconds()", StringComparison.Ordinal)
         && aoeWarning.Contains("duration / modRate", StringComparison.Ordinal)
         && aoeWarning.Contains("function Fuyutsui:GetGCDRemainingSeconds()", StringComparison.Ordinal)
@@ -8597,6 +8605,11 @@ static void ClassMacrosEditorPersistenceContract()
         var virtue = keymap.GetBinding(1, "美德道标", "");
         Equal(2, virtue?.Hotkeys.Count ?? 0, "keymap service preserves the routed hotkey sequence");
         Equal(virtue?.DisplayText, keymap.GetHotkey(1, "美德道标", ""), "legacy hotkey display stays readable");
+        var shield = keymap.GetBinding(ReservedUnit.Target, "正义盾击", "harm, nodead");
+        Equal("ALT-NUMPAD8", shield?.DisplayText,
+            "holy paladin Shield of the Righteous resolves to the macro slot generated by Fuyutsui");
+        Equal(1, shield?.Hotkeys.Count ?? 0,
+            "Shield of the Righteous uses one target macro key");
     }
     finally
     {
@@ -11123,7 +11136,7 @@ sealed class CooldownAwareRuntimeStateBuilder(CooldownAwareTargetKeyOutput outpu
             ["DiGua桥接就绪"] = true,
             ["宏绑定状态"] = 1,
             ["宏绑定数量"] = 89,
-            ["公共冷却剩余"] = 0,
+            ["公共冷却剩余"] = output.SendCount > 0 ? 119 : 0,
             ["公共冷却时长"] = 150,
             ["玩家动作序号"] = output.SendCount > 0 ? 1 : 0,
             ["玩家动作技能"] = output.SendCount > 0 ? 24 : 0,

@@ -139,7 +139,7 @@
     },
     "BundledModules/holy-paladin-virtue-12.1.json": {
       "category": "configuration-schema",
-      "sha256": "81105b9f27c92e6aa5a56556913966c7fce04f96f8fdf6f4b10d97173294f208"
+      "sha256": "22f26a5578c03134834584701fcf1f3122e7e648910b59fd260715204ddccc29"
     },
     "BundledModules/blood-deathbringer-12.1.json": {
       "category": "configuration-schema",
@@ -287,7 +287,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "0b6d93c0fc4902a0c0c83f8ab20464063dd011e8ca09570bf438224fccdece06"
+      "sha256": "fc2a022b754eae4071e1058684558e75fcccf0e0ad36c7b253064ca82281fa2a"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -319,11 +319,11 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "ebf5c9c387c4feb57fe5547d152fd5c1ffcb86942e5a1828113adee2348b0d75"
+      "sha256": "860a3ba1ee2983e9b20763d69e24dfd6b005b04821cbe11c882516773a5a1f51"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/aoe-warning-replay.lua": {
       "category": "shared-contract",
-      "sha256": "ef8e27a42efccf661adc0f76269d7b4825d9294df1dd9acc11ea1384b9bf6c95"
+      "sha256": "d72f407c9ff986c49cb56b493768925a3ea889d2731f787921c16ded71f2527b"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/digua-bridge-replay.lua": {
       "category": "shared-contract",
@@ -479,7 +479,7 @@
     },
     "FuyutsuiDiGuaBridge/Bridge.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "00288e7f2c12aeb8df9e98f457f7fa39cc20d60c316f499b1d6dde9f76520152"
+      "sha256": "f1dbaa02ce49539f9f5389f64ba3d3a3fb230e56e49468ce04cf24b5a73a3088"
     },
     "FuyutsuiDiGuaBridge/FuyutsuiDiGuaBridge.toc": {
       "category": "fuyutsui-authority",
@@ -547,7 +547,7 @@
     },
     "Fuyutsui/core/aoewarning.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "9a1263bc8d9f09df715ea0f25d93c752414a32a2d406cd01f7ab32f66d28b1ac"
+      "sha256": "d3c7b2c861097048ce8d9efd74b2fa4a1d247735b8d2da4af9db8d7f10933db2"
     },
     "Fuyutsui/core/aoewarningdata.lua": {
       "category": "fuyutsui-authority",
@@ -583,7 +583,7 @@
     },
     "Fuyutsui/core/group.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "2569ec03467ebde31179363c211179e858521b7626bd62f01b693a0dc1046eb6"
+      "sha256": "614369778011f14b6baa96350bc82acb57d8d0fb603574e29945455aa07b34a5"
     },
     "Fuyutsui/core/keybinds.lua": {
       "category": "fuyutsui-authority",

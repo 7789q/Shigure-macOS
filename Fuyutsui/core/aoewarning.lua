@@ -269,7 +269,6 @@ local function GetAbsorbAnchorCode(event)
     if not event or event.eventType ~= 2 then return 0 end
     if event.impactAnchor == "actual" then return 1 end
     if event.impactAnchor == "diguabar" then return 2 end
-    if event.castOutcome == "missing_end_anchor" then return 4 end
     return 3
 end
 
@@ -387,8 +386,8 @@ local function StageForEvent(event, now)
             event.status = "succeeded"
             event.castOutcome = "diguabar_elapsed"
             event.completed = true
-            local impactAt = event.impactAt or now
-            event.virtueReadyAt = impactAt + config.absorbVirtueDelaySeconds
+            event.impactAnchor = "diguabar"
+            event.virtueReadyAt = event.impactAt + config.absorbVirtueDelaySeconds
             event.expiresAt = event.virtueReadyAt + config.impactActiveSeconds
             TraceLog(
                 "DiGua倒计时结束 event=%s，等待 %.2f 秒后进入阶段3",
@@ -543,7 +542,7 @@ local function FindMatchingEvent(now, spellID, endsAt, unit)
             and not event.cast
             and not event.completed
             and EventMatchesUnit(event, unit)
-            and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked) then
+            and not (event.eventType == 2 and event.timelineFallbackBlocked) then
             local distance = endsAt and math.abs(event.impactAt - endsAt) or 0
             if not selected or distance < selectedDistance
                 or (distance == selectedDistance and event.sequence < selected.sequence) then
@@ -568,6 +567,7 @@ local function FindDirectCastEvent(eventType, spellID, impactAt, unit)
             and event.eventType == eventType
             and event.spellID == spellID
             and not event.completed
+            and not (event.eventType == 2 and event.timelineFallbackBlocked)
             and EventMatchesUnit(event, unit)
             and (not impactAt or not event.cast or not event.cast.endsAt
                 or math.abs(event.cast.endsAt - impactAt)
@@ -728,7 +728,7 @@ local function FindRecentSemanticEvent(now, unit)
             and not event.cast
             and not event.completed
             and EventMatchesUnit(event, unit)
-            and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked)
+            and not (event.eventType == 2 and event.timelineFallbackBlocked)
             and math.abs(now - event.createdAt) <= threshold
             and (not selected or event.createdAt > selected.createdAt
                 or (event.createdAt == selected.createdAt and event.sequence > selected.sequence)) then
@@ -775,7 +775,7 @@ end
 
 function Fuyutsui:TryBindPendingAOECast(event)
     if not event or event.reservationOnly or event.cast or event.completed
-        or (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked) then
+        or (event.eventType == 2 and event.timelineFallbackBlocked) then
         return false
     end
     local now = GetTime()
@@ -817,7 +817,7 @@ local function FindDiagnosticEvent(now, endsAt)
     for _, event in pairs(warning.events) do
         if now <= event.expiresAt
             and not event.completed
-            and not (event.source == "timeline" and event.eventType == 2 and event.timelineFallbackBlocked) then
+            and not (event.eventType == 2 and event.timelineFallbackBlocked) then
             local distance = endsAt and math.abs(event.impactAt - endsAt) or 0
             if not selected
                 or distance < selectedDistance
@@ -847,17 +847,19 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
     local timing = startedAt and endsAt and { startedAt = startedAt, endsAt = endsAt } or nil
     local duration = timing and nil or ReadProtectedCastDuration(unit, false)
     local impactAt = endsAt or (type(duration) == "number" and now + duration or nil)
+    local event = FindRecentSemanticEvent(now, unit)
+    if not event or event.eventType ~= 2 then event = nil end
+    if not event and readableSpellID then
+        event = FindMatchingEvent(now, readableSpellID, impactAt, unit)
+    end
+    -- Keep the cast identity even when protected APIs hide both start and end.
+    -- The terminal event will replace the prediction with its arrival time.
+    if not impactAt and event then impactAt = event.impactAt end
     if not impactAt then
         TraceLog(
             "DiGua式读条收到但无法读取结束时间 unit=%s cast=%s spell=%s",
             tostring(unit), tostring(castGUID or "<protected>"), tostring(spellID or "<protected>"))
         return true
-    end
-
-    local event = FindRecentSemanticEvent(now, unit)
-    if not event or event.eventType ~= 2 then event = nil end
-    if not event and readableSpellID then
-        event = FindMatchingEvent(now, readableSpellID, impactAt, unit)
     end
     if not event then
         for _, candidate in pairs(warning.events) do
@@ -879,8 +881,8 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
         -- public Virtue window after the row's grace period.
         for _, candidate in pairs(warning.events) do
             if candidate.eventType == 2
-                and candidate.source == "timeline"
                 and candidate.timelineFallbackBlocked
+                and (candidate.source == "timeline" or candidate.source == "diguabar")
                 and EventMatchesUnit(candidate, unit)
                 and math.abs(candidate.impactAt - impactAt)
                     <= Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds then
@@ -1106,34 +1108,17 @@ local function CommitTerminal(id, cast, reason)
         ReleaseCast(event, true)
         event.status = "succeeded"
         event.castOutcome = "succeeded"
-        local impactAt = cast.endsAt
-        if event.eventType == 2 and not impactAt and event.impactAnchor ~= "diguabar" then
-            event.status = "unknown"
-            event.castOutcome = "missing_end_anchor"
-            event.completed = false
-            event.timelineFallbackBlocked = true
-            event.expiresAt = math.max(
-                event.expiresAt,
-                now + Fuyutsui.AOEWarningConfig.absorbTimelineFallbackGraceSeconds
-                    + Fuyutsui.AOEWarningConfig.impactActiveSeconds)
-            TraceLog(
-                "吸奶盾读条成功但缺少真实结束锚点 event=%s cast=%s outcome=unknown，禁止进入美德窗口",
-                tostring(event.runtimeID or event.id),
-                tostring(cast.castGUID or "<protected>"))
-            return
-        end
+        local impactAt = cast.endsAt or now
         event.completed = true
         TraceLog(
             "读条终态 event=%s spell=%s cast=%s reason=succeeded accepted=true status=succeeded",
             tostring(event.runtimeID or event.id),
             tostring(cast.spellID or event.spellID or 0),
             tostring(cast.castGUID or "<protected>"))
-        -- The terminal callback can be processed after the cast actually ended.
-        -- Anchor the post-cast delay to the observed cast end whenever it is
-        -- available; protected casts use the explicit DiGua fallback anchor.
-        impactAt = impactAt or event.impactAt or now
+        -- A prediction can reserve resources, but a successful terminal is the
+        -- only source allowed to establish the execution timestamp.
         event.impactAt = impactAt
-        if cast.endsAt then event.impactAnchor = "actual" end
+        event.impactAnchor = "actual"
         event.virtueReadyAt = event.eventType == 2
             and impactAt + Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds
             or impactAt
@@ -1409,19 +1394,28 @@ function Fuyutsui:ObserveAOEDiGuaBar(iconID, duration, name, unitKey)
     local impactAt = now + duration
     for _, event in pairs(warning.events) do
         if event.eventType == 2
+            and event.cast
+            and EventMatchesUnit(event, unitKey) then
+            -- The bar is a reservation signal. Once a real cast is bound it
+            -- must never move the confirmed cast end or Virtue timestamp.
+            event.diguaUnit = unitKey or event.diguaUnit
+            return
+        end
+    end
+    for _, event in pairs(warning.events) do
+        if event.eventType == 2
             and event.source == "timeline"
             and not event.completed
             and math.abs(event.impactAt - impactAt) <= 0.5 then
-            -- DiGua is the verified fallback anchor for a timeline row whose
-            -- protected cast may not expose a readable end timestamp. Upgrade
-            -- the existing row so an already-bound cast keeps its identity.
+            -- DiGua can identify an unbound reservation, but it cannot confirm
+            -- the cast or change the timestamp of an already-bound cast.
             event.source = "diguabar"
             event.diguaUnit = unitKey
             event.unitKey = unitKey
             event.impactAnchor = "diguabar"
             event.impactAt = impactAt
-            event.virtueReadyAt = impactAt + Fuyutsui.AOEWarningConfig.absorbVirtueDelaySeconds
-            event.expiresAt = event.virtueReadyAt + Fuyutsui.AOEWarningConfig.impactActiveSeconds
+            event.virtueReadyAt = nil
+            event.expiresAt = impactAt + Fuyutsui.AOEWarningConfig.impactActiveSeconds
             event.timelineFallbackBlocked = false
             event.timelineFallbackPending = false
             event.timelineFallbackAt = nil

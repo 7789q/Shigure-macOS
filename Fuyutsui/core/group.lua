@@ -5,7 +5,22 @@ local roleMap = Fuyutsui.roleMap
 local updateIndex = 1
 
 local function IsSecret(value)
-    return issecretvalue and issecretvalue(value)
+    return type(issecretvalue) == "function" and issecretvalue(value)
+end
+
+local function ResolveUnitInRange(unit)
+    if unit == "player" then
+        return true
+    end
+
+    local ok, _, maxRange = pcall(function()
+        return Fuyutsui:GetUnitRange(unit)
+    end)
+    if not ok or IsSecret(maxRange) or type(maxRange) ~= "number" then
+        return false
+    end
+
+    return maxRange <= 40
 end
 
 local function Clamp(value, low, high)
@@ -163,7 +178,7 @@ function Fuyutsui:UpdateUnitValid(unit)
     local blocks = self.blocks
     local obj = self.group[unit]
     if not obj then return end
-    obj.inRange = unit == "player" or UnitInRange(unit) == true
+    obj.inRange = ResolveUnitInRange(unit)
     obj.valid = not obj.isDead and obj.canAssist and obj.inSight and obj.inRange
     if blocks and blocks.groups and blocks.groups.canHeal then
         local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.canHeal
@@ -299,7 +314,7 @@ function Fuyutsui:UpdateGroup()
             GUID = UnitGUID(unit),
             role = role,
             isDead = UnitIsDeadOrGhost(unit),
-            inRange = UnitInRange(unit),
+            inRange = ResolveUnitInRange(unit),
             canAttack = UnitCanAttack("player", unit),
             canAssist = UnitCanAssist("player", unit),
             inSight = true,

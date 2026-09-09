@@ -34,8 +34,9 @@ if Fuyutsui and Fuyutsui.InitializeDiGuaBridge then
         frame:RegisterEvent("UNIT_SPELLCAST_FAILED_QUIET")
         frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
-            if not IsAbsorbCastUnit(unit) or not Fuyutsui then return end
+            if not Fuyutsui or type(unit) ~= "string" or not unit:find("nameplate", 1, true) then return end
             if event == "UNIT_SPELLCAST_START" then
+                if not IsAbsorbCastUnit(unit) then return end
                 if Fuyutsui.ObserveAOEEnemyCast then
                     Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, false)
                 end

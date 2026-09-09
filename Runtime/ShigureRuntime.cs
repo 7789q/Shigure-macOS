@@ -1435,7 +1435,6 @@ internal sealed class CooldownConfirmationTracker
     // Blood DK actions should enter the WoW queue with enough transport
     // margin to avoid landing on the final few centiseconds of the GCD.
     internal const int BloodDeathKnightQueueWindowCentiseconds = 20;
-    private static readonly TimeSpan DefaultGlobalCooldown = TimeSpan.FromMilliseconds(1500);
     private static readonly HashSet<string> HealingSpells = new(StringComparer.Ordinal)
     {
         "圣疗术",
@@ -1467,7 +1466,6 @@ internal sealed class CooldownConfirmationTracker
     private readonly Dictionary<string, DateTimeOffset> _recentlyConfirmed = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _retryNotBefore = new(StringComparer.Ordinal);
     private readonly List<SupersededActionCode> _supersededActionCodes = [];
-    private DateTimeOffset _globalCooldownBlockedUntil = DateTimeOffset.MinValue;
 
     private static readonly TimeSpan SupersededActionObservationWindow = TimeSpan.FromSeconds(1);
 
@@ -1497,7 +1495,7 @@ internal sealed class CooldownConfirmationTracker
             return true;
         }
 
-        return _globalCooldownBlockedUntil > now;
+        return false;
     }
 
     public bool CanAttempt(
@@ -1607,11 +1605,6 @@ internal sealed class CooldownConfirmationTracker
         int queueWindowCentiseconds = QueueWindowCentiseconds)
     {
         var decisionSpell = ResolveConfirmationSpell(decision);
-        if (decisionSpell is not null && !IsOffGlobalCooldownSpell(decisionSpell))
-        {
-            RecordGlobalCooldownSent(sentAt, state, queueWindowCentiseconds);
-        }
-
         if (decisionSpell is null
             || (decision.CooldownConfirmationSpell is null && decision.PlayerActionCode is null))
         {
@@ -1773,7 +1766,12 @@ internal sealed class CooldownConfirmationTracker
                 && pending.PlayerActionCode.HasValue
                 && actionSerial == pending.InitialActionSerial
                 && actionCode != pending.PlayerActionCode.Value
-                && actionStatus is 1 or 2;
+                && actionStatus is 1 or 2
+                // Shield of the Righteous shares Holy Power with other
+                // spenders. A stale action snapshot cannot identify it; only
+                // its own action event or the scoped anonymous fallback below
+                // may acknowledge the pending Shield.
+                && !string.Equals(pending.Spell, "正义盾击", StringComparison.Ordinal);
             // WoW can report a successful Shield of the Righteous with an
             // anonymous action code while the Holy Power update is already
             // visible. The resource transition plus a successful new action
@@ -1908,7 +1906,6 @@ internal sealed class CooldownConfirmationTracker
         _recentlyConfirmed.Clear();
         _retryNotBefore.Clear();
         _supersededActionCodes.Clear();
-        _globalCooldownBlockedUntil = DateTimeOffset.MinValue;
     }
 
     private bool IsSupersededAction(PlayerActionEvent action, DateTimeOffset now)
@@ -2009,29 +2006,6 @@ internal sealed class CooldownConfirmationTracker
     private readonly record struct PlayerActionEvent(int Serial, int Code, int Status, int FailureReason);
 
     private readonly record struct SupersededActionCode(int Code, DateTimeOffset ExpiresAt);
-
-    private void RecordGlobalCooldownSent(
-        DateTimeOffset sentAt,
-        GameState? state,
-        int queueWindowCentiseconds)
-    {
-        if (state is null
-            || !state.Values.ContainsKey("公共冷却时长"))
-        {
-            return;
-        }
-
-        var gcdCentiseconds = state.GetInt("公共冷却时长");
-        var gcdDuration = gcdCentiseconds > 0
-            ? TimeSpan.FromMilliseconds(gcdCentiseconds * 10d)
-            : DefaultGlobalCooldown;
-        var queueWindow = TimeSpan.FromMilliseconds(queueWindowCentiseconds * 10d);
-        _globalCooldownBlockedUntil = sentAt + gcdDuration - queueWindow;
-        if (_globalCooldownBlockedUntil < sentAt)
-        {
-            _globalCooldownBlockedUntil = sentAt;
-        }
-    }
 
     private static int ReadInt(IReadOnlyDictionary<string, object?> values, string key) =>
         values.TryGetValue(key, out var value) ? Convert.ToInt32(value) : 0;
