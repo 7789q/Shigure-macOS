@@ -174,6 +174,12 @@ local stateBlockGetters = {
             local centiseconds = math.min(255, math.max(0, math.floor(seconds * 100 + 0.5)))
             return centiseconds / 255
         end,
+        ["血沸充能剩余"] = function()
+            local seconds = state.bloodBoilChargeRemaining or 0
+            local centiseconds = math.min(255, math.max(0, math.floor(seconds * 100 + 0.5)))
+            return centiseconds / 255
+        end,
+        ["血沸即将满层"] = function() return state.bloodBoilNearCap and 1 / 255 or 0 end,
         ["DiGua桥接就绪"] = function() return state.diGuaBridgeReady and 1 or 0 end,
         ["Fuyutsui协议版本"] = function() return FUYUTSUI_PROTOCOL_VERSION / 255 end,
         ["Fuyutsui状态心跳"] = function() return (state.protocolHeartbeat or 0) / 255 end,

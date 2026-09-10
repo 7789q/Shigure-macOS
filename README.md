@@ -19,7 +19,7 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 1. 确认 macOS 13+、`.NET 10 SDK` 和 Xcode Command Line Tools 已安装。
 2. 在“系统设置 → 隐私与安全性”中，为实际运行的 Shigure 应用授予屏幕录制和辅助功能权限。
 3. 启动应用，按提示同步游戏插件；同步完成后在 WoW 中执行一次 `/reload`。
-4. 首次构建或权限主体变化时，按[本地构建](#本地构建)流程生成并启动固定路径的应用。
+4. 首次构建或权限主体变化时，按[本地构建](#本地构建)流程生成新的应用包，核验签名并启动。
 
 ## 主要功能
 
@@ -37,7 +37,9 @@ Shigure 的原生 macOS 版本。应用读取 Fuyutsui 在目标游戏窗口绘�
 
 ## Fuyutsui 同步
 
-当前基线为 Fuyutsui 1.2.1.15；源码事实源中的随包模块为血DK 1.2.1.61、奶骑 1.2.1.28。源码当前已通过 Release 构建和 90 项契约测试；当前工作区可见最近本地验收包 `artifacts/macos/Shigure-20260909-local-4.app` 已通过签名和此前的 Launch Services 启动验收，但仍早于最新源代码，不能作为当前运行产物，需重新打包后再验证。木桩日志已覆盖友方 NPC 治疗路径，副本和嗜血急速场景仍需单独完成实战验收。应用会迁移工作副本、生成配置并检查协议冲突。协议、模块和奶骑美德的详细边界见[架构与发行说明](Documentation/macOS/README.md)、[文档索引](Documentation/README.md)、[更新日志](CHANGELOG.md)及[美德实现文档](Documentation/holy-paladin-virtue-implementation.md)。
+应用把包内插件作为版本基线，在本机建立运行工作副本，再生成配置并同步到 WoW。模块 JSON 可以从设置中的本地模块源独立更新；C# 或 Lua 修复仍需更新对应 App 与插件，并在游戏中 `/reload`。不能仅凭模块显示版本判断整套修复已经生效。
+
+当前源码版本、测试结果、实际运行包与待部署项统一记录在[交付状态](Documentation/macOS/README.md#当前交付状态2026-09-10)。奶骑大秘境和团本使用独立模块，团本差异见[美德与黎明之光](Documentation/holy-paladin-raid-virtue-implementation.md)。
 
 ## 环境要求
 

@@ -82,7 +82,11 @@ public sealed class KeymapService : IKeymapResolver
             {
                 var hotkeys = ReadHotkeySequence(entry, hotkey);
                 var binding = new KeyInputBinding(hotkey, hotkeys);
-                _bindings[(unit, spell, macroCondition)] = binding;
+                // Exact macro-condition entries are generated in canonical slot order.
+                // Keep the first one when an old runtime keymap contains duplicate
+                // copies of the same selector-target action; later legacy entries
+                // must not silently replace ALT-NUMPAD8 with an unrelated slot.
+                _bindings.TryAdd((unit, spell, macroCondition), binding);
                 // 兼容未保存“宏条件”的旧模块：保留旧版按单位+技能查询时的最后一项行为。
                 _fallbackBindings[(unit, spell)] = binding;
             }

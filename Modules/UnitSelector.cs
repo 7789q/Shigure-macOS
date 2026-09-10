@@ -16,7 +16,7 @@ public static class UnitSelector
     public static int ResolvePlayerSlot(GameState state)
     {
         var groupType = state.GetInt("队伍类型");
-        return groupType == 46 ? 1 : groupType is >= 1 and <= 30 ? groupType : 1;
+        return groupType == 46 ? 1 : groupType is >= 1 and <= 40 ? groupType : 1;
     }
 
     /// <summary>解析动态单位为 group 槽位("1".."30"), 无匹配返回 null。</summary>

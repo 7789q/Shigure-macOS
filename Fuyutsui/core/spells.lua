@@ -2,6 +2,7 @@ local addon, ns = ...
 
 local GetSpellName = C_Spell.GetSpellName
 local GetSpellCooldown = C_Spell.GetSpellCooldown
+local GetSpellCharges = C_Spell.GetSpellCharges
 local GetSpellChargeDuration = C_Spell.GetSpellChargeDuration
 local GetSpellCooldownDuration = C_Spell.GetSpellCooldownDuration
 local EvaluateColorFromBoolean = C_CurveUtil.EvaluateColorFromBoolean
@@ -273,6 +274,49 @@ function Fuyutsui:UpdateSpellCooldown()
             end
         end
     end
+    self:UpdateBloodBoilChargeRemaining()
+end
+
+function Fuyutsui:UpdateBloodBoilChargeRemaining()
+    -- Spec indices are class-local: Holy Paladin is also spec 1.
+    if self.state.classId ~= 6 or self.state.specIndex ~= 1 then return end
+    local remaining = 3
+    local nearCap = false
+    if GetSpellCharges then
+        local chargeInfo = GetSpellCharges(50842)
+        if chargeInfo then
+            local currentCharges = chargeInfo.currentCharges
+            local maxCharges = chargeInfo.maxCharges
+            if not issecretvalue(currentCharges)
+                and not issecretvalue(maxCharges)
+                and type(currentCharges) == "number"
+                and type(maxCharges) == "number"
+                and currentCharges < maxCharges then
+                local startTime = chargeInfo.cooldownStartTime or 0
+                local duration = chargeInfo.cooldownDuration or 0
+                local modRate = chargeInfo.chargeModRate or 1
+                if not issecretvalue(startTime)
+                    and not issecretvalue(duration)
+                    and not issecretvalue(modRate)
+                    and type(startTime) == "number"
+                    and type(duration) == "number"
+                    and type(modRate) == "number"
+                    and modRate > 0 then
+                    remaining = math.max(0, startTime + duration / modRate - GetTime())
+                    local gcdSeconds = self.GetEstimatedGCDSeconds and self:GetEstimatedGCDSeconds() or 1.5
+                    nearCap = currentCharges == 1 and remaining <= gcdSeconds + 0.2
+                end
+            end
+        else
+            remaining = 3
+        end
+    end
+    if self.state.bloodBoilChargeRemaining == remaining
+        and self.state.bloodBoilNearCap == nearCap then return end
+    self.state.bloodBoilChargeRemaining = remaining
+    self.state.bloodBoilNearCap = nearCap
+    self:UpdateStateBlock("状态", "血沸充能剩余")
+    self:UpdateStateBlock("状态", "血沸即将满层")
 end
 
 function Fuyutsui:GetItemCount()

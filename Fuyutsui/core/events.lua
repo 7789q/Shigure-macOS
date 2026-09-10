@@ -352,6 +352,9 @@ function Fuyutsui:UNIT_HEALTH(_, unit)
     end
     if self.group[unit] then
         self:UpdateUnitDeath(unit, "health")
+        if state.classId == 2 and state.specIndex == 1 then
+            self:UpdateUnitHealthInfo(unit)
+        end
     end
 end
 
@@ -634,7 +637,8 @@ function Fuyutsui:OnUpdate(elapsed)
 
     self.timeElapsed = self.timeElapsed + elapsed
     if self.timeElapsed > 0.2 then
-        self:UpdateProtocolHealth()
+        -- Reset before work so an error cannot retry this block every render frame.
+        self.timeElapsed = 0
         self:UpdateStateBlock("状态", "公共冷却时长")
         self:UpdatePlayerCombat()
         self:UpdatePlayerCombatTime()
@@ -648,7 +652,8 @@ function Fuyutsui:OnUpdate(elapsed)
 
         self:UpdateEnemyCount()
         self:UpdateItemCooldown()
-        self.timeElapsed = 0
+        -- Only a completed refresh certifies the target and range snapshot as fresh.
+        self:UpdateProtocolHealth()
     end
 
     self.timeElapsed1 = self.timeElapsed1 + elapsed

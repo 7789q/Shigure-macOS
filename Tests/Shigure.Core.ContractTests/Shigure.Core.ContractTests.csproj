@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="HolyPaladinRaidContractTests.cs" />
     <Compile Include="..\..\Apps\Shigure.MacApp\MacApplicationHost.cs" Link="MacApp\MacApplicationHost.cs" />
     <Compile Include="..\..\Apps\Shigure.MacApp\MacPermissionCommand.cs" Link="MacApp\MacPermissionCommand.cs" />
     <Compile Include="..\..\Apps\Shigure.MacApp\MacModuleImportCommand.cs" Link="MacApp\MacModuleImportCommand.cs" />

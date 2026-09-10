@@ -163,319 +163,329 @@
       "type": "int",
       "category": "状态"
     },
-    "玩家动作序号": {
+    "血沸充能剩余": {
       "step": 21,
       "type": "int",
       "category": "状态"
     },
-    "玩家动作技能": {
+    "血沸即将满层": {
       "step": 22,
-      "type": "int",
+      "type": "bool",
       "category": "状态"
     },
-    "玩家动作状态": {
+    "玩家动作序号": {
       "step": 23,
       "type": "int",
       "category": "状态"
     },
-    "敌人数量": {
+    "玩家动作技能": {
       "step": 24,
       "type": "int",
       "category": "状态"
     },
-    "敌人数-无仇恨": {
+    "玩家动作状态": {
       "step": 25,
       "type": "int",
       "category": "状态"
     },
-    "敌人数-有仇恨": {
+    "敌人数量": {
       "step": 26,
       "type": "int",
       "category": "状态"
     },
-    "符文": {
+    "敌人数-无仇恨": {
       "step": 27,
       "type": "int",
       "category": "状态"
     },
-    "一键辅助": {
+    "敌人数-有仇恨": {
       "step": 28,
       "type": "int",
       "category": "状态"
     },
-    "施法技能": {
+    "符文": {
       "step": 29,
       "type": "int",
       "category": "状态"
     },
-    "站定时长": {
+    "一键辅助": {
       "step": 30,
       "type": "int",
       "category": "状态"
     },
-    "血沸循环心打次数": {
+    "施法技能": {
       "step": 31,
       "type": "int",
       "category": "状态"
     },
-    "血沸手动触发": {
+    "站定时长": {
       "step": 32,
-      "type": "bool",
+      "type": "int",
       "category": "状态"
     },
-    "血沸自动链": {
+    "血沸循环心打次数": {
       "step": 33,
-      "type": "bool",
+      "type": "int",
       "category": "状态"
     },
-    "血沸高亮": {
+    "血沸手动触发": {
       "step": 34,
       "type": "bool",
       "category": "状态"
     },
-    "符文刃舞爆发窗口": {
+    "血沸自动链": {
       "step": 35,
-      "type": "int",
+      "type": "bool",
       "category": "状态"
     },
-    "副本内": {
+    "血沸高亮": {
       "step": 36,
       "type": "bool",
       "category": "状态"
     },
-    "符文能量": {
+    "符文刃舞爆发窗口": {
       "step": 37,
+      "type": "int",
+      "category": "状态"
+    },
+    "副本内": {
+      "step": 38,
+      "type": "bool",
+      "category": "状态"
+    },
+    "符文能量": {
+      "step": 39,
       "type": "int",
       "category": "能量"
     },
     "治疗药水": {
-      "step": 38,
-      "type": "int",
-      "category": "物品"
-    },
-    "治疗石": {
-      "step": 39,
-      "type": "int",
-      "category": "物品"
-    },
-    "鲁莽药水": {
       "step": 40,
       "type": "int",
       "category": "物品"
     },
-    "银月城生命药水": {
+    "治疗石": {
       "step": 41,
       "type": "int",
       "category": "物品"
     },
-    "浓缩银月城生命药水": {
+    "鲁莽药水": {
       "step": 42,
       "type": "int",
       "category": "物品"
     },
-    "爆发开关": {
+    "银月城生命药水": {
       "step": 43,
+      "type": "int",
+      "category": "物品"
+    },
+    "浓缩银月城生命药水": {
+      "step": 44,
+      "type": "int",
+      "category": "物品"
+    },
+    "爆发开关": {
+      "step": 45,
       "type": "int",
       "category": "配置开关"
     },
     "爆发药水开关": {
-      "step": 44,
+      "step": 46,
       "type": "int",
       "category": "配置开关"
     },
     "目标类型": {
-      "step": 45,
-      "type": "int",
-      "category": "目标"
-    },
-    "目标生命值": {
-      "step": 46,
-      "type": "int",
-      "category": "目标"
-    },
-    "目标施法(倒计时)": {
       "step": 47,
       "type": "int",
       "category": "目标"
     },
-    "目标施法(正计时)": {
+    "目标生命值": {
       "step": 48,
       "type": "int",
       "category": "目标"
     },
-    "目标施法可打断": {
+    "目标施法(倒计时)": {
       "step": 49,
       "type": "int",
       "category": "目标"
     },
-    "目标引导": {
+    "目标施法(正计时)": {
       "step": 50,
       "type": "int",
       "category": "目标"
     },
-    "目标引导可打断": {
+    "目标施法可打断": {
       "step": 51,
       "type": "int",
       "category": "目标"
     },
-    "目标距离": {
+    "目标引导": {
       "step": 52,
       "type": "int",
       "category": "目标"
     },
-    "目标死亡": {
+    "目标引导可打断": {
       "step": 53,
+      "type": "int",
+      "category": "目标"
+    },
+    "目标距离": {
+      "step": 54,
+      "type": "int",
+      "category": "目标"
+    },
+    "目标死亡": {
+      "step": 55,
       "type": "bool",
       "category": "目标"
     },
     "焦点施法(倒计时)": {
-      "step": 54,
-      "type": "int",
-      "category": "焦点"
-    },
-    "焦点施法(正计时)": {
-      "step": 55,
-      "type": "int",
-      "category": "焦点"
-    },
-    "焦点施法可打断": {
       "step": 56,
       "type": "int",
       "category": "焦点"
     },
-    "焦点引导": {
+    "焦点施法(正计时)": {
       "step": 57,
       "type": "int",
       "category": "焦点"
     },
-    "焦点引导可打断": {
+    "焦点施法可打断": {
       "step": 58,
       "type": "int",
       "category": "焦点"
     },
-    "焦点距离": {
+    "焦点引导": {
       "step": 59,
       "type": "int",
       "category": "焦点"
     },
-    "鼠标类型": {
+    "焦点引导可打断": {
       "step": 60,
       "type": "int",
-      "category": "鼠标"
+      "category": "焦点"
     },
-    "鼠标驱散类型": {
+    "焦点距离": {
       "step": 61,
       "type": "int",
-      "category": "鼠标"
+      "category": "焦点"
     },
-    "鼠标生命值": {
+    "鼠标类型": {
       "step": 62,
       "type": "int",
       "category": "鼠标"
     },
-    "鼠标距离": {
+    "鼠标驱散类型": {
       "step": 63,
       "type": "int",
       "category": "鼠标"
     },
-    "鼠标施法(倒计时)": {
+    "鼠标生命值": {
       "step": 64,
       "type": "int",
       "category": "鼠标"
     },
-    "鼠标施法(正计时)": {
+    "鼠标距离": {
       "step": 65,
       "type": "int",
       "category": "鼠标"
     },
-    "鼠标施法可打断": {
+    "鼠标施法(倒计时)": {
       "step": 66,
       "type": "int",
       "category": "鼠标"
     },
-    "鼠标引导": {
+    "鼠标施法(正计时)": {
       "step": 67,
       "type": "int",
       "category": "鼠标"
     },
-    "鼠标引导可打断": {
+    "鼠标施法可打断": {
       "step": 68,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导": {
+      "step": 69,
+      "type": "int",
+      "category": "鼠标"
+    },
+    "鼠标引导可打断": {
+      "step": 70,
       "type": "int",
       "category": "鼠标"
     },
     "auras": {
       "白骨之盾": {
-        "step": 69,
-        "type": "int",
-        "category": "玩家"
-      },
-      "符文刃舞": {
-        "step": 70,
-        "type": "int",
-        "category": "玩家"
-      },
-      "吸血鬼之血": {
         "step": 71,
         "type": "int",
         "category": "玩家"
       },
-      "冰封之韧": {
+      "符文刃舞": {
         "step": 72,
         "type": "int",
         "category": "玩家"
       },
-      "枯萎凋零": {
+      "吸血鬼之血": {
         "step": 73,
         "type": "int",
         "category": "玩家"
       },
-      "血色之地": {
+      "冰封之韧": {
         "step": 74,
         "type": "int",
         "category": "玩家"
       },
-      "破灭": {
+      "枯萎凋零": {
         "step": 75,
         "type": "int",
         "category": "玩家"
       },
-      "午夜舞步": {
+      "血色之地": {
         "step": 76,
         "type": "int",
         "category": "玩家"
       },
-      "沸点": {
+      "破灭": {
         "step": 77,
         "type": "int",
         "category": "玩家"
       },
-      "赤色天灾": {
+      "午夜舞步": {
         "step": 78,
         "type": "int",
         "category": "玩家"
       },
-      "鲜血护盾": {
+      "沸点": {
         "step": 79,
         "type": "int",
         "category": "玩家"
       },
-      "鲜血禁闭": {
+      "赤色天灾": {
         "step": 80,
         "type": "int",
         "category": "玩家"
       },
-      "鲜血女王的精华": {
+      "鲜血护盾": {
         "step": 81,
         "type": "int",
         "category": "玩家"
       },
-      "血债": {
+      "鲜血禁闭": {
         "step": 82,
         "type": "int",
         "category": "玩家"
       },
-      "目标血之疫病": {
+      "鲜血女王的精华": {
         "step": 83,
+        "type": "int",
+        "category": "玩家"
+      },
+      "血债": {
+        "step": 84,
+        "type": "int",
+        "category": "玩家"
+      },
+      "目标血之疫病": {
+        "step": 85,
         "type": "int",
         "category": "目标减益"
       },
@@ -512,67 +522,67 @@
     },
     "spells": {
       "死亡之握": {
-        "step": 84,
-        "type": "int"
-      },
-      "反魔法领域": {
-        "step": 85,
-        "type": "int"
-      },
-      "窒息": {
         "step": 86,
         "type": "int"
       },
-      "致盲冰雨": {
+      "反魔法领域": {
         "step": 87,
         "type": "int"
       },
-      "心灵冰冻": {
+      "窒息": {
         "step": 88,
         "type": "int"
       },
-      "死神的抚摩": {
+      "致盲冰雨": {
         "step": 89,
         "type": "int"
       },
-      "死神印记": {
+      "心灵冰冻": {
         "step": 90,
         "type": "int"
       },
-      "亡者复生": {
+      "死神的抚摩": {
         "step": 91,
         "type": "int"
       },
-      "吸血鬼之血": {
+      "死神印记": {
         "step": 92,
         "type": "int"
       },
-      "冰封之韧": {
+      "亡者复生": {
         "step": 93,
         "type": "int"
       },
-      "巫妖之躯": {
+      "吸血鬼之血": {
         "step": 94,
         "type": "int"
       },
-      "血魔之握": {
+      "冰封之韧": {
         "step": 95,
         "type": "int"
       },
-      "憎恶附肢": {
+      "巫妖之躯": {
         "step": 96,
         "type": "int"
       },
-      "吞噬": {
+      "血魔之握": {
         "step": 97,
         "type": "int"
       },
-      "血液沸腾": {
+      "憎恶附肢": {
         "step": 98,
         "type": "int"
       },
-      "血液沸腾充能": {
+      "吞噬": {
         "step": 99,
+        "type": "int"
+      },
+      "血液沸腾": {
+        "step": 100,
+        "type": "int"
+      },
+      "血液沸腾充能": {
+        "step": 101,
         "type": "int"
       },
       "血液沸腾层数": {
@@ -581,11 +591,11 @@
         "type": "int"
       },
       "枯萎凋零": {
-        "step": 100,
+        "step": 102,
         "type": "int"
       },
       "枯萎凋零充能": {
-        "step": 101,
+        "step": 103,
         "type": "int"
       },
       "枯萎凋零层数": {
@@ -594,31 +604,31 @@
         "type": "int"
       },
       "符文刃舞": {
-        "step": 102,
-        "type": "int"
-      },
-      "心脏打击": {
-        "step": 103,
-        "type": "int"
-      },
-      "灵界打击": {
         "step": 104,
         "type": "int"
       },
-      "精髓分裂": {
+      "心脏打击": {
         "step": 105,
         "type": "int"
       },
-      "符文分流": {
+      "灵界打击": {
         "step": 106,
         "type": "int"
       },
-      "反魔法护罩": {
+      "精髓分裂": {
         "step": 107,
         "type": "int"
       },
-      "死亡脚步": {
+      "符文分流": {
         "step": 108,
+        "type": "int"
+      },
+      "反魔法护罩": {
+        "step": 109,
+        "type": "int"
+      },
+      "死亡脚步": {
+        "step": 110,
         "type": "int"
       }
     }

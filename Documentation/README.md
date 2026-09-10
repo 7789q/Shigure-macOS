@@ -2,16 +2,20 @@
 
 文档只保留能帮助使用、维护或验证项目的内容。修改代码或模块后，先更新对应的现役文档，再在根 `CHANGELOG.md` 记录用户可见变化。
 
+当前代码、运行包、模块副本与验证状态的统一入口是[macOS 交付状态](macOS/README.md#当前交付状态2026-09-10)。模块的界面版本号不代表 App、插件和规则内容已经一起更新。
+
 ## 当前事实
 
 | 文档 | 用途 | 权威范围 |
 | --- | --- | --- |
 | [`../README.md`](../README.md) | 安装、构建、测试和用户可见能力 | 项目入口 |
 | [`macOS/README.md`](macOS/README.md) | macOS 分层、权限、插件协议、打包和发行边界 | 平台与交付 |
-| [`holy-paladin-healing-optimization-design-2026-09-06.md`](holy-paladin-healing-optimization-design-2026-09-06.md) | 奶骑治疗压力分类和优先级设计 | 治疗策略设计 |
-| [`holy-paladin-virtue-implementation.md`](holy-paladin-virtue-implementation.md) | AOE、吸奶盾、美德和 DiGua/Fuyutsui 状态机 | 运行时实现契约 |
+| [`holy-paladin-healing-optimization-design-2026-09-06.md`](holy-paladin-healing-optimization-design-2026-09-06.md) | 奶骑治疗策略的设计背景和待验证增强项 | 设计参考，不覆盖当前模块规则 |
+| [`holy-paladin-virtue-implementation.md`](holy-paladin-virtue-implementation.md) | 两个奶骑模块共用的 AOE、吸奶盾和状态协议 | 共享实现契约 |
 | [`action-event-protocol-follow-up.md`](action-event-protocol-follow-up.md) | 动作事件协议 v6 的部署、最小验证、20 分钟实战验收和后续根治路径 | 动作确认维护与验收 |
-| [`../BundledModules/holy-paladin-virtue-12.1.json`](../BundledModules/holy-paladin-virtue-12.1.json) | 奶骑可执行规则 | 机器可读规则 |
+| [`holy-paladin-raid-virtue-implementation.md`](holy-paladin-raid-virtue-implementation.md) | 团本美德、鸣钟、黎明优先级与手动技能边界 | 团本实现契约 |
+| [`../BundledModules/holy-paladin-virtue-12.1.json`](../BundledModules/holy-paladin-virtue-12.1.json) | 奶骑大秘境可执行规则 | 机器可读规则 |
+| [`../BundledModules/holy-paladin-raid-virtue-12.1.json`](../BundledModules/holy-paladin-raid-virtue-12.1.json) | 奶骑团本可执行规则 | 机器可读规则 |
 | [`../BundledModules/blood-deathbringer-12.1.json`](../BundledModules/blood-deathbringer-12.1.json) | 血DK可执行规则 | 机器可读规则 |
 
 ## 维护入口

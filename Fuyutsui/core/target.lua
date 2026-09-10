@@ -9,6 +9,7 @@ local mouseover = Fuyutsui.mouseover
 local boss = Fuyutsui.boss
 local nameplate = Fuyutsui.nameplate
 local lastTargetTrace
+local SHIELD_OF_THE_RIGHTEOUS_SPELL_ID = 53600
 
 local function IsSafeGuid(value)
     return type(value) == "string"
@@ -97,6 +98,29 @@ end
 function Fuyutsui:GetUnitRange(unit)
     local minRange, maxRange = rc:GetRange(unit)
     return minRange, maxRange
+end
+
+local function IsShieldOfTheRighteousInRange(unit)
+    if Fuyutsui.state.classId ~= 2 or Fuyutsui.state.specIndex ~= 1 then
+        return nil
+    end
+    if not C_Spell or type(C_Spell.IsSpellInRange) ~= "function" then
+        return nil
+    end
+
+    local ok, result = pcall(C_Spell.IsSpellInRange, SHIELD_OF_THE_RIGHTEOUS_SPELL_ID, unit)
+    -- Restricted API results remain unknown; converting to a color does not
+    -- make them safe to compare in Lua.
+    if not ok or (type(issecretvalue) == "function" and issecretvalue(result)) then
+        return nil
+    end
+    if result == true or result == 1 then
+        return true
+    end
+    if result == false or result == 0 then
+        return false
+    end
+    return nil
 end
 
 local unitZHMap = {
@@ -226,6 +250,16 @@ function Fuyutsui:UpdateUnitRangeBlock(unit)
     local category = unitZHMap[unit]
     if not cache or not category then return end
     local minRange, maxRange = self:GetUnitRange(unit)
+    local shieldInRange = IsShieldOfTheRighteousInRange(unit)
+    if shieldInRange == true then
+        -- LibRangeCheck's maxRange is an upper bound. For Holy Paladin's
+        -- five-yard spender, the spell API is the authoritative in-range bit.
+        maxRange = 5
+    elseif shieldInRange == false and maxRange and maxRange <= 5 then
+        -- Do not let a stale generic five-yard checker pass a failed Shield
+        -- range check; retain a diagnostic value that fails the <=5 rule.
+        maxRange = 6
+    end
     cache.minRange = minRange
     cache.maxRange = maxRange
     cache.inFront = IsUnitInFront(unit)

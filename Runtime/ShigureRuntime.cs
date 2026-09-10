@@ -382,18 +382,21 @@ public sealed class ShigureRuntime : IDisposable
             suppressedActions = _cooldownConfirmationTracker.WithLayOnHandsSuppressed(suppressedActions, now);
         }
         var rateLimitedRuleKeys = GetRateLimitedRuleKeys(now);
-        var evaluation = _logic is IRateLimitAwareRuntimeLogic rateLimitAware
+        var evaluationState = _state;
+        LogicEvaluation Evaluate(IReadOnlySet<LogicActionKey> actions) =>
+            _logic is IRateLimitAwareRuntimeLogic rateLimitAware
             ? rateLimitAware.Evaluate(
                 _classId,
                 _specId,
                 _specName,
-                _state,
+                evaluationState,
                 _enabled,
-                suppressedActions,
+                actions,
                 rateLimitedRuleKeys)
             : _logic is IActionSuppressionAwareRuntimeLogic suppressionAware
-                ? suppressionAware.Evaluate(_classId, _specId, _specName, _state, _enabled, suppressedActions)
-                : _logic.Evaluate(_classId, _specId, _specName, _state, _enabled);
+                ? suppressionAware.Evaluate(_classId, _specId, _specName, evaluationState, _enabled, actions)
+                : _logic.Evaluate(_classId, _specId, _specName, evaluationState, _enabled);
+        var evaluation = Evaluate(suppressedActions);
         _moduleName = evaluation.ModuleName;
 
         if (!_enabled)
@@ -425,7 +428,25 @@ public sealed class ShigureRuntime : IDisposable
             guardedInfo["确认帧"] = $"{emergencyCheck.ConsecutiveFrames}/2";
             _unitInfo = guardedInfo;
             _currentStep = $"{decision.Step}（已拦截）";
-            return;
+            if (_classId != 2 || _specId != 1
+                || _state.GetInt("队伍类型") is < 1 or > 40
+                || _logic is not (IActionSuppressionAwareRuntimeLogic or IRateLimitAwareRuntimeLogic))
+            {
+                return;
+            }
+
+            // One rejected Lay on Hands must not stall the raid's other heals.
+            // Preserve its two-frame check: observing the fallback would reset it.
+            var fallbackSuppressed = suppressedActions.ToHashSet();
+            fallbackSuppressed.Add(new LogicActionKey("圣疗术", ReadInt(decision.UnitInfo, "动作单位槽位")));
+            var fallback = Evaluate(fallbackSuppressed).Decision;
+            if (fallback is null || EmergencyActionGuard.IsEmergency(fallback)) return;
+            decision = fallback;
+            _moduleName = decision.ModuleName;
+            var fallbackInfo = decision.UnitInfo.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+            fallbackInfo["安全确认"] = $"圣疗未发送：{emergencyCheck.Reason}；继续评估后续治疗";
+            _unitInfo = fallbackInfo;
+            _currentStep = decision.Step;
         }
 
         if (_clickPending)
@@ -1202,9 +1223,14 @@ public sealed class ShigureRuntime : IDisposable
                 return $"当前目标不是可攻击目标（目标类型 {targetType}）；WoW 原始错误文本未提供";
             }
 
-            if (distance <= 0 || distance > 5)
+            if (distance <= 0)
             {
-                return $"当前目标距离不可用或超过 5 码（{distance}）；WoW 原始错误文本未提供";
+                return $"当前目标距离范围不可用（{distance}）；WoW 原始错误文本未提供";
+            }
+
+            if (distance > 5)
+            {
+                return $"当前目标距离仅为范围上界（{distance}），无法据此判断是否超过 5 码；WoW 原始错误文本未提供";
             }
 
             if (inFront <= 0)
@@ -2325,9 +2351,10 @@ internal sealed class EmergencyActionGuard
 
         var unit = ReadInt(decision.UnitInfo, "动作单位槽位");
         var playerHealth = state.GetInt("生命值");
+        var playerSlot = UnitSelector.ResolvePlayerSlot(state);
         var targetHealth = unit switch
         {
-            0 => playerHealth,
+            ReservedUnit.None or ReservedUnit.Player => playerHealth,
             > 0 when state.Group.TryGetValue(unit.ToString(), out var member)
                 && member.TryGetValue("生命值", out var health) => ConvertToInt(health),
             _ => 0
@@ -2342,12 +2369,12 @@ internal sealed class EmergencyActionGuard
                 0);
         }
 
-        if (unit == 1 && playerHealth > CriticalHealthThreshold)
+        if (unit == playerSlot && playerHealth > CriticalHealthThreshold)
         {
             Reset();
             return new EmergencyActionCheck(
                 false,
-                $"单位 1 显示 {targetHealth}%，但独立自身生命值为 {playerHealth}%",
+                $"单位 {unit} 显示 {targetHealth}%，但独立自身生命值为 {playerHealth}%",
                 0);
         }
 

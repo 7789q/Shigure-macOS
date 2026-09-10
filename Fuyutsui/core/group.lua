@@ -82,7 +82,11 @@ function Fuyutsui:UpdateUnitHealthInfo(unit)
     local obj = group[unit]
     if not blocks or not blocks.groups or not obj then return end
     local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.healthPercent
-    obj.curve = self:CreateColorCurveScaling(100 + (obj.inComingHeals or 0))
+    -- Holy Paladin decisions consume actual health. Pending cast estimates
+    -- must not make a member look healed before the heal has landed.
+    obj.curve = state.classId == 2 and state.specIndex == 1
+        and self.curve100
+        or self:CreateColorCurveScaling(100 + (obj.inComingHeals or 0))
     local healthPercent = UnitHealthPercent(unit, false, obj.curve)
     if not healthPercent or type(healthPercent.GetRGB) ~= "function" then
         return
@@ -93,7 +97,7 @@ function Fuyutsui:UpdateUnitHealthInfo(unit)
         return
     end
     obj.healthPercent = b
-    obj.healthPercentValue = IsSecret(b) and 1 or b
+    obj.healthPercentValue = IsSecret(b) and 1 or b * 255 / 100
     self:CreateTexture(index, b)
 end
 
@@ -187,41 +191,47 @@ function Fuyutsui:UpdateGroupInRangeAndHealth()
     if not blocks or not blocks.groups then return end
     local numUnits = #groupList
     if numUnits >= 1 then
-        if updateIndex > numUnits then
-            updateIndex = 1
-        end
-        local unit = groupList[updateIndex]
-        local obj = group[unit]
-        if not obj then return end
-        local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.role
-        obj.isDead = UnitIsDeadOrGhost(unit)
-        obj.canAssist = UnitCanAssist("player", unit)
-        self:UpdateUnitValid(unit)
-        if obj.valid then
-            self:UpdateUnitHealthInfo(unit)
-            -- 可治疗成员保留职责标记；无职责的有效成员使用稳定占位值。
-            local roleValue = roleMap[obj.role]
-            if not roleValue or roleValue == 0 then
-                roleValue = 5
+        -- UNIT_HEALTH is the immediate path. A raid sweep is only a fallback,
+        -- bounded to four frames rather than one frame per raid member.
+        local batch = state.classId == 2 and state.specIndex == 1 and self:IsRaidGroup()
+            and math.ceil(numUnits / 4) or 1
+        for _ = 1, math.min(batch, numUnits) do
+            if updateIndex > numUnits then
+                updateIndex = 1
             end
-            self:CreateTexture(index, roleValue / 255)
-        else
-            local healthIndex = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.healthPercent
-            obj.healthPercent = 0
-            obj.healthPercentValue = 0
-            obj.forecastHealth = 0
-            obj.damageRate = 0
-            obj.expectedNeed, obj.burstNeed = 0, 0
-            obj.sustainNeed, obj.singleNeed = 0, 0
-            self:CreateTexture(healthIndex, 0)
-            self:CreateTexture(index, 0)
-            if blocks.groups.expectedNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.expectedNeed, 0) end
-            if blocks.groups.burstNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.burstNeed, 0) end
-            if blocks.groups.sustainNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.sustainNeed, 0) end
-        end
-        updateIndex = updateIndex + 1
-        if updateIndex > numUnits then
-            updateIndex = 1
+            local unit = groupList[updateIndex]
+            local obj = group[unit]
+            if not obj then return end
+            local index = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.role
+            obj.isDead = UnitIsDeadOrGhost(unit)
+            obj.canAssist = UnitCanAssist("player", unit)
+            self:UpdateUnitValid(unit)
+            if obj.valid then
+                self:UpdateUnitHealthInfo(unit)
+                -- 可治疗成员保留职责标记；无职责的有效成员使用稳定占位值。
+                local roleValue = roleMap[obj.role]
+                if not roleValue or roleValue == 0 then
+                    roleValue = 5
+                end
+                self:CreateTexture(index, roleValue / 255)
+            else
+                local healthIndex = blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.healthPercent
+                obj.healthPercent = 0
+                obj.healthPercentValue = 0
+                obj.forecastHealth = 0
+                obj.damageRate = 0
+                obj.expectedNeed, obj.burstNeed = 0, 0
+                obj.sustainNeed, obj.singleNeed = 0, 0
+                self:CreateTexture(healthIndex, 0)
+                self:CreateTexture(index, 0)
+                if blocks.groups.expectedNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.expectedNeed, 0) end
+                if blocks.groups.burstNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.burstNeed, 0) end
+                if blocks.groups.sustainNeed then self:CreateTexture(blocks.groups.start + (obj.index - 1) * blocks.groups.num + blocks.groups.sustainNeed, 0) end
+            end
+            updateIndex = updateIndex + 1
+            if updateIndex > numUnits then
+                updateIndex = 1
+            end
         end
     end
 end

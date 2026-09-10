@@ -1242,6 +1242,14 @@ function Fuyutsui:ReleaseGroupAuraContainers()
     end
 end
 
+local function GroupDispelFilter()
+    if Fuyutsui.state.classId == 2 and Fuyutsui.state.specIndex == 1 and Fuyutsui:IsRaidGroup() then
+        -- A dispel type alone does not mean this player can remove the aura.
+        return "HARMFUL|RAID"
+    end
+    return "HARMFUL"
+end
+
 local function CreateGroupMemberAuraContainer(memberIndex, groups, auraDefs, includeDispelTypes)
     EnsureAuraContainerLoaded()
 
@@ -1272,9 +1280,10 @@ local function CreateGroupMemberAuraContainer(memberIndex, groups, auraDefs, inc
         local pixelIndex = GroupAuraPixelIndex(groups, memberIndex, groups.dispel)
         if pixelIndex > 0 and pixelIndex <= BLOCK_FIX_COUNT then
             local dispelKey = "group_" .. memberIndex .. "_dispel"
+            local dispelFilter = GroupDispelFilter()
             container:AddAuraSlot(
                 dispelKey,
-                "HARMFUL",
+                dispelFilter,
                 {
                     candidateFilters = {
                         includeDispelTypes = includeDispelTypes,
@@ -1286,6 +1295,7 @@ local function CreateGroupMemberAuraContainer(memberIndex, groups, auraDefs, inc
             )
             container.fuyutsuiDispelSlot = {
                 key = dispelKey,
+                filter = dispelFilter,
                 includeDispelTypes = includeDispelTypes,
             }
         end
@@ -1319,6 +1329,12 @@ function Fuyutsui:RefreshGroupAuraContainers()
             local memberIndex = obj.index
             used[memberIndex] = true
             local container = groupAuraContainers[memberIndex]
+            if container and container.fuyutsuiDispelSlot
+                and container.fuyutsuiDispelSlot.filter ~= GroupDispelFilter() then
+                ReleaseFrame(container)
+                groupAuraContainers[memberIndex] = nil
+                container = nil
+            end
             if not container then
                 container = CreateGroupMemberAuraContainer(memberIndex, groups, auraDefs, includeDispelTypes)
                 groupAuraContainers[memberIndex] = container

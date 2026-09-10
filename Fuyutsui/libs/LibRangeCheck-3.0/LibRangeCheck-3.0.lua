@@ -270,6 +270,7 @@ end
 
 tinsert(HarmSpells.PALADIN, 853) -- Hammer of Justice (10 yards)
 tinsert(HarmSpells.PALADIN, 35395) -- Crusader Strike (Melee Range)
+tinsert(HarmSpells.PALADIN, 53600) -- Shield of the Righteous (5 yards)
 tinsert(HarmSpells.PALADIN, 62124) -- Hand of Reckoning (30 yards)
 tinsert(HarmSpells.PALADIN, 183218) -- Hand of Hindrance (30 yards)
 tinsert(HarmSpells.PALADIN, 20271) -- Judgement (30 yards)
