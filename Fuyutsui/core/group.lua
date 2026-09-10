@@ -106,13 +106,6 @@ function Fuyutsui:UpdateHolyPaladinForecast()
     local virtueCoverageCount, virtueTransferNeed = 0, 0
     local virtueMainTarget = state.virtueMainTargetIndex or 0
 
-    local eventType = state.aoeEventType or 0
-    local eventStage = state.aoeEventStage or 0
-    local eventBoost = 0
-    if eventType ~= 0 and eventStage ~= 0 then
-        eventBoost = eventStage == 2 and 32 or eventStage == 3 and 24 or eventStage == 5 and 12 or 18
-    end
-
     for _, unit in ipairs(self.groupList or {}) do
         local obj = self.group[unit]
         if obj and obj.valid then
@@ -127,8 +120,9 @@ function Fuyutsui:UpdateHolyPaladinForecast()
             obj.forecastHealth = health
 
             local safety = obj.role == "TANK" and 8 or 5
-            local shortPrediction = Clamp(obj.damageRate * 2 + eventBoost, 0, 80)
-            local longPrediction = Clamp(obj.damageRate * 9 + eventBoost * 2, 0, 140)
+            -- A warning reserves resources; it is not damage to every member.
+            local shortPrediction = Clamp(obj.damageRate * 2, 0, 80)
+            local longPrediction = Clamp(obj.damageRate * 9, 0, 140)
             local expected = Clamp(deficit + longPrediction + safety, 0, 255)
             local burst = Clamp(deficit + shortPrediction, 0, 255)
             local sustain = Clamp(deficit + longPrediction, 0, 255)

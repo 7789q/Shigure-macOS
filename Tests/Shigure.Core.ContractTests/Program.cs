@@ -51,6 +51,9 @@ var tests = new (string Name, Action Run)[]
     ("legacy module state compatibility contract", LegacyModuleStateCompatibilityContract),
     ("module dependency capture and import contract", ModuleDependencyCaptureAndImportContract),
     ("cooldown confirmation tracker contract", CooldownConfirmationTrackerContract),
+    ("Lay on Hands independent confirmation", LayOnHandsIndependentConfirmationContract),
+    ("holy paladin decoded feedback", HolyPaladinDecodedFeedbackContract),
+    ("holy paladin forecast production Lua replay", HolyPaladinForecastLuaReplayContract),
     ("anonymous Divine Purpose and Lay on Hands confirmation contract", AnonymousFallbackConfirmationContract),
     ("anonymous Shield confirmation contract", AnonymousShieldConfirmationContract),
     ("interrupt failure diagnostic contract", InterruptFailureDiagnosticContract),
@@ -1465,8 +1468,8 @@ static void BundledModuleInstallationContract()
         File.WriteAllText(
             previousVersionPath,
             File.ReadAllText(sourcePath).Replace(
-                "\"Version\": \"1.2.1.28\"",
-                "\"Version\": \"1.2.1.27\"",
+                "\"Version\": \"1.2.1.31\"",
+                "\"Version\": \"1.2.1.30\"",
                 StringComparison.Ordinal));
         var previousVersionUpgrade = installer.Install(sourceDirectory, previousVersionTargetDirectory);
         Equal(1, previousVersionUpgrade.UpdatedModules.Count,
@@ -1610,7 +1613,7 @@ static int ValidateHolyPaladinModule(string path)
     {
         var module = ModuleStore.Parse(File.ReadAllBytes(path));
         Equal("烈日奶骑大秘境-美德爆发 12.1", module.Name, "holy paladin module identity");
-        Equal("1.2.1.28", module.Version, "holy paladin module version");
+        Equal("1.2.1.31", module.Version, "holy paladin module version");
         Equal(5, module.Counts.Single(count => count.Name == "D5AtLeast").HealthThreshold,
             "holy paladin module tracks the five-percent light-injury count");
         Equal(CountKind.UnitsAtOrAboveHealingDeficit,
@@ -1775,7 +1778,7 @@ static int ValidateHolyPaladinModule(string path)
         Equal("AOE事件类型 == 2 && AOE事件阶段 == 3 && spells.美德道标 == 0 && auras.美德道标 == 0",
             module.Rules[6].Condition,
             "heal absorb cast completion has an explicit Virtue timing rule");
-        Equal("真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发高压 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+        Equal("H85 >= 3 && HTotal >= 50 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || H30AtLeast >= 3 && HTotal >= 90 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || D10AtLeast >= 3 && 多人爆发需求 >= 90 && 预计治疗人数 >= 3 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
             module.Rules[7].Condition,
             "reactive group Virtue uses real or forecast group pressure without blocking mixed absorb pressure");
         Equal("AOE事件类型 != 2 && AOE事件阶段 == 0|AOE事件类型 != 2 && AOE事件阶段 == 4|AOE事件类型 == 2 && AOE事件阶段 == 1", string.Join('|', module.Rules[7].SubConditions ?? []),
@@ -2120,6 +2123,18 @@ static int ValidateHolyPaladinModule(string path)
             "MOD-01 Lay on Hands uses the true-health target instead of the absorb target");
         Equal("圣疗术", layOnHands.CooldownConfirmationSpell,
             "MOD-01 Lay on Hands waits for cooldown confirmation");
+        var pendingLay = new CooldownConfirmationTracker();
+        var pendingLayAt = DateTimeOffset.UtcNow;
+        pendingLay.RecordSent(layOnHands, pendingLayAt);
+        var pendingLaySuppression = pendingLay.WithLayOnHandsSuppressed(new HashSet<LogicActionKey>(), pendingLayAt);
+        Equal("荣耀圣令", Action(Evaluate(State(
+            [20, 40, 100, 100, 100], holyPower: 3, layOnHandsCooldown: 0),
+            suppressedActions: pendingLaySuppression)),
+            "MOD-01 a still-critical Lay on Hands target does not starve ordinary healing while awaiting acknowledgement");
+        Equal("荣耀圣令", Action(Evaluate(State(
+            [100, 20, 100, 100, 100], holyPower: 3, layOnHandsCooldown: 0),
+            suppressedActions: pendingLaySuppression)),
+            "MOD-01 retargeting cannot reselect unconfirmed Lay on Hands ahead of ordinary healing");
         var staleGroupForbearance = Evaluate(State(
             [100, 20, 100, 100, 100],
             layOnHandsCooldown: 0,
@@ -2716,6 +2731,16 @@ static int ValidateHolyPaladinModule(string path)
             [80, 80, 80, 80, 100],
             virtueCooldown: 0), heldGroupDamageTracker)),
             "MOD-35 reactive group damage opens Virtue before the hold window");
+        Equal(false, Action(Evaluate(State(
+            [60, 100, 100, 100, 100],
+            virtueCooldown: 0,
+            shockCharges: 2), heldGroupDamageTracker)) == "美德道标",
+            "MOD-35 held group pressure cannot open a new Virtue for one injured player");
+        var staleForecast = State([60, 100, 100, 100, 100], virtueCooldown: 0, shockCharges: 2);
+        staleForecast.Values["多人爆发需求"] = 150;
+        staleForecast.Values["预计治疗人数"] = 5;
+        Equal(false, Action(Evaluate(staleForecast)) == "美德道标",
+            "MOD-35 forecast pressure alone cannot open Virtue after real group deficits disappear");
         Equal("正义盾击", Action(Evaluate(State(
             [100, 100, 100, 100, 100],
             virtueAura: 5,
@@ -4368,6 +4393,132 @@ static void ModuleDependencyCaptureAndImportContract()
     }
 }
 
+static void LayOnHandsIndependentConfirmationContract()
+{
+    var now = DateTimeOffset.UtcNow;
+    var lay = new LogicDecision("CTRL-L", "圣疗术", new Dictionary<string, object?>
+    {
+        ["动作技能"] = "圣疗术", ["动作单位槽位"] = 2, ["规则编号"] = 3
+    }, CooldownConfirmationSpell: "圣疗术", PlayerActionCode: 29);
+    var heal = new LogicDecision("CTRL-H", "荣耀圣令", new Dictionary<string, object?>
+    {
+        ["动作技能"] = "荣耀圣令", ["动作单位槽位"] = 3, ["规则编号"] = 14
+    }, CooldownConfirmationSpell: "荣耀圣令", PlayerActionCode: 36);
+    static GameState State(int gcd = 0, int code = 0, int serial = 0) => new(new Dictionary<string, object?>
+    {
+        ["公共冷却剩余"] = gcd, ["玩家动作序号"] = serial,
+        ["玩家动作技能"] = code, ["玩家动作状态"] = code == 0 ? 0 : 2,
+        ["group"] = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+        {
+            ["2"] = new Dictionary<string, object?> { ["生命值"] = 100, ["可治疗"] = true }
+        }
+    });
+    var tracker = new CooldownConfirmationTracker();
+    tracker.RecordSent(lay, now, State());
+    Equal(true, tracker.CanAttempt(heal, State(), now.AddMilliseconds(50), true, out _),
+        "pending Lay on Hands does not block another heal after GCD ends");
+    Equal(false, tracker.CanAttempt(heal, State(80), now.AddMilliseconds(50), true, out _),
+        "independent confirmation still respects the real GCD");
+    Equal(true, tracker.CanAttempt(heal, State(15), now.AddMilliseconds(50), true, out _,
+            queueWindowCentiseconds: CooldownConfirmationTracker.HolyPaladinQueueWindowCentiseconds),
+        "Holy Paladin can queue the next heal with transport margin");
+    Equal(false, tracker.CanAttempt(heal, State(21), now.AddMilliseconds(50), true, out _,
+            queueWindowCentiseconds: CooldownConfirmationTracker.HolyPaladinQueueWindowCentiseconds),
+        "Holy Paladin still waits outside its queue window");
+    var retarget = lay with { UnitInfo = new Dictionary<string, object?>
+    {
+        ["动作技能"] = "圣疗术", ["动作单位槽位"] = 3
+    } };
+    Equal(false, tracker.CanAttempt(retarget, State(), now.AddMilliseconds(50), true, out _),
+        "unknown Lay on Hands cannot retry on a new target even after the old target recovers");
+    tracker.RecordSent(heal, now.AddMilliseconds(50), State());
+    var healingUpdate = tracker.Observe(State(code: 36, serial: 1), now.AddMilliseconds(100));
+    Equal("荣耀圣令", healingUpdate.Single().Spell, "ordinary healing confirms independently");
+    Equal(true, tracker.HasPending, "Lay on Hands keeps its own pending confirmation");
+    Equal("圣疗术", tracker.Observe(State(code: 29, serial: 2), now.AddMilliseconds(150)).Single().Spell,
+        "delayed Lay on Hands acknowledgement remains attributable");
+
+    tracker = new CooldownConfirmationTracker();
+    tracker.RecordSent(heal, now, State());
+    tracker.RecordSent(lay, now.AddMilliseconds(50), State());
+    Equal("圣疗术", tracker.Observe(State(code: 29, serial: 1), now.AddMilliseconds(100)).Single().Spell,
+        "emergency off-GCD healing does not discard the ordinary pending action");
+    Equal("荣耀圣令", tracker.Observe(State(code: 36, serial: 2), now.AddMilliseconds(150)).Single().Spell,
+        "ordinary pending action survives Lay on Hands");
+
+    tracker = new CooldownConfirmationTracker();
+    tracker.RecordSent(lay, now, State());
+    tracker.RecordSent(heal, now.AddMilliseconds(50), State());
+    var anonymous = State(serial: 1);
+    anonymous.Values["玩家动作状态"] = 2;
+    Equal(0, tracker.Observe(anonymous, now.AddMilliseconds(100)).Count,
+        "anonymous concurrent success cannot falsely confirm Lay on Hands");
+    anonymous.Values["玩家动作状态"] = 4;
+    Equal(0, tracker.Observe(anonymous, now.AddMilliseconds(150)).Count,
+        "anonymous concurrent failure cannot be assigned to either spell");
+    var both = State();
+    foreach (var (slot, code) in new[] { (1, 29), (2, 36) })
+    {
+        both.Values[$"玩家动作事件{slot}序号"] = slot + 1;
+        both.Values[$"玩家动作事件{slot}技能"] = code;
+        both.Values[$"玩家动作事件{slot}状态"] = 2;
+    }
+    var updates = tracker.Observe(both, now.AddMilliseconds(200));
+    Equal(2, updates.Count, "same-snapshot distinct events confirm both independent actions");
+    Equal(true, updates.All(update => update.Confirmed), "both acknowledgements retain their own skill identity");
+}
+
+static void HolyPaladinDecodedFeedbackContract()
+{
+    var root = FindRepositoryRoot();
+    var builder = new StateBuilder(new ConfigService(Path.Combine(root, "config")));
+    // Use the shipped Paladin schema; the fixture crosses producer offsets and decoder consumers.
+    var paladin = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "config", "Paladin.json")))!["1"]!;
+    var group = paladin["group"]!;
+    var row = new Dictionary<int, int> { [1] = 233, [2] = 2, [3] = 1 };
+    void Field(string name, int value) => row[paladin[name]!["step"]!.GetValue<int>()] = value;
+    Field("多人爆发需求", 200);
+    Field("多人持续需求", 200);
+    Field("预计治疗人数", 5);
+    Field("美德主目标", 1);
+    Field("美德覆盖人数", 0);
+    for (var i = 0; i < 3; i++)
+    {
+        var offset = group["start"]!.GetValue<int>() + i * group["num"]!.GetValue<int>();
+        foreach (var (name, value) in new Dictionary<string, int>
+        {
+            ["生命值"] = i == 0 ? 100 : 60, ["职责"] = 5, ["可治疗"] = 1,
+            ["预期需求"] = 5, ["爆发需求"] = 0, ["持续需求"] = 0, ["美德道标"] = i < 2 ? 8 : 0
+        }) row[offset + group[name]!["step"]!.GetValue<int>()] = value;
+    }
+    var state = builder.Build(row, new Dictionary<int, int>(), new Dictionary<int, int> { [2] = 10 });
+    Equal(90, state.GetInt("多人爆发需求"), "decoded real deficits repair protected Lua health forecasts");
+    Equal(2, state.GetInt("美德覆盖人数"), "coverage comes from the same member aura pixels as targeting");
+    Equal(8, state.GetInt("美德转移需求"), "transfer need uses the covered secondary target's actual deficit and absorb");
+    row[group["start"]!.GetValue<int>() + group["美德道标"]!["step"]!.GetValue<int>()] = 0;
+    state = builder.Build(row, new Dictionary<int, int>(), new Dictionary<int, int> { [2] = 10 });
+    Equal(0, state.GetInt("美德转移需求"), "uncovered main target cannot receive an invented transfer benefit");
+    row.Remove(group["start"]!.GetValue<int>() + group["爆发需求"]!["step"]!.GetValue<int>());
+    state = builder.Build(row, new Dictionary<int, int>());
+    Equal(200, state.GetInt("多人爆发需求"), "missing forecast pixels do not silently replace aggregate data with zero");
+}
+
+static void HolyPaladinForecastLuaReplayContract()
+{
+    var root = FindRepositoryRoot();
+    var startInfo = new ProcessStartInfo("/usr/bin/env")
+    {
+        WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false
+    };
+    startInfo.ArgumentList.Add("luajit");
+    startInfo.ArgumentList.Add(Path.Combine(root, "Tests", "Shigure.Core.ContractTests", "Fixtures", "holy-paladin-forecast-replay.lua"));
+    startInfo.ArgumentList.Add(root);
+    using var process = Process.Start(startInfo)!;
+    var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+    process.WaitForExit();
+    Equal(0, process.ExitCode, output);
+}
+
 static void CooldownConfirmationTrackerContract()
 {
     static GameState State(int cooldown) => new(new Dictionary<string, object?>
@@ -4643,12 +4794,12 @@ static void CooldownConfirmationTrackerContract()
 
     var emergencyTracker = new CooldownConfirmationTracker();
     emergencyTracker.RecordSent(emergencyDecision, now);
-    Equal(false, emergencyTracker.CanAttempt(
+    Equal(true, emergencyTracker.CanAttempt(
             decision,
             now.Add(CooldownConfirmationTracker.RetryCadence),
             allowPreemption: false,
             out _),
-        "a lower-priority action cannot overwrite a pending emergency cast");
+        "a lower-priority action can proceed while Lay on Hands confirms independently");
 
     var priorityTracker = new CooldownConfirmationTracker();
     var offensiveDecision = new LogicDecision(
@@ -8197,15 +8348,15 @@ static void FuyutsuiProtocolContract()
         && compatibilityBridge.Contains("Fuyutsui:ObserveAOEDiGuaBar(132334, 11.7, \"准备吸奶盾\", unit)", StringComparison.Ordinal)
         && compatibilityBridge.Contains("Fuyutsui:CancelAOEDiGuaBar(unit)", StringComparison.Ordinal)
         && aoeWarning.Contains("absorbVirtueDelaySeconds = 2", StringComparison.Ordinal)
-        && aoeWarning.Contains("event.castOutcome = \"diguabar_elapsed\"", StringComparison.Ordinal)
-        && aoeWarning.Contains("local impactAt = cast.endsAt or now", StringComparison.Ordinal)
+        && !aoeWarning.Contains("event.castOutcome = \"diguabar_elapsed\"", StringComparison.Ordinal)
+        && aoeWarning.Contains("local impactAt = inferredProtectedSuccess and cast.endsAt", StringComparison.Ordinal)
         && aoeWarning.Contains("event.impactAnchor = \"actual\"", StringComparison.Ordinal)
         && aoeWarning.Contains("event.virtueReadyAt = event.eventType == 2", StringComparison.Ordinal)
         && aoeWarning.Contains("event.timelineFallbackBlocked = true", StringComparison.Ordinal)
         && aoeWarning.Contains("local function TraceLog(message, ...)\n    DebugLog(message, ...)\nend", StringComparison.Ordinal)
         && !compatibilityBridge.Contains("|cff00ff00[Fuyutsui AOE]|r", StringComparison.Ordinal)
         && !compatibilityBridge.Contains("hooksecurefunc(addonTable, \"CustomEncounterBar\"", StringComparison.Ordinal),
-        "heal-absorb Virtue mirrors DiGua's live nameplate countdown, keeps chat quiet by default and waits two seconds");
+        "heal-absorb countdown only reserves resources; an identified cast supplies the two-second execution anchor");
     Equal(true, paladin.Contains("\"AOE事件类型\"", StringComparison.Ordinal)
         && paladin.Contains("\"AOE事件阶段\"", StringComparison.Ordinal)
         && paladin.Contains("\"AOE吸奶盾锚点\"", StringComparison.Ordinal)
@@ -8255,7 +8406,7 @@ static void FuyutsuiProtocolContract()
     Equal(true, aoeWarning.Contains("function Fuyutsui:PublishAOEDiagnostic", StringComparison.Ordinal)
         && aoeWarning.Contains("Fuyutsui:PublishAOEDiagnostic(\"castUnmatched\"", StringComparison.Ordinal)
         && aoeWarning.Contains("真实读条直连", StringComparison.Ordinal)
-        && aoeWarning.Contains("受保护读条直连", StringComparison.Ordinal)
+        && aoeWarning.Contains("if event.eventType == 2 and protectedSpell then return false end", StringComparison.Ordinal)
         && diGuaBridge.Contains("Fuyutsui:PublishAOEDiagnostic(\"bridgeSuccess\"", StringComparison.Ordinal)
         && diGuaBridge.Contains("castEventTypeBySpell", StringComparison.Ordinal)
         && stateBlocks.Contains("[\"AOE预警技能低位\"]", StringComparison.Ordinal),

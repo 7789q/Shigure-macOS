@@ -1,4 +1,4 @@
-{
+﻿{
   "schemaVersion": 1,
   "coveredRoots": [
     ".github/workflows",
@@ -139,7 +139,7 @@
     },
     "BundledModules/holy-paladin-virtue-12.1.json": {
       "category": "configuration-schema",
-      "sha256": "22f26a5578c03134834584701fcf1f3122e7e648910b59fd260715204ddccc29"
+      "sha256": "f3683e69bf7887d2b241ea6c076a60bee7763a1c5237e99bc8a54c0a36c2d8d1"
     },
     "BundledModules/blood-deathbringer-12.1.json": {
       "category": "configuration-schema",
@@ -287,7 +287,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "fc2a022b754eae4071e1058684558e75fcccf0e0ad36c7b253064ca82281fa2a"
+      "sha256": "77aefc3abcb635777dba846dfbcff7d921ef685d37eb4c261a8226b6acae0387"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -319,11 +319,15 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "860a3ba1ee2983e9b20763d69e24dfd6b005b04821cbe11c882516773a5a1f51"
+      "sha256": "d92021ba454dacd39c15b7eb5ef346b52fe94501129cc54671c4ab054d55ca64"
+    },
+    "Tests/Shigure.Core.ContractTests/Fixtures/holy-paladin-forecast-replay.lua": {
+      "category": "shared-contract",
+      "sha256": "55cb268cc420d5453792ff70fe241665224484f71ef09a719e20128e06606f0b"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/aoe-warning-replay.lua": {
       "category": "shared-contract",
-      "sha256": "d72f407c9ff986c49cb56b493768925a3ea889d2731f787921c16ded71f2527b"
+      "sha256": "568a27f93c71120145c53425c42cbbffe14e2242127826ab94b7c6ba440f7fce"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/digua-bridge-replay.lua": {
       "category": "shared-contract",
@@ -355,7 +359,7 @@
     },
     "Runtime/StateBuilder.cs": {
       "category": "configuration-schema",
-      "sha256": "7a357cb34bb0d3173940714fc0da1abf082cff5460894086fa9c3c7732e069c5"
+      "sha256": "97f527442c99bf013dc33547ee59cd953a9f81a6a13ffd89d05d84be8c2e8736"
     },
     "wow_process.txt": {
       "category": "configuration-schema",
@@ -547,7 +551,7 @@
     },
     "Fuyutsui/core/aoewarning.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "d3c7b2c861097048ce8d9efd74b2fa4a1d247735b8d2da4af9db8d7f10933db2"
+      "sha256": "1302b210939682d4353adae845def8ed5c2b7990f2d6f6cb770d622d53a488cb"
     },
     "Fuyutsui/core/aoewarningdata.lua": {
       "category": "fuyutsui-authority",
@@ -583,7 +587,7 @@
     },
     "Fuyutsui/core/group.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "614369778011f14b6baa96350bc82acb57d8d0fb603574e29945455aa07b34a5"
+      "sha256": "ea0deb2b1efe187797a2a0ca6f1a374592b06074b067332beeb770ebebd7baa3"
     },
     "Fuyutsui/core/keybinds.lua": {
       "category": "fuyutsui-authority",
@@ -627,7 +631,7 @@
     },
     "Fuyutsui/main.lua": {
       "category": "fuyutsui-authority",
-      "sha256": "42a8f89527d03cc8770bcba0364596f3fade00fa844220ef89cbf4be9285a1ea"
+      "sha256": "51c286c6f758de8ec9eec20a04a8bb1bab93a6a49dc821b91cac7afda92cfe42"
     },
     "Infrastructure/ClassBlocksStore.cs": {
       "category": "fuyutsui-generation",

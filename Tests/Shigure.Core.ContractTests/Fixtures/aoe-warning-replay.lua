@@ -312,30 +312,17 @@ clear()
 
 -- Instanced combat can protect the cast Spell ID and numeric timing. A same-frame
 -- nameplate cast is correlated only with the newly created DiGua warning, while
--- completion still comes from the unit cast terminal event.
+-- A protected Spell ID cannot identify the absorb mechanic by timing alone.
 now = 80
 local protectedSpell = { secret = true }
-local rawBefore = Fuyutsui.state.aoeRawCasts or 0
-local protectedBefore = Fuyutsui.state.aoeProtectedSpells or 0
-local matchedBefore = Fuyutsui.state.aoeProtectedMatches or 0
 casts.nameplate7 = { startedAt = now, endsAt = now + 4 }
-local bridgeReadyBeforeProtected = Fuyutsui.state.diGuaBridgeReady
-Fuyutsui.state.diGuaBridgeReady = false
 Fuyutsui:ObserveAOEEnemyCast("nameplate7", protectedSpell, protectedSpell, false)
 add(9, "准备吸奶盾", 1306517, 4)
-update(2, 1, "protected cast remains absorb reservation inside Lua")
-assert(Fuyutsui.state.aoeProtectedCastActive == true, "protected cast must publish its active protocol flag")
-assert(Fuyutsui.state.aoeRawCasts == (rawBefore + 1) % 256,
-    "protected correlation publishes the raw cast diagnostic")
-assert(Fuyutsui.state.aoeProtectedSpells == (protectedBefore + 1) % 256,
-    "protected correlation publishes the secret Spell ID diagnostic")
-assert(Fuyutsui.state.aoeProtectedMatches == (matchedBefore + 1) % 256,
-    "protected correlation publishes the semantic match diagnostic")
+update(2, 1, "protected cast keeps absorb reservation")
 Fuyutsui:FinishAOEEnemyCast("nameplate7", protectedSpell, protectedSpell, "succeeded")
 flush()
 now = 86
-update(2, 3, "protected cast success opens absorb execution")
-Fuyutsui.state.diGuaBridgeReady = bridgeReadyBeforeProtected
+update(2, 1, "unknown spell success cannot open absorb execution")
 clear()
 
 -- Fuyutsui can receive the readable UNIT_SPELLCAST_START before DiGua creates
@@ -363,29 +350,26 @@ flush()
 now = 105
 update(2, 3, "direct cast success opens absorb execution after delay")
 
--- The same direct path works when DiGua protects the enemy Spell ID/GUID: its
--- nameplate/context filters identify the Ritual Lord, while the terminal event
--- still owns success versus interruption.
+-- Context alone cannot identify a protected enemy spell.
 clear()
 now = 110
 casts.nameplate10 = { startedAt = now, endsAt = now + 3 }
 Fuyutsui:ObserveAOEEnemyCast("nameplate10", protectedSpell, protectedSpell, false)
-update(2, 1, "protected direct cast reserves absorb")
+update(0, 0, "protected direct cast cannot invent an absorb event")
 Fuyutsui:FinishAOEEnemyCast("nameplate10", protectedSpell, protectedSpell, "succeeded")
 flush()
 now = 115
-update(2, 3, "protected direct success opens absorb execution")
+update(0, 0, "protected direct success cannot invent absorb execution")
 
--- DiGua's live NamePlateEnterCombat countdown is the protected fallback when
--- no readable cast event can be bound. A real bound cast still takes priority.
+-- A nameplate countdown is reservation only until a real cast can be bound.
 clear()
 now = 120
 Fuyutsui:ObserveAOEDiGuaBar(132334, 3, "准备吸奶盾", "nameplate11")
 update(2, 1, "DiGua bar reserves absorb")
 now = 123
-update(2, 1, "DiGua bar waits its post-cast delay")
+update(2, 1, "DiGua bar waits for real cast evidence")
 now = 125
-update(2, 3, "DiGua bar fallback opens absorb execution")
+update(2, 1, "DiGua timer alone never opens absorb execution")
 clear()
 
 -- A late DiGua bar update must not overwrite a cast that is already bound.
@@ -409,12 +393,40 @@ clear()
 -- the actual fallback. The old prediction must not be reused.
 now = 160
 casts.nameplate15 = { startedAt = now, endsAt = now + 3, secretTiming = true }
-Fuyutsui:ObserveAOEEnemyCast("nameplate15", "protected-terminal-time", protectedSpell, false)
+Fuyutsui:ObserveAOEEnemyCast("nameplate15", "protected-terminal-time", 1306517, false)
 now = 161
-Fuyutsui:FinishAOEEnemyCast("nameplate15", "protected-terminal-time", protectedSpell, "succeeded")
+Fuyutsui:FinishAOEEnemyCast("nameplate15", "protected-terminal-time", 1306517, "succeeded")
 flush()
 now = 163
 update(2, 3, "protected success uses terminal time plus two seconds")
+clear()
+
+-- A protected cast can expose only a DurationObject and STOP. Preserve that
+-- duration through binding, then accept STOP only when it lands at the decoded
+-- cast end and no higher-priority terminal arrives during the grace window.
+now = 170
+Fuyutsui:ObserveAOEDiGuaBar(132334, 11.7, "准备吸奶盾", "nameplate16")
+casts.nameplate16 = { startedAt = now, endsAt = now + 3, secretTiming = true }
+Fuyutsui:ObserveAOEEnemyCast("nameplate16", protectedSpell, 1306517, false)
+now = 173
+Fuyutsui:FinishAOEEnemyCast("nameplate16", protectedSpell, 1306517, "stopped")
+flush()
+now = 174.9
+update(2, 5, "protected STOP reserves the final GCD from the decoded cast end")
+now = 175
+update(2, 3, "protected STOP opens Virtue exactly two seconds after the decoded cast end")
+clear()
+
+-- An early STOP remains unknown and must not fabricate a successful cast.
+now = 180
+Fuyutsui:ObserveAOEDiGuaBar(132334, 11.7, "准备吸奶盾", "nameplate17")
+casts.nameplate17 = { startedAt = now, endsAt = now + 3, secretTiming = true }
+Fuyutsui:ObserveAOEEnemyCast("nameplate17", protectedSpell, 1306517, false)
+now = 181
+Fuyutsui:FinishAOEEnemyCast("nameplate17", protectedSpell, 1306517, "stopped")
+flush()
+now = 185
+update(2, 1, "early protected STOP does not open Virtue")
 clear()
 
 -- DiGua keeps one independent timeline event per nameplate unit. Two Ritual
@@ -432,6 +444,58 @@ Fuyutsui:FinishAOEEnemyCast("nameplate13", "parallel-absorb", 1306517, "succeede
 flush()
 now = 135
 update(2, 3, "the surviving DiGua unit owns the final Virtue window")
+clear()
+
+-- An unbound absorb timeline must not borrow another unit's protected cast.
+now = 200
+add(901, "准备吸奶盾", 1306517, 11.7)
+local originalPowerType = UnitPowerType
+function UnitPowerType(unit) return unit == "nameplate19" and 0 or 1 end
+casts.nameplate19 = { startedAt = now, endsAt = now + 1.4, secretTiming = true }
+Fuyutsui:ObserveAOEEnemyCast("nameplate19", protectedSpell, protectedSpell, false)
+now = 201.4
+Fuyutsui:FinishAOEEnemyCast("nameplate19", protectedSpell, protectedSpell, "stopped")
+flush()
+now = 203.5
+update(2, 1, "unrelated protected cast cannot promote an absorb warning")
+assert(Fuyutsui.state.aoeAbsorbAnchor ~= 1, "unrelated cast cannot produce an actual absorb anchor")
+UnitPowerType = originalPowerType
+clear()
+
+-- Actual group absorbs can recover an unbound warning, but cannot move a
+-- known cast's post-cast delay or recreate the same active event every frame.
+Fuyutsui.groupList = { "player", "party1", "party2" }
+Fuyutsui.group.party2 = { valid = true }
+function UnitHealthMax() return 100 end
+absorbs.player, absorbs.party1, absorbs.party2 = 20, 20, 20
+now = 220
+Fuyutsui:ObserveAOEDiGuaBar(132334, 11.7, "准备吸奶盾", "nameplate20")
+Fuyutsui:ObserveAOEHealAbsorbs()
+update(2, 1, "one absorb sample does not open execution")
+Fuyutsui:ObserveAOEHealAbsorbs()
+update(2, 3, "confirmed group absorbs recover an unbound warning")
+Fuyutsui:ConfirmAOEVirtue(200025)
+Fuyutsui:ObserveAOEHealAbsorbs()
+absorbs.player, absorbs.party1, absorbs.party2 = 0, 0, 0
+Fuyutsui:ObserveAOEHealAbsorbs()
+Fuyutsui:ObserveAOEHealAbsorbs()
+update(0, 0, "confirmed absorb lifecycle clears without a duplicate event")
+clear()
+now = 240
+start("nameplate21", "known-absorb", 1306517, 3)
+now = 242
+absorbs.player, absorbs.party1, absorbs.party2 = 20, 20, 20
+Fuyutsui:ObserveAOEHealAbsorbs()
+Fuyutsui:ObserveAOEHealAbsorbs()
+update(2, 1, "absorb observations cannot replace an identified active cast")
+now = 243
+Fuyutsui:FinishAOEEnemyCast("nameplate21", "known-absorb", 1306517, "succeeded")
+flush()
+now = 244.9
+Fuyutsui:ObserveAOEHealAbsorbs()
+update(2, 5, "actual absorbs preserve the known cast's final GCD protection")
+now = 245
+update(2, 3, "identified absorb cast still opens exactly two seconds after completion")
 clear()
 
 print("AOE warning production Lua replay passed")

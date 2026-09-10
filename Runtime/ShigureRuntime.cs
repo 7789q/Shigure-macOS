@@ -377,6 +377,10 @@ public sealed class ShigureRuntime : IDisposable
         }
 
         var suppressedActions = _actionFailureBackoff.GetSuppressed(now);
+        if (_classId == 2 && _specId == 1)
+        {
+            suppressedActions = _cooldownConfirmationTracker.WithLayOnHandsSuppressed(suppressedActions, now);
+        }
         var rateLimitedRuleKeys = GetRateLimitedRuleKeys(now);
         var evaluation = _logic is IRateLimitAwareRuntimeLogic rateLimitAware
             ? rateLimitAware.Evaluate(
@@ -525,7 +529,9 @@ public sealed class ShigureRuntime : IDisposable
             || decision.IsHealing;
         var queueWindowCentiseconds = IsBloodDeathKnight()
             ? CooldownConfirmationTracker.BloodDeathKnightQueueWindowCentiseconds
-            : CooldownConfirmationTracker.QueueWindowCentiseconds;
+            : _classId == 2 && _specId == 1
+                ? CooldownConfirmationTracker.HolyPaladinQueueWindowCentiseconds
+                : CooldownConfirmationTracker.QueueWindowCentiseconds;
         var confirmationSpell = decision.CooldownConfirmationSpell;
         if (string.IsNullOrWhiteSpace(confirmationSpell)
             && decision.UnitInfo.TryGetValue("动作技能", out var actionSpellValue))
@@ -1435,6 +1441,7 @@ internal sealed class CooldownConfirmationTracker
     // Blood DK actions should enter the WoW queue with enough transport
     // margin to avoid landing on the final few centiseconds of the GCD.
     internal const int BloodDeathKnightQueueWindowCentiseconds = 20;
+    internal const int HolyPaladinQueueWindowCentiseconds = 20;
     private static readonly HashSet<string> HealingSpells = new(StringComparer.Ordinal)
     {
         "圣疗术",
@@ -1470,6 +1477,24 @@ internal sealed class CooldownConfirmationTracker
     private static readonly TimeSpan SupersededActionObservationWindow = TimeSpan.FromSeconds(1);
 
     public bool HasPending => _pending.Count > 0;
+
+    public IReadOnlySet<LogicActionKey> WithLayOnHandsSuppressed(
+        IReadOnlySet<LogicActionKey> suppressedActions,
+        DateTimeOffset now)
+    {
+        var blocked = _pending.ContainsKey("圣疗术")
+            || _recentlyConfirmed.TryGetValue("圣疗术", out var confirmedAt)
+                && now - confirmedAt < PostConfirmationHold
+            || _retryNotBefore.TryGetValue("圣疗术", out var retryAt) && now < retryAt;
+        if (!blocked) return suppressedActions;
+
+        var result = suppressedActions.ToHashSet();
+        for (var unit = ReservedUnit.None; unit <= ReservedUnit.Mouseover; unit++)
+        {
+            result.Add(new LogicActionKey("圣疗术", unit));
+        }
+        return result;
+    }
 
     public static bool IsOffGlobalCooldownSpell(string? spell) =>
         !string.IsNullOrWhiteSpace(spell) && OffGlobalCooldownSpells.Contains(spell);
@@ -1541,9 +1566,6 @@ internal sealed class CooldownConfirmationTracker
             return true;
         }
 
-        var blocking = _pending.Values.MinBy(item => item.Urgency)
-            ?? throw new InvalidOperationException("待确认技能集合不能为空。");
-
         if (decisionSpell is not null
             && _pending.TryGetValue(decisionSpell, out var pending))
         {
@@ -1558,9 +1580,13 @@ internal sealed class CooldownConfirmationTracker
 
             // Keep same-spell target attribution unambiguous. Only a healing
             // target that is no longer valid may replace its active generation.
-            return IsPendingTargetInvalid(pending.LastAction, decision, state);
+            return decisionSpell != "圣疗术"
+                && IsPendingTargetInvalid(pending.LastAction, decision, state);
         }
 
+        // Lay on Hands has its own acknowledgement lifecycle, not a GCD lock.
+        var blocking = _pending.Values.Where(item => item.Spell != "圣疗术").MinBy(item => item.Urgency);
+        if (blocking is null) return true;
         pendingSpell = blocking.Spell;
         var candidateUrgency = ResolveUrgency(decision);
         if (candidateUrgency >= blocking.Urgency)
@@ -1634,8 +1660,19 @@ internal sealed class CooldownConfirmationTracker
         // caller has already checked that a same-spell target change is valid.
         // Keep a short tombstone for a preempted action. Its event may arrive
         // after the replacement was sent and must not fail the new action.
-        foreach (var superseded in _pending.Values)
+        var independentCodes = new HashSet<int>();
+        var hasConcurrentAction = false;
+        foreach (var superseded in _pending.Values.ToArray())
         {
+            if (superseded.Spell != decisionSpell
+                && (superseded.Spell == "圣疗术" || decisionSpell == "圣疗术"))
+            {
+                hasConcurrentAction = true;
+                superseded.HasConcurrentAction = true;
+                if (decision.PlayerActionCode is { } newCode) superseded.IndependentActionCodes.Add(newCode);
+                if (superseded.PlayerActionCode is { } oldCode) independentCodes.Add(oldCode);
+                continue;
+            }
             if (superseded.PlayerActionCode is { } supersededCode
                 && supersededCode != decision.PlayerActionCode)
             {
@@ -1643,9 +1680,9 @@ internal sealed class CooldownConfirmationTracker
                     supersededCode,
                     sentAt.Add(SupersededActionObservationWindow)));
             }
+            _pending.Remove(superseded.Spell);
         }
 
-        _pending.Clear();
         _pending.Add(decisionSpell, new PendingCooldownConfirmation(
             decisionSpell,
             sentAt,
@@ -1660,6 +1697,8 @@ internal sealed class CooldownConfirmationTracker
             urgency,
             action,
             new HashSet<LogicActionKey> { action }));
+        _pending[decisionSpell].HasConcurrentAction = hasConcurrentAction;
+        _pending[decisionSpell].IndependentActionCodes.UnionWith(independentCodes);
     }
 
     internal void RecordSent(LogicDecision decision, DateTimeOffset sentAt)
@@ -1676,9 +1715,18 @@ internal sealed class CooldownConfirmationTracker
             var latestActionSerial = state.GetInt("玩家动作序号");
             var latestActionCode = state.GetInt("玩家动作技能");
             var latestActionStatus = state.GetInt("玩家动作状态");
+            if (pending.IndependentActionCodes.Contains(latestActionCode)
+                || spell == "圣疗术" && pending.HasConcurrentAction && latestActionCode == 0)
+            {
+                latestActionSerial = pending.InitialActionSerial;
+                latestActionCode = 0;
+                latestActionStatus = 0;
+            }
             var newActionEvents = ReadPlayerActionEvents(state)
                 .Where(action => IsNewerActionSerial(action.Serial, pending.InitialActionSerial))
                 .Where(action => !IsSupersededAction(action, now))
+                .Where(action => !pending.IndependentActionCodes.Contains(action.Code))
+                .Where(action => !(spell == "圣疗术" && pending.HasConcurrentAction && action.Code == 0))
                 .OrderBy(action => ActionSerialDistance(action.Serial, pending.InitialActionSerial))
                 .ToArray();
             var matchingActionIndex = pending.PlayerActionCode is { } expectedCode
@@ -1750,6 +1798,11 @@ internal sealed class CooldownConfirmationTracker
                     && actionCode == 0
                     && actionStatus is 3 or 4
                 || resourceOnlyActionFailure;
+            if (pending.HasConcurrentAction && actionCode == 0)
+            {
+                // An anonymous failure cannot identify which concurrent action failed.
+                definitiveActionFailure = false;
+            }
             var observedValue = string.IsNullOrWhiteSpace(pending.StateField)
                 ? (int?)null
                 : state.GetInt(pending.StateField);
@@ -2114,6 +2167,8 @@ internal sealed class CooldownConfirmationTracker
         public int Urgency { get; set; } = urgency;
         public LogicActionKey LastAction { get; set; } = lastAction;
         public HashSet<LogicActionKey> Actions { get; } = actions;
+        public HashSet<int> IndependentActionCodes { get; } = [];
+        public bool HasConcurrentAction { get; set; }
     }
 }
 

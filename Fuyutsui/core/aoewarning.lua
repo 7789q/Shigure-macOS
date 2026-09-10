@@ -28,6 +28,7 @@ Fuyutsui.AOEWarningConfig = Fuyutsui.AOEWarningConfig or {
     inputMarginSeconds = 0.35,
     defaultGCDSeconds = 1.5,
     castTerminalGraceSeconds = 0.5,
+    protectedCastStopToleranceSeconds = 0.25,
     protectedCorrelationSeconds = 0.5,
     allowUnverifiedChannels = false,
 }
@@ -380,24 +381,8 @@ local function StageForEvent(event, now)
     local remaining = event.impactAt - now
     local prepareLead = event.prepareLeadSeconds or config.prepareLeadSeconds
     if remaining > prepareLead then return 0 end
-    if event.eventType == 2 and event.source == "diguabar" and not event.cast then
-        if remaining > 0 then return 1 end
-        if not event.completed and event.status ~= "failed" then
-            event.status = "succeeded"
-            event.castOutcome = "diguabar_elapsed"
-            event.completed = true
-            event.impactAnchor = "diguabar"
-            event.virtueReadyAt = event.impactAt + config.absorbVirtueDelaySeconds
-            event.expiresAt = event.virtueReadyAt + config.impactActiveSeconds
-            TraceLog(
-                "DiGua倒计时结束 event=%s，等待 %.2f 秒后进入阶段3",
-                tostring(event.runtimeID or event.id),
-                config.absorbVirtueDelaySeconds)
-        end
-        return event.virtueReadyAt and now >= event.virtueReadyAt and 3 or 1
-    end
     if event.eventType == 2
-        and event.source == "timeline"
+        and (event.source == "timeline" or event.source == "diguabar")
         and not event.cast
         and remaining <= 0 then
         local fallbackAt = event.timelineFallbackAt
@@ -650,7 +635,12 @@ local function ReadProtectedCastDuration(unit, isChannel)
     return math.max(0, blue * 25.5)
 end
 
-local function BindEventCast(event, unit, castGUID, spellID, isChannel, timing, protectedSpell)
+local function BindEventCast(event, unit, castGUID, spellID, isChannel, timing, duration, protectedSpell)
+    if event.eventType == 2 and protectedSpell then return false end
+    local observedAt = GetTime()
+    local durationSeconds = type(duration) == "number" and math.max(0, duration) or nil
+    local derivedEndsAt = timing and timing.endsAt
+        or (durationSeconds and observedAt + durationSeconds or nil)
     local unitGUID = SafeString(UnitGUID(unit))
     warning.nextProtectedCastSequence = warning.nextProtectedCastSequence + 1
     local castKey = CastKey(castGUID, unitGUID, spellID, timing and timing.startedAt)
@@ -664,8 +654,9 @@ local function BindEventCast(event, unit, castGUID, spellID, isChannel, timing, 
         castGUID = SafeString(castGUID),
         spellID = spellID or event.spellID,
         startedAt = timing and timing.startedAt or nil,
-        endsAt = timing and timing.endsAt or nil,
-        totalSeconds = timing and (timing.endsAt - timing.startedAt) or nil,
+        endsAt = derivedEndsAt,
+        totalSeconds = timing and (timing.endsAt - timing.startedAt) or durationSeconds,
+        durationDerived = timing == nil and durationSeconds ~= nil,
         isChannel = isChannel == true,
         executionOpened = false,
         protectedTiming = timing == nil,
@@ -719,7 +710,7 @@ local function PrunePendingCasts(now)
     end
 end
 
-local function FindRecentSemanticEvent(now, unit)
+local function FindRecentSemanticEvent(now, unit, allowAbsorb)
     local threshold = Fuyutsui.AOEWarningConfig.protectedCorrelationSeconds
     local selected
     for _, event in pairs(warning.events) do
@@ -729,6 +720,7 @@ local function FindRecentSemanticEvent(now, unit)
             and not event.completed
             and EventMatchesUnit(event, unit)
             and not (event.eventType == 2 and event.timelineFallbackBlocked)
+            and (event.eventType ~= 2 or allowAbsorb)
             and math.abs(now - event.createdAt) <= threshold
             and (not selected or event.createdAt > selected.createdAt
                 or (event.createdAt == selected.createdAt and event.sequence > selected.sequence)) then
@@ -746,6 +738,8 @@ local function PublishProtectedCastDiagnostics(candidate, event)
 end
 
 local function BindPendingCandidate(event, candidate)
+    -- Timing proximity cannot identify a protected absorb spell.
+    if event.eventType == 2 and candidate.protectedSpell then return false end
     if candidate.isChannel and not Fuyutsui.AOEWarningConfig.allowUnverifiedChannels then
         if candidate.protectedSpell then PublishProtectedCastDiagnostics(candidate, event) end
         Fuyutsui:PublishAOEDiagnostic("castRejected", event.spellID)
@@ -770,6 +764,7 @@ local function BindPendingCandidate(event, candidate)
         candidate.spellID or event.spellID,
         candidate.isChannel,
         candidate.timing,
+        candidate.duration,
         candidate.protectedSpell)
 end
 
@@ -837,17 +832,17 @@ end
 local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
     if isChannel or not IsLikelyAbsorbCastUnit(unit) then return false end
     local readableSpellID = SafeNumber(spellID)
-    -- A readable non-1306517 cast is handled by the normal timeline/Spell ID
-    -- matcher. The DiGua contextual fallback is reserved for protected values
-    -- where the unit filters are the only reliable identity.
-    if readableSpellID and readableSpellID ~= 1306517 then return false end
+    -- Context identifies a possible caster, not which spell it is casting.
+    -- Unknown Spell IDs keep the reservation; real group absorbs can still
+    -- drive reactive healing through the decoded pressure fields.
+    if readableSpellID ~= 1306517 then return false end
 
     local now = GetTime()
     local startedAt, endsAt = ReadCastTiming(unit, false)
     local timing = startedAt and endsAt and { startedAt = startedAt, endsAt = endsAt } or nil
     local duration = timing and nil or ReadProtectedCastDuration(unit, false)
     local impactAt = endsAt or (type(duration) == "number" and now + duration or nil)
-    local event = FindRecentSemanticEvent(now, unit)
+    local event = FindRecentSemanticEvent(now, unit, true)
     if not event or event.eventType ~= 2 then event = nil end
     if not event and readableSpellID then
         event = FindMatchingEvent(now, readableSpellID, impactAt, unit)
@@ -909,6 +904,7 @@ local function ObserveDiGuaAbsorbCast(unit, castGUID, spellID, isChannel)
         readableSpellID or 1306517,
         false,
         timing,
+        duration,
         protectedSpell)
     if not timing then
         event.impactAnchor = "diguabar"
@@ -952,27 +948,6 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
             PublishProtectedCastDiagnostics(candidate, diagnosticEvent)
         end
         local event = FindRecentSemanticEvent(now, unit)
-        if not event and self.state.diGuaBridgeReady == true
-            and not isChannel
-            and IsLikelyAbsorbCastUnit(unit) then
-            local impactAt = endsAt or (type(duration) == "number" and now + duration or nil)
-                or now + self.AOEWarningConfig.absorbDiGuaCastSeconds
-                event = NewEvent(
-                "cast:protected:" .. tostring(castGUID or unit .. ":" .. tostring(now)),
-                2,
-                impactAt,
-                "cast",
-                { spellID = 1306517, impactAnchor = "diguabar", unitKey = unit })
-            if event then
-                Fuyutsui:PublishAOEDiagnostic("enemyCast", event.spellID)
-                TraceLog(
-                    "受保护读条直连 event=%s type=2 expectedSpell=1306517 unit=%s end=%s timeline=%s",
-                    tostring(event.runtimeID or event.id),
-                    tostring(unit),
-                    tostring(endsAt or impactAt),
-                    diagnosticEvent and "matched" or "missing")
-            end
-        end
         if event then
             if not event.cast then
                 BindEventCast(
@@ -982,6 +957,7 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
                     event.spellID,
                     candidate.isChannel,
                     candidate.timing,
+                    candidate.duration,
                     true)
             else
                 BindPendingCandidate(event, candidate)
@@ -1070,13 +1046,15 @@ function Fuyutsui:ObserveAOEEnemyCast(unit, castGUID, spellID, isChannel)
         Fuyutsui:PublishAOEDiagnostic("castRejected", diagnosticEvent.spellID, spellID)
         return
     end
-    BindEventCast(event, unit, castGUID, spellID, isChannel, timing, false)
+    BindEventCast(event, unit, castGUID, spellID, isChannel, timing, duration, false)
 end
 
 local function CastMatches(cast, unit, castGUID, spellID)
     if not cast then return false end
     local safeGUID = SafeString(castGUID)
     if safeGUID and cast.castGUID then return safeGUID == cast.castGUID end
+    local readableSpellID = SafeNumber(spellID)
+    if cast.spellID == 1306517 and readableSpellID and readableSpellID ~= cast.spellID then return false end
     -- Protected Spell IDs/GUIDs are not comparable in instanced combat. The
     -- unit is the stable identity for that cast until its terminal event.
     if cast.protectedTiming or cast.protectedSpellID then return cast.unit == unit end
@@ -1092,11 +1070,31 @@ local terminalPriority = {
     died = 4,
 }
 
-local function CommitTerminal(id, cast, reason)
+local function ProtectedStopMatchesCastEnd(cast, terminalAt)
+    if not cast or not cast.durationDerived or not cast.endsAt or not terminalAt then
+        return false
+    end
+    local tolerance = Fuyutsui.AOEWarningConfig.protectedCastStopToleranceSeconds or 0.25
+    return math.abs(terminalAt - cast.endsAt) <= tolerance
+end
+
+local function CommitTerminal(id, cast, reason, terminalAt)
     local event = warning.events[id]
     if not event or event.cast ~= cast then return end
     warning.pendingTerminals[cast.key] = nil
     local now = GetTime()
+    terminalAt = terminalAt or now
+    local inferredProtectedSuccess = reason == "stopped"
+        and ProtectedStopMatchesCastEnd(cast, terminalAt)
+    if inferredProtectedSuccess then
+        reason = "succeeded"
+        TraceLog(
+            "受保护读条 STOP 命中结束点 event=%s cast=%s expectedEnd=%.3f terminal=%.3f",
+            tostring(event.runtimeID or event.id),
+            tostring(cast.castGUID or "<protected>"),
+            cast.endsAt,
+            terminalAt)
+    end
     TraceLog(
         "读条终态 event=%s spell=%s cast=%s reason=%s accepted=true",
         tostring(event.runtimeID or event.id),
@@ -1108,7 +1106,9 @@ local function CommitTerminal(id, cast, reason)
         ReleaseCast(event, true)
         event.status = "succeeded"
         event.castOutcome = "succeeded"
-        local impactAt = cast.endsAt or now
+        local impactAt = inferredProtectedSuccess and cast.endsAt
+            or (cast.durationDerived and terminalAt or cast.endsAt)
+            or terminalAt
         event.completed = true
         TraceLog(
             "读条终态 event=%s spell=%s cast=%s reason=succeeded accepted=true status=succeeded",
@@ -1191,13 +1191,22 @@ local function QueueTerminal(event, reason)
     local cast = event and event.cast
     local priority = terminalPriority[reason]
     if not cast or not cast.key or not priority or warning.completedCasts[cast.key] then return end
+    local observedAt = GetTime()
     local pending = warning.pendingTerminals[cast.key]
     if pending then
-        if priority > pending.priority then pending.reason, pending.priority = reason, priority end
+        if priority > pending.priority then
+            pending.reason, pending.priority, pending.observedAt = reason, priority, observedAt
+        end
         return
     end
 
-    pending = { id = event.id, cast = cast, reason = reason, priority = priority }
+    pending = {
+        id = event.id,
+        cast = cast,
+        reason = reason,
+        priority = priority,
+        observedAt = observedAt,
+    }
     warning.pendingTerminals[cast.key] = pending
     -- STOP is emitted for both a completed cast and a canceled cast on some
     -- clients. Keep it pending for a short grace period so a late SUCCEEDED
@@ -1208,7 +1217,7 @@ local function QueueTerminal(event, reason)
     C_Timer.After(delay, function()
         local current = warning.pendingTerminals[cast.key]
         if current ~= pending then return end
-        CommitTerminal(current.id, current.cast, current.reason)
+        CommitTerminal(current.id, current.cast, current.reason, current.observedAt)
     end)
 end
 
@@ -1242,7 +1251,8 @@ function Fuyutsui:ConfirmAOEVirtue(spellID)
     if SafeNumber(spellID) ~= 200025 then return end
     for _, event in pairs(warning.events) do
         if event.eventType == 2
-            and ((event.cast and event.cast.executionOpened) or event.completed) then
+            and event.completed
+            and event.virtueReadyAt and GetTime() >= event.virtueReadyAt then
             event.virtueConfirmed = true
             TraceLog(
                 "美德确认 event=%s status=%s",
@@ -1294,7 +1304,7 @@ function Fuyutsui:ObserveAOEHealAbsorbs()
         local now = GetTime()
         local observedEvent
         for _, event in pairs(warning.events) do
-            if event.eventType == 2 and not event.completed and not event.timelineFallbackBlocked then
+            if event.eventType == 2 and not event.timelineFallbackBlocked then
                 observedEvent = event
                 break
             end
@@ -1308,7 +1318,7 @@ function Fuyutsui:ObserveAOEHealAbsorbs()
                 "observed")
         end
 
-        if observedEvent and not observedEvent.completed then
+        if observedEvent and not observedEvent.completed and not observedEvent.cast then
             observedEvent.status = "succeeded"
             observedEvent.completed = true
             observedEvent.castOutcome = "observed_absorb_without_prompt"

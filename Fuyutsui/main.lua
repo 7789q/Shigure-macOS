@@ -204,6 +204,9 @@ function Fuyutsui:LoadPlayerBlocks(specIndex)
             role = t.group.role,
             dispel = t.group.dispel,
             canHeal = t.group.canHeal,
+            expectedNeed = t.group.expectedNeed,
+            burstNeed = t.group.burstNeed,
+            sustainNeed = t.group.sustainNeed,
             -- 成员光环偏移：pixel = start + (memberIndex-1)*num + offset
             aura = t.group.aura,
         }

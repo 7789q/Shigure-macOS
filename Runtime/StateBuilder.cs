@@ -58,6 +58,10 @@ public sealed class StateBuilder : IRuntimeStateBuilder
             var (group, positiveAbsorbs) = BuildGroup(groupConfig, rowData, barData, healAbsorbData);
             result["group"] = group;
             ApplyHealingAbsorbForecast(result, group);
+            if (classId == 2 && specId == 1)
+            {
+                ApplyHolyPaladinCoverage(result, group);
+            }
             healAbsorbDiagnostic = new HealAbsorbDiagnosticSnapshot(
                 healAbsorbData.Count,
                 positiveAbsorbs);
@@ -149,6 +153,7 @@ public sealed class StateBuilder : IRuntimeStateBuilder
         var sustainTotal = 0;
         var expectedCount = 0;
         var hasForecast = false;
+        var completeForecast = true;
 
         foreach (var data in group.Values)
         {
@@ -161,6 +166,23 @@ public sealed class StateBuilder : IRuntimeStateBuilder
             if (mutable.ContainsKey("可治疗") && !ReadBool(mutable, "可治疗"))
             {
                 continue;
+            }
+            if (ReadInt(mutable, "生命值") <= 0)
+            {
+                continue;
+            }
+            if (ReadInt(state, "职业") == 2 && ReadInt(state, "专精") == 1)
+            {
+                // Lua cannot compare protected health values. Use the already
+                // decoded real deficit as the minimum, without counting it twice.
+                var deficit = Math.Clamp(100 - ReadInt(mutable, "生命值"), 0, 100);
+                foreach (var field in new[] { "预期需求", "爆发需求", "持续需求" })
+                {
+                    if (mutable.ContainsKey(field))
+                    {
+                        mutable[field] = Math.Max(ReadInt(mutable, field), deficit);
+                    }
+                }
             }
             if (absorb > 0)
             {
@@ -183,11 +205,15 @@ public sealed class StateBuilder : IRuntimeStateBuilder
                 if (burst >= 15) burstTotal += burst;
                 if (sustain >= 15) sustainTotal += sustain;
             }
+            else
+            {
+                completeForecast = false;
+            }
         }
 
         state["治疗吸收单位数"] = positiveUnits;
         state["治疗吸收总量"] = totalAbsorb;
-        if (!hasForecast)
+        if (!hasForecast || !completeForecast)
         {
             return;
         }
@@ -205,6 +231,39 @@ public sealed class StateBuilder : IRuntimeStateBuilder
             state["预计治疗人数"] = Math.Min(255, expectedCount);
         }
 
+    }
+
+    private static void ApplyHolyPaladinCoverage(
+        IDictionary<string, object?> state,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>> group)
+    {
+        var count = 0;
+        var transferNeed = 0;
+        var mainTarget = ReadInt(state, "美德主目标").ToString();
+        var mainCovered = false;
+        foreach (var (slot, data) in group)
+        {
+            if (data is not Dictionary<string, object?> member
+                || ReadInt(member, "生命值") <= 0
+                || member.ContainsKey("可治疗") && !ReadBool(member, "可治疗"))
+            {
+                continue;
+            }
+            // Missing feedback is not proof of zero coverage.
+            if (!member.ContainsKey("美德道标")) return;
+            if (ReadInt(member, "美德道标") <= 0) continue;
+            count++;
+            if (slot == mainTarget) mainCovered = true;
+            if (mainTarget != "0" && slot != mainTarget)
+            {
+                var deficit = Math.Clamp(100 - ReadInt(member, "生命值"), 0, 100)
+                    + ReadInt(member, "治疗吸收");
+                transferNeed += (int)Math.Floor(deficit * 0.15 + 0.5);
+            }
+        }
+        state["美德覆盖人数"] = count;
+        state["美德转移需求"] = mainCovered ? Math.Min(255, transferNeed) : 0;
+        state["美德覆盖溢出"] = Math.Max(0, count - 5);
     }
 
     private static void AddCapped(Dictionary<string, object?> values, string key, int delta)
@@ -274,6 +333,10 @@ public sealed class StateBuilder : IRuntimeStateBuilder
                         : rowData.TryGetValue(baseStep + relStep.Value, out var rawValue) ? rawValue : null;
                 }
 
+                if (raw is null && fieldName is "预期需求" or "爆发需求" or "持续需求" or "美德道标")
+                {
+                    continue;
+                }
                 sub[fieldName] = ConvertRawValue(raw, JsonHelpers.GetString(JsonHelpers.Get(field, "type")));
             }
 

@@ -3,7 +3,7 @@
   "Name": "烈日奶骑大秘境-美德爆发 12.1",
   "Author": "Shigure",
   "RecommendedTalent": "CEEAzbn3egSOtoSwvPw1U1vTLAAAALAwMAAD2GzMzMjZmZBmZYZsZmFjmYYMzMMmtMAMAsB2YZmZmlZbmZ2aAAAAWAGsZgZMDzAAYmhZMGNA",
-  "Version": "1.2.1.28",
+  "Version": "1.2.1.31",
   "UnitMappingVersion": 3,
   "Enabled": true,
   "Match": { "ClassId": 2, "SpecId": 1 },
@@ -133,7 +133,7 @@
     },
     {
       "Enabled": true,
-      "Condition": "真实群伤 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发高压 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || 多人爆发预测 > 0 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
+      "Condition": "H85 >= 3 && HTotal >= 50 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || H30AtLeast >= 3 && HTotal >= 90 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0 || D10AtLeast >= 3 && 多人爆发需求 >= 90 && 预计治疗人数 >= 3 && spells.美德道标 == 0 && auras.美德道标 == 0 && 战斗时间 > 0",
       "SubConditions": [ "AOE事件类型 != 2 && AOE事件阶段 == 0", "AOE事件类型 != 2 && AOE事件阶段 == 4", "AOE事件类型 == 2 && AOE事件阶段 == 1" ],
       "Unit": 1,
       "Spell": "美德道标",
