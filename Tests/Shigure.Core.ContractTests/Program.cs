@@ -82,6 +82,8 @@ var tests = new (string Name, Action Run)[]
     ("runtime startup failure ownership contract", RuntimeStartupFailureOwnershipContract),
     ("runtime session ownership contract", RuntimeSessionOwnershipContract),
     ("local runtime log store contract", LocalRuntimeLogStoreContract),
+    ("healing dispatch health consistency", HealingDispatchHealthConsistency),
+    ("runtime file-only healing diagnostics", RuntimeFileOnlyHealingDiagnostics),
     ("mac application host lifecycle contract", MacApplicationHostLifecycleContract),
     ("mac permission command contract", MacPermissionCommandContract),
     ("mac module import command contract", MacModuleImportCommandContract),
@@ -2597,6 +2599,15 @@ static int ValidateHolyPaladinModule(string path)
         Equal("荣耀圣令", Action(playerPriority), "MOD-28 equal-risk player receives the expected heal");
         Equal(1, Convert.ToInt32(playerPriority.UnitInfo["动作单位槽位"]),
             "MOD-28 equal-risk player wins the stable slot tie");
+        var inconsistentPlayer = State([100, 100, 100, 100, 100], holyPower: 3);
+        inconsistentPlayer.Values["生命值"] = 68;
+        var correctedDecision = Evaluate(inconsistentPlayer);
+        Equal("荣耀圣令", Action(correctedDecision), "injured self remains selected despite a full-health group pixel");
+        Equal(68, Convert.ToInt32(correctedDecision.UnitInfo["目标生命值"]), "action diagnostics use corrected health");
+        Equal(100, Convert.ToInt32(correctedDecision.UnitInfo["目标原始生命值"]), "action diagnostics retain the protocol health");
+        var pausedOffense = Evaluate(State([100, 100, 100, 100, 100], holyPower: 5, targetDistance: 15));
+        Equal(true, pausedOffense.UnitInfo["候选过滤摘要"]?.ToString()?.Contains("规则 40 审判", StringComparison.Ordinal) == true,
+            "file diagnostics include late rules beyond the previous 32-candidate cutoff");
         var freeHealthyShield = Evaluate(State(
             [100, 100, 100, 100, 100],
             holyPower: 3,
@@ -10102,6 +10113,109 @@ static void RuntimeSessionControllerContract()
     immediateController.DisposeAsync().AsTask().GetAwaiter().GetResult();
 }
 
+static void HealingDispatchHealthConsistency()
+{
+    var module = new ModuleUnit { Name = "受伤目标", Kind = UnitSelectorKind.LowestHealth, HealthThreshold = 90 };
+    var runtime = (ShigureRuntime)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ShigureRuntime));
+    var stateField = typeof(ShigureRuntime).GetField("_state", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+    var guard = typeof(ShigureRuntime).GetMethod("ShouldSuppressStaleHealing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+    foreach (var playerSlot in new[] { 1, 4 })
+    foreach (var health in new[] { 20, 68, 80, 100 })
+    {
+        var member = new Dictionary<string, object?> { ["生命值"] = 100, ["职责"] = 5, ["可治疗"] = true, ["治疗吸收"] = 0 };
+        var state = new GameState(new Dictionary<string, object?>
+        {
+            ["生命值"] = health, ["队伍类型"] = playerSlot == 1 ? 46 : playerSlot,
+            ["group"] = new Dictionary<string, IReadOnlyDictionary<string, object?>> { [playerSlot.ToString()] = member }
+        });
+        Equal(health < 90 ? playerSlot.ToString() : null, UnitSelector.Resolve(module, state), "selector uses the independent player health");
+        stateField.SetValue(runtime, state);
+        foreach (var spell in new[] { "荣耀圣令", "圣光闪现", "圣光术" })
+        {
+            var decision = new LogicDecision("A", "治疗", new Dictionary<string, object?>
+            {
+                ["动作技能"] = spell, ["动作单位槽位"] = playerSlot
+            }, "fixture");
+            Equal(health == 100, (bool)guard.Invoke(runtime, [decision])!, "dispatch must agree with corrected player health");
+            var pending = decision with { CooldownConfirmationSpell = spell };
+            var tracker = new CooldownConfirmationTracker();
+            tracker.RecordSent(pending, DateTimeOffset.UnixEpoch, state);
+            var otherTarget = pending with { UnitInfo = new Dictionary<string, object?>
+            {
+                ["动作技能"] = spell, ["动作单位槽位"] = playerSlot == 1 ? 2 : 1
+            } };
+            Equal(health == 100, tracker.CanAttempt(otherTarget, state, DateTimeOffset.UnixEpoch.AddMilliseconds(100), false, out _),
+                "pending healing is not replaced while corrected self health is still injured");
+            member["治疗吸收"] = 10;
+            Equal(false, (bool)guard.Invoke(runtime, [decision])!, "full health with absorb still needs healing");
+            member["治疗吸收"] = 0;
+            member["可治疗"] = false;
+            Equal(false, ShigureRuntime.IsDispatchTargetValid(decision, state), "health correction does not bypass eligibility");
+            member["可治疗"] = true;
+        }
+        Equal(100, Convert.ToInt32(member["生命值"]), "raw health is retained for diagnostics");
+    }
+}
+
+static void RuntimeFileOnlyHealingDiagnostics()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"shigure-healing-log-{Guid.NewGuid():N}");
+    var clock = new ManualTimeProvider();
+    var controller = new RuntimeSessionController(new RuntimeSessionCoordinator(new HostRuntimeFactory()), clock);
+    var visible = new List<RuntimeLogEntry>();
+    var detailed = new List<RuntimeLogEntry>();
+    controller.LogAdded += _ => throw new InvalidOperationException("simulated UI log failure");
+    controller.LogAdded += visible.Add;
+    var store = new Shigure.MacUI.LocalRuntimeLogStore(Path.Combine(root, "runtime-detailed.log"));
+    controller.DetailedLogAdded += entry => { detailed.Add(entry); store.Append(entry); };
+    var write = typeof(RuntimeSessionController).GetMethod("WriteSnapshotLog", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+    var state = new GameState(new Dictionary<string, object?>
+    {
+        ["生命值"] = 20, ["队伍类型"] = 46, ["队伍人数"] = 2, ["首领战"] = 87,
+        ["Fuyutsui协议版本"] = 6, ["Fuyutsui状态心跳"] = 14,
+        ["玩家动作事件1序号"] = 3, ["玩家动作事件1失败原因"] = 17,
+        ["$counts"] = new Dictionary<string, int> { ["H85"] = 1, ["DTotal"] = 80 },
+        ["group"] = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+        {
+            ["1"] = new Dictionary<string, object?> { ["生命值"] = 100, ["职责"] = 5, ["可治疗"] = true },
+            ["2"] = new Dictionary<string, object?> { ["生命值"] = 40, ["职责"] = 0, ["可治疗"] = false, ["治疗吸收"] = 15, ["name"] = "must-not-log" }
+        }
+    });
+    var snapshot = new RenderSnapshot(true, "圣骑士", "神圣", 2, 1, "fixture", state, "暂停", new Dictionary<string, object?>
+    {
+        ["候选过滤摘要"] = "规则 40: 未命中", ["模块版本"] = "fixture-version"
+    }, [], null);
+    try
+    {
+        write.Invoke(controller, [snapshot]);
+        var jsonLine = detailed.Single(entry => entry.Message.StartsWith("奶骑状态快照：", StringComparison.Ordinal)).Message;
+        using var json = JsonDocument.Parse(jsonLine["奶骑状态快照：".Length..]);
+        var units = json.RootElement.GetProperty("队伍");
+        Equal(100, units[0].GetProperty("协议生命").GetInt32(), "file records raw self health");
+        Equal(20, units[0].GetProperty("规则生命").GetInt32(), "file records corrected self health");
+        Equal(false, units[1].GetProperty("可治疗").GetBoolean(), "invalid injured members remain in diagnostics");
+        Equal(JsonValueKind.Null, units[0].GetProperty("治疗吸收").ValueKind, "unknown fields are not logged as zero");
+        Equal(false, jsonLine.Contains("must-not-log", StringComparison.Ordinal), "member names are excluded");
+        Equal(true, detailed.Any(entry => entry.Message.Contains("规则 40", StringComparison.Ordinal)), "full decision evidence goes to file");
+        Equal(false, visible.Any(entry => entry.Message.Contains("规则 40", StringComparison.Ordinal) || entry.Message.Contains("奶骑状态快照", StringComparison.Ordinal)), "diagnostic details never enter the UI log channel");
+        Equal(true, visible.Any(entry => entry.Message == "步骤：暂停"), "UI keeps concise action status");
+        var fileCount = detailed.Count;
+        var visibleCount = visible.Count;
+        write.Invoke(controller, [snapshot]);
+        Equal(fileCount, detailed.Count, "identical immediate snapshots are coalesced");
+        clock.Advance(TimeSpan.FromMilliseconds(300));
+        write.Invoke(controller, [snapshot]);
+        Equal(fileCount + 1, detailed.Count, "unchanged pauses still get periodic file snapshots");
+        Equal(visibleCount, visible.Count, "periodic diagnostics do not add UI rows");
+        Equal(true, File.ReadAllText(store.Path).Contains("奶骑状态快照", StringComparison.Ordinal), "diagnostics are actually persisted");
+    }
+    finally
+    {
+        controller.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+    }
+}
+
 static void LocalRuntimeLogStoreContract()
 {
     var root = Path.Combine(Path.GetTempPath(), $"shigure-log-{Guid.NewGuid():N}");
@@ -10114,7 +10228,7 @@ static void LocalRuntimeLogStoreContract()
             "local runtime log store writes UTF-8 entries");
 
         var payload = new string('x', 1024 * 1024);
-        for (var index = 0; index < 9; index++)
+        for (var index = 0; index <= Shigure.MacUI.LocalRuntimeLogStore.MaximumFileBytes / payload.Length; index++)
         {
             store.Append(new RuntimeLogEntry(DateTimeOffset.UnixEpoch, payload));
         }

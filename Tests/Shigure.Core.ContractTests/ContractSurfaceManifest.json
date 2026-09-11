@@ -119,11 +119,11 @@
     },
     "Apps/Shigure.MacUI/MainWindow.axaml.cs": {
       "category": "macos-platform",
-      "sha256": "e2f7099dac85ddadeb8629df003ad7fb2af617a37b8bcc7f2c2abad841a5eb78"
+      "sha256": "38516306f7f339cff37bda018d77dab2ce8a4624cfc7630df1e1863c67b28ff2"
     },
     "Apps/Shigure.MacUI/LocalRuntimeLogStore.cs": {
       "category": "macos-platform",
-      "sha256": "ab72641873a0c37b3b45d6e59ab92083d5488f2d546a012448663cecfc3ec8bf"
+      "sha256": "c43802809515c8f9f874ba25d892c78028054a36e155f102878e13ef689455b0"
     },
     "Apps/Shigure.MacUI/ModuleEditorView.cs": {
       "category": "macos-platform",
@@ -231,7 +231,7 @@
     },
     "Modules/ModuleStore.cs": {
       "category": "shared-contract",
-      "sha256": "a3bf52cdad0ffded97812607662fae90648d3f59669e6e8560b5854c8d98a8ed"
+      "sha256": "0c95ae4f85b741bb4b64f6daa6d512a30443a7f0172c6b251feb19ac3969e1b3"
     },
     "Modules/ModuleUnit.cs": {
       "category": "shared-contract",
@@ -303,7 +303,7 @@
     },
     "Runtime/ShigureRuntime.cs": {
       "category": "shared-contract",
-      "sha256": "1afdcba560b80a5193aea22ad8b0149dc1113d8a574828b213b426b2ff4db535"
+      "sha256": "ea45e4760bd8c71879d01b8e14999d0cf76d68dfc78937708bcae225952611b4"
     },
     "Runtime/TriggerModePolicy.cs": {
       "category": "shared-contract",
@@ -323,7 +323,7 @@
     },
     "Presentation/RuntimeSessionController.cs": {
       "category": "shared-contract",
-      "sha256": "c73e37abce3a339d112ef8f798f1e471305d3bb3712dcea8cb95b41b2e4051a0"
+      "sha256": "46451256ffa8fa693862fb0596d8fc8a17e34b3aaf7e96ee6004dbf99f5ea977"
     },
     "Presentation/Shigure.Presentation.csproj": {
       "category": "shared-contract",
@@ -335,7 +335,7 @@
     },
     "Tests/Shigure.Core.ContractTests/Program.cs": {
       "category": "shared-contract",
-      "sha256": "4dc1f3cfcb727b4c7e11763fb4d12e9cf89f26bb586c08e1898775d7431e4fcc"
+      "sha256": "db42f18e12d29f4a06628358a0d4018b4719e5025e3e03b7fa354e3390147f16"
     },
     "Tests/Shigure.Core.ContractTests/Fixtures/holy-paladin-forecast-replay.lua": {
       "category": "shared-contract",

@@ -228,6 +228,7 @@ public sealed partial class MainWindow : Window
         _runtime.StatusChanged += HandleRuntimeStatusChanged;
         _runtime.SnapshotUpdated += HandleRuntimeSnapshotUpdated;
         _runtime.LogAdded += HandleRuntimeLogAdded;
+        _runtime.DetailedLogAdded += _detailedLogStore.Append;
         PositionChanged += (_, _) => ScheduleMainWindowBoundsCapture();
         PropertyChanged += (_, e) =>
         {
@@ -673,6 +674,7 @@ public sealed partial class MainWindow : Window
             _runtime.StatusChanged -= HandleRuntimeStatusChanged;
             _runtime.SnapshotUpdated -= HandleRuntimeSnapshotUpdated;
             _runtime.LogAdded -= HandleRuntimeLogAdded;
+            _runtime.DetailedLogAdded -= _detailedLogStore.Append;
             _overlay?.Close();
             _logicToast?.Close();
         }
@@ -1957,7 +1959,7 @@ public sealed partial class MainWindow : Window
         {
             PostToUi(() => _runtimeUiUpdateGuard.TryRun(
                 "runtime-log",
-                () => AppendLog(entry)));
+                () => AppendLog(entry, persist: false)));
         }
     }
 
@@ -2044,9 +2046,9 @@ public sealed partial class MainWindow : Window
     private void AppendLocalLog(string message) =>
         AppendLog(new RuntimeLogEntry(DateTimeOffset.UtcNow, message));
 
-    private void AppendLog(RuntimeLogEntry entry)
+    private void AppendLog(RuntimeLogEntry entry, bool persist = true)
     {
-        _detailedLogStore.Append(entry);
+        if (persist) _detailedLogStore.Append(entry);
         _logLines.Add($"[{entry.Timestamp.ToLocalTime():HH:mm:ss}] {entry.Message}");
         while (_logLines.Count > MaximumLogLines)
         {

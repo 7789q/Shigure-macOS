@@ -5,7 +5,7 @@ namespace Shigure.MacUI;
 
 internal sealed class LocalRuntimeLogStore
 {
-    internal const long MaximumFileBytes = 8 * 1024 * 1024;
+    internal const long MaximumFileBytes = 32 * 1024 * 1024;
     internal const int MaximumArchives = 3;
 
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);

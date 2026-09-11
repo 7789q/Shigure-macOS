@@ -709,10 +709,7 @@ public static class ModuleLogic
 
         void AddCandidateDiagnostic(string value)
         {
-            if (candidateDiagnostics.Count < 32)
-            {
-                candidateDiagnostics.Add(value);
-            }
+            candidateDiagnostics.Add(value);
         }
 
         void PublishCandidateDiagnostics()
@@ -910,7 +907,8 @@ public static class ModuleLogic
             if (resolvedUnit is > 0
                 && state.Group.TryGetValue(resolvedUnit.Value.ToString(), out var actionUnit))
             {
-                info["目标生命值"] = actionUnit.TryGetValue("生命值", out var health) ? health : 0;
+                info["目标原始生命值"] = actionUnit.GetValueOrDefault("生命值");
+                info["目标生命值"] = UnitSelector.ResolveHealth(resolvedUnit.Value.ToString(), state);
                 info["目标治疗吸收"] = actionUnit.TryGetValue("治疗吸收", out var absorb) ? absorb : 0;
                 if (resolvedUnit == UnitSelector.ResolvePlayerSlot(state))
                 {
@@ -1478,6 +1476,7 @@ public static class ModuleLogic
         var info = new Dictionary<string, object?>
         {
             ["模块"] = module.Name,
+            ["模块版本"] = module.Version,
             ["职业"] = module.Match.ClassId?.ToString() ?? "*",
             ["专精"] = module.Match.SpecId?.ToString() ?? "*",
             ["队伍类型"] = state.GetInt("队伍类型"),

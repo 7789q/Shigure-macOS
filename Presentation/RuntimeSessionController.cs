@@ -1,3 +1,6 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+
 namespace Shigure.Presentation;
 
 public enum RuntimeSessionState
@@ -50,6 +53,8 @@ public sealed class RuntimeSessionController : IAsyncDisposable
     private int? _lastLoggedMacroBindingStatus;
     private int? _lastLoggedMacroBindingCount;
     private string? _lastLoggedMacroBindingPresence;
+    private DateTimeOffset? _lastHealingDiagnosticAt;
+    private static readonly JsonSerializerOptions DiagnosticJsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public RuntimeSessionController(
         RuntimeSessionCoordinator coordinator,
@@ -69,6 +74,8 @@ public sealed class RuntimeSessionController : IAsyncDisposable
     public event Action<RenderSnapshot>? SnapshotUpdated;
 
     public event Action<RuntimeLogEntry>? LogAdded;
+
+    public event Action<RuntimeLogEntry>? DetailedLogAdded;
 
     public RuntimeSessionStatus Status
     {
@@ -407,7 +414,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
             if (!string.Equals(macroPresence, _lastLoggedMacroBindingPresence, StringComparison.Ordinal))
             {
                 _lastLoggedMacroBindingPresence = macroPresence;
-                AddLog($"WoW宏绑定诊断：{macroPresence}，扫描状态字段数 {snapshot.State.Values.Count}");
+                AddDetailedLog($"WoW宏绑定诊断：{macroPresence}，扫描状态字段数 {snapshot.State.Values.Count}");
             }
         }
 
@@ -429,7 +436,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         var healAbsorbLog = _healAbsorbLogTracker.Observe(snapshot.State?.HealAbsorbDiagnostic);
         if (healAbsorbLog is not null)
         {
-            AddLog(healAbsorbLog);
+            AddDetailedLog(healAbsorbLog);
         }
 
         var aoeDiagnosticsReady = string.IsNullOrWhiteSpace(snapshot.ScanFailureReason)
@@ -444,13 +451,13 @@ public sealed class RuntimeSessionController : IAsyncDisposable
                      ? _aoeWarningLogTracker.ObserveDiagnostics(snapshot.State)
                      : [])
         {
-            AddLog(diagnosticLog);
+            AddDetailedLog(diagnosticLog);
         }
 
         var aoeWarningLog = _aoeWarningLogTracker.Observe(snapshot.State);
         if (aoeWarningLog is not null)
         {
-            AddLog(aoeWarningLog);
+            AddDetailedLog(aoeWarningLog);
         }
 
         if (string.IsNullOrWhiteSpace(snapshot.CurrentStep))
@@ -459,13 +466,73 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         }
 
         var details = BuildStepLogDetails(snapshot);
-        if (!string.Equals(snapshot.CurrentStep, _lastLoggedStep, StringComparison.Ordinal)
-            || !string.Equals(details, _lastLoggedStepDetails, StringComparison.Ordinal))
+        var stepChanged = !string.Equals(snapshot.CurrentStep, _lastLoggedStep, StringComparison.Ordinal);
+        var detailsChanged = stepChanged
+            || !string.Equals(details, _lastLoggedStepDetails, StringComparison.Ordinal);
+        if (stepChanged)
+        {
+            Notify(LogAdded, new RuntimeLogEntry(_timeProvider.GetUtcNow(), $"步骤：{snapshot.CurrentStep}"));
+        }
+        if (detailsChanged)
         {
             _lastLoggedStep = snapshot.CurrentStep;
             _lastLoggedStepDetails = details;
-            AddLog($"步骤：{snapshot.CurrentStep}{details}");
+            AddDetailedLog($"步骤：{snapshot.CurrentStep}{details}");
         }
+        WriteHealingDiagnostic(snapshot, detailsChanged);
+    }
+
+    private void WriteHealingDiagnostic(RenderSnapshot snapshot, bool force)
+    {
+        var state = snapshot.State;
+        if (snapshot.ClassId != 2 || snapshot.SpecId != 1 || state is null)
+        {
+            _lastHealingDiagnosticAt = null;
+            return;
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        var interval = TimeSpan.FromMilliseconds(snapshot.Enabled ? 250 : 1000);
+        if (!force && _lastHealingDiagnosticAt is { } previous && now - previous < interval) return;
+        _lastHealingDiagnosticAt = now;
+
+        // Log only numeric game/protocol fields. Never serialize the entire state
+        // or group dictionaries, which may acquire names or identifiers later.
+        var fields = new[]
+        {
+            "有效性", "队伍类型", "队伍人数", "首领战", "战斗时间", "生命值", "神圣能量", "法力值", "移动",
+            "施法技能", "施法(倒计时)", "施法(正计时)", "引导", "公共冷却剩余", "公共冷却时长",
+            "Fuyutsui协议版本", "Fuyutsui状态心跳", "宏绑定状态", "宏绑定数量", "DiGua桥接就绪",
+            "目标类型", "目标生命值", "目标距离", "目标正面", "目标死亡", "目标身份序号",
+            "玩家动作序号", "玩家动作技能", "玩家动作状态",
+            "AOE事件类型", "AOE事件阶段", "单目标需求", "多人爆发需求", "多人持续需求", "预计治疗人数",
+            "美德覆盖人数", "美德转移需求"
+        };
+        var groupFields = new[] { "职责", "可治疗", "治疗吸收", "驱散", "预期需求", "爆发需求", "持续需求", "美德道标" };
+        // Include unavailable slots as well; a zero eligibility bit must not hide
+        // the very injury we need to diagnose. Old schemas without counts keep all.
+        var capacity = state.GetInt("队伍人数") is > 0 and <= 40 ? Math.Min(30, state.GetInt("队伍人数")) : 30;
+        var members = Enumerable.Range(1, capacity).Select(slot =>
+        {
+            var member = state.Group.GetValueOrDefault(slot.ToString());
+            var values = groupFields.ToDictionary(key => key, key => member?.GetValueOrDefault(key));
+            values["槽位"] = slot;
+            values["协议生命"] = member?.GetValueOrDefault("生命值");
+            values["规则生命"] = UnitSelector.ResolveHealth(slot.ToString(), state);
+            return values;
+        }).ToArray();
+        var actions = Enumerable.Range(1, 4).Select(slot => new[] { "序号", "技能", "状态", "失败原因" }
+            .ToDictionary(key => key, key => state.GetValue($"玩家动作事件{slot}{key}"))).ToArray();
+        var diagnostic = new
+        {
+            版本 = 1, Core构建 = typeof(GameState).Module.ModuleVersionId,
+            已开启 = snapshot.Enabled, 步骤 = snapshot.CurrentStep, 模块 = snapshot.ModuleName,
+            模块版本 = snapshot.UnitInfo.GetValueOrDefault("模块版本"), 玩家槽位 = UnitSelector.ResolvePlayerSlot(state),
+            状态 = fields.ToDictionary(key => key, state.GetValue), 队伍 = members,
+            动态单位 = state.GetValue("$units"), 人数与缺口 = state.GetValue("$counts"),
+            技能 = state.Spells, 光环 = state.Auras, 动作事件 = actions
+        };
+        AddDetailedLog($"奶骑状态快照：{JsonSerializer.Serialize(diagnostic, DiagnosticJsonOptions)}");
     }
 
     private static string BuildStepLogDetails(RenderSnapshot snapshot)
@@ -474,6 +541,8 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         {
             ("动作单位", "目标"),
             ("目标生命值", "目标生命"),
+            ("目标原始生命值", "目标协议生命"),
+            ("模块版本", "模块版本"),
             ("目标治疗吸收", "目标吸收"),
             ("目标自律", "目标自律"),
             ("目标驱散类型", "目标驱散"),
@@ -586,6 +655,7 @@ public sealed class RuntimeSessionController : IAsyncDisposable
         _lastLoggedMacroBindingStatus = null;
         _lastLoggedMacroBindingCount = null;
         _lastLoggedMacroBindingPresence = null;
+        _lastHealingDiagnosticAt = null;
         _healAbsorbLogTracker.Reset();
         _aoeWarningLogTracker.Reset();
     }
@@ -616,8 +686,15 @@ public sealed class RuntimeSessionController : IAsyncDisposable
     private void ReleaseRuntimeLease() =>
         Interlocked.Exchange(ref _runtimeLease, null)?.Dispose();
 
-    private void AddLog(string message) =>
-        Notify(LogAdded, new RuntimeLogEntry(_timeProvider.GetUtcNow(), message));
+    private void AddLog(string message)
+    {
+        var entry = new RuntimeLogEntry(_timeProvider.GetUtcNow(), message);
+        Notify(DetailedLogAdded, entry);
+        Notify(LogAdded, entry);
+    }
+
+    private void AddDetailedLog(string message) =>
+        Notify(DetailedLogAdded, new RuntimeLogEntry(_timeProvider.GetUtcNow(), message));
 
     private static string ModeLabel(SendMode mode) => mode switch
     {

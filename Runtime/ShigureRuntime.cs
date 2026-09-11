@@ -478,7 +478,7 @@ public sealed class ShigureRuntime : IDisposable
                 entry => entry.Value,
                 StringComparer.Ordinal);
             guardedInfo["发送拦截"] = "目标当前已满血且无治疗吸收，跳过过期治疗快照";
-            guardedInfo["发送拦截原因"] = "重新读取的目标状态与决策快照不一致";
+            guardedInfo["发送拦截原因"] = "统一血量校正后目标已满血且无治疗吸收";
             _unitInfo = guardedInfo;
             _currentStep = $"跳过过期治疗决策：{decision.CooldownConfirmationSpell ?? "动作"}";
             return;
@@ -834,9 +834,7 @@ public sealed class ShigureRuntime : IDisposable
             return false;
         }
 
-        var health = member.TryGetValue("生命值", out var healthValue)
-            ? Convert.ToInt32(healthValue)
-            : 0;
+        var health = UnitSelector.ResolveHealth(unit.ToString(), _state) ?? 0;
         var absorb = member.TryGetValue("治疗吸收", out var absorbValue)
             ? Convert.ToInt32(absorbValue)
             : 0;
@@ -2113,9 +2111,7 @@ internal sealed class CooldownConfirmationTracker
             return false;
         }
 
-        var health = member.TryGetValue("生命值", out var healthValue)
-            ? Convert.ToInt32(healthValue)
-            : 0;
+        var health = UnitSelector.ResolveHealth(pendingAction.Unit.ToString(), state) ?? 0;
         var absorb = member.TryGetValue("治疗吸收", out var absorbValue)
             ? Convert.ToInt32(absorbValue)
             : 0;
